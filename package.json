@@ -1,0 +1,19 @@
+{
+  "name": "orcamentos-moveis-planejados",
+  "version": "1.0.0",
+  "description": "Sistema de orçamentos para móveis planejados — cálculo por metro linear e metro quadrado, PDF para o cliente sem preços internos.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"tests/**/*.test.js\""
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "pdfkit": "^0.20.2"
+  }
+}

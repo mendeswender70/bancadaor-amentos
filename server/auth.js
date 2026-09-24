@@ -1,0 +1,124 @@
+import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
+import { ErroHttp, invalido, texto } from './validacao.js';
+
+const DURACAO_SESSAO_DIAS = 30;
+const COOKIE = 'sid';
+
+export function gerarHashSenha(senha) {
+  const sal = randomBytes(16);
+  const hash = scryptSync(senha, sal, 64);
+  return `scrypt$${sal.toString('base64')}$${hash.toString('base64')}`;
+}
+
+export function conferirSenha(senha, armazenado) {
+  const [algoritmo, sal, hash] = String(armazenado).split('$');
+  if (algoritmo !== 'scrypt' || !sal || !hash) return false;
+  const esperado = Buffer.from(hash, 'base64');
+  const calculado = scryptSync(String(senha), Buffer.from(sal, 'base64'), esperado.length);
+  return timingSafeEqual(esperado, calculado);
+}
+
+export function validarSenha(senha) {
+  const s = String(senha ?? '');
+  if (s.length < 6) throw invalido('A senha deve ter pelo menos 6 caracteres.');
+  if (s.length > 200) throw invalido('Senha muito longa.');
+  return s;
+}
+
+export function validarEmail(email) {
+  const s = texto(email, { max: 200, obrigatorio: true, campo: 'E-mail' }).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) throw invalido('E-mail inválido.');
+  return s;
+}
+
+const hashToken = (token) => createHash('sha256').update(token).digest('hex');
+
+function lerCookies(req) {
+  const cookies = {};
+  for (const parte of String(req.headers.cookie || '').split(';')) {
+    const i = parte.indexOf('=');
+    if (i > 0) cookies[parte.slice(0, i).trim()] = decodeURIComponent(parte.slice(i + 1).trim());
+  }
+  return cookies;
+}
+
+function opcoesCookie(req) {
+  const seguro = process.env.COOKIE_SECURE === '1' || req.secure;
+  return ['Path=/', 'HttpOnly', 'SameSite=Lax', seguro ? 'Secure' : ''].filter(Boolean).join('; ');
+}
+
+export function criarSessao(db, req, res, usuarioId) {
+  const token = randomBytes(32).toString('base64url');
+  db.prepare(`DELETE FROM sessoes WHERE expira_em < datetime('now')`).run();
+  db.prepare(`INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, datetime('now', ?))`).run(
+    hashToken(token),
+    usuarioId,
+    `+${DURACAO_SESSAO_DIAS} days`,
+  );
+  res.setHeader(
+    'Set-Cookie',
+    `${COOKIE}=${token}; Max-Age=${DURACAO_SESSAO_DIAS * 86400}; ${opcoesCookie(req)}`,
+  );
+}
+
+export function encerrarSessao(db, req, res) {
+  const token = lerCookies(req)[COOKIE];
+  if (token) db.prepare('DELETE FROM sessoes WHERE token_hash = ?').run(hashToken(token));
+  res.setHeader('Set-Cookie', `${COOKIE}=; Max-Age=0; ${opcoesCookie(req)}`);
+}
+
+export function usuarioDaSessao(db, req) {
+  const token = lerCookies(req)[COOKIE];
+  if (!token) return null;
+  return (
+    db
+      .prepare(
+        `SELECT u.id, u.nome, u.email, u.tipo FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
+         WHERE s.token_hash = ? AND s.expira_em > datetime('now')`,
+      )
+      .get(hashToken(token)) || null
+  );
+}
+
+export function exigirLogin(db) {
+  return (req, _res, next) => {
+    const usuario = usuarioDaSessao(db, req);
+    if (!usuario) return next(new ErroHttp(401, 'Faça login para continuar.'));
+    req.usuario = usuario;
+    next();
+  };
+}
+
+/**
+ * Proteção contra CSRF: toda requisição que altera dados precisa do cabeçalho
+ * X-Requested-With, que um formulário de outro site não consegue enviar sem
+ * autorização CORS (que este servidor nunca concede).
+ */
+export function exigirCabecalhoFetch(req, _res, next) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (req.get('X-Requested-With') !== 'fetch') return next(new ErroHttp(403, 'Requisição não permitida.'));
+  next();
+}
+
+/** Limita tentativas de login erradas por IP (10 a cada 15 minutos). */
+export function criarLimitadorLogin({ maximo = 10, janelaMs = 15 * 60 * 1000 } = {}) {
+  const falhas = new Map();
+  const chave = (req) => req.ip || 'desconhecido';
+  return {
+    verificar(req) {
+      const registro = falhas.get(chave(req));
+      if (registro && registro.inicio + janelaMs < Date.now()) falhas.delete(chave(req));
+      else if (registro && registro.quantidade >= maximo) {
+        throw new ErroHttp(429, 'Muitas tentativas. Aguarde alguns minutos e tente novamente.');
+      }
+    },
+    falhou(req) {
+      const registro = falhas.get(chave(req)) || { quantidade: 0, inicio: Date.now() };
+      registro.quantidade += 1;
+      falhas.set(chave(req), registro);
+    },
+    limpar(req) {
+      falhas.delete(chave(req));
+    },
+  };
+}
