@@ -46,3 +46,13 @@ test('migrações criam as tabelas e os dados iniciais uma única vez', async ()
     await db.close();
   }
 });
+
+test('explica o que corrigir quando a conexão com o banco falha', async () => {
+  const { explicarErroBanco } = await import('../server/db.js');
+  assert.match(explicarErroBanco({ code: '28P01', message: 'password authentication failed for user "postgres"' }), /senha/i);
+  assert.match(explicarErroBanco({ code: 'XX000', message: 'Tenant or user not found' }), /usuário/i);
+  assert.match(explicarErroBanco({ code: 'ENOTFOUND' }), /não foi encontrado/);
+  assert.match(explicarErroBanco({ code: 'ENETUNREACH' }), /Transaction pooler/);
+  assert.match(explicarErroBanco(new TypeError('Invalid URL')), /formato inválido/);
+  assert.doesNotMatch(explicarErroBanco({ message: 'x', code: 'ECONNREFUSED' }), /senha123/);
+});

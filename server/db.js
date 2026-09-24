@@ -375,6 +375,32 @@ async function migrar(banco) {
 }
 
 /**
+ * Traduz falhas de conexão em uma mensagem que diz o que corrigir na
+ * DATABASE_URL — sem mostrar a senha.
+ */
+export function explicarErroBanco(erro) {
+  const codigo = erro?.code || erro?.errno || '';
+  const texto = String(erro?.message || '');
+  const dica = 'Copie de novo em Supabase → Connect → Transaction pooler.';
+  if (erro instanceof TypeError && /url/i.test(texto)) {
+    return 'O endereço na DATABASE_URL está em formato inválido. Confira se tirou os colchetes [ ] da senha e se a senha tem só letras e números.';
+  }
+  if (codigo === '28P01' || /password authentication failed/i.test(texto)) {
+    return 'A senha do banco na DATABASE_URL está incorreta. Gere uma nova em Supabase → Project Settings → Database → Reset database password e atualize a variável na Vercel.';
+  }
+  if (/tenant or user not found/i.test(texto)) {
+    return `O usuário na DATABASE_URL está incorreto (ele deve ser "postgres.<código do projeto>"). ${dica}`;
+  }
+  if (['ENOTFOUND', 'EAI_AGAIN'].includes(codigo)) return `O endereço do banco na DATABASE_URL não foi encontrado. ${dica}`;
+  if (['ENETUNREACH', 'EHOSTUNREACH', 'EADDRNOTAVAIL'].includes(codigo)) {
+    return 'Não foi possível alcançar o banco. Use o endereço do "Transaction pooler" (porta 6543), não o "Direct connection".';
+  }
+  if (codigo === 'ECONNREFUSED') return `O banco recusou a conexão. Confira a porta (6543) na DATABASE_URL. ${dica}`;
+  if (codigo === 'CONNECT_TIMEOUT' || codigo === 'ETIMEDOUT') return 'O banco demorou demais para responder. Tente de novo em instantes.';
+  return `Não foi possível conectar ao banco de dados${codigo ? ` (${codigo})` : ''}. ${dica}`;
+}
+
+/**
  * Abre o banco e aplica as migrações.
  * @param {{url: string}|null} [config] sem config: detecta pelo ambiente.
  *   url "memory://" ou "pglite:<pasta>" usam o Postgres embutido.
@@ -383,7 +409,11 @@ export async function abrirBanco(config = configuracaoBanco()) {
   let driver;
   const url = config?.url;
   if (url && ehPostgres(url)) {
-    driver = driverPostgres(url);
+    try {
+      driver = driverPostgres(url);
+    } catch (erro) {
+      throw new ErroHttp(503, explicarErroBanco(erro));
+    }
   } else if (url === 'memory://' || url?.startsWith('pglite:')) {
     driver = await driverEmbutido(url === 'memory://' ? url : url.slice('pglite:'.length));
   } else {
@@ -396,6 +426,12 @@ export async function abrirBanco(config = configuracaoBanco()) {
     driver = await driverEmbutido(fileURLToPath(new URL('../data/pglite', import.meta.url)));
   }
   const banco = new Banco(driver);
-  await migrar(banco);
+  try {
+    await migrar(banco);
+  } catch (erro) {
+    await banco.close().catch(() => {});
+    console.error('Falha ao conectar no banco:', erro?.code || '', erro?.message || erro);
+    throw new ErroHttp(503, explicarErroBanco(erro));
+  }
   return banco;
 }
