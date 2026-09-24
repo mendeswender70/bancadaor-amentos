@@ -2755,3 +2755,31 @@ input.invalido {
 .carregando img {
   border-radius: 10px;
 }
+
+.arquivo-pdf {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  background: var(--superficie-2);
+}
+
+.arquivo-pdf div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.arquivo-pdf strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arquivo-pdf span:not(.selo-icone) {
+  font-size: 0.84rem;
+  color: var(--suave);
+}

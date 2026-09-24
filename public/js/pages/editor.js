@@ -616,16 +616,88 @@ export async function paginaEditor({ id, clienteId }) {
     return salvar({ silencioso: true });
   }
 
-  async function abrirPdf() {
-    // A janela é aberta já no clique para não ser bloqueada pelo navegador.
-    const janela = window.open('', '_blank');
-    if (!(await garantirSalvo())) {
-      janela?.close();
-      return;
+  // Gera o PDF no servidor e devolve como arquivo pronto para baixar/compartilhar.
+  async function prepararPdf() {
+    if (!(await garantirSalvo())) return null;
+    try {
+      const blob = await baixarBlob(`/orcamentos/${orc.id}/pdf`);
+      return new File([blob], nomeDoPdf(orc), { type: 'application/pdf' });
+    } catch (erro) {
+      avisoErro(erro);
+      return null;
     }
-    const url = `/api/orcamentos/${orc.id}/pdf`;
-    if (janela) janela.location.href = url;
-    else location.href = url;
+  }
+
+  async function abrirPdf() {
+    aviso('Gerando o PDF…');
+    const arquivo = await prepararPdf();
+    if (!arquivo) return;
+    const podeCompartilhar = Boolean(navigator.canShare?.({ files: [arquivo] }));
+    await abrirModal('PDF do orçamento', (fechar) =>
+      h(
+        'div',
+        { class: 'envio' },
+        h(
+          'div',
+          { class: 'arquivo-pdf' },
+          h('span', { class: 'selo-icone' }, icone('pdf')),
+          h('div', {}, h('strong', {}, arquivo.name), h('span', {}, `${Math.max(1, Math.round(arquivo.size / 1024))} KB · pronto`)),
+        ),
+        h(
+          'div',
+          { class: 'envio-passos' },
+          podeCompartilhar
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'botao botao-primario botao-grande botao-bloco',
+                  onclick: async () => {
+                    try {
+                      await navigator.share({ files: [arquivo], title: `Orçamento nº ${formatarNumero(orc.numero)}` });
+                      fechar();
+                    } catch (erro) {
+                      if (erro.name !== 'AbortError') avisoErro(erro);
+                    }
+                  },
+                },
+                icone('compartilhar'),
+                'Salvar ou compartilhar',
+              )
+            : null,
+          h(
+            'button',
+            {
+              type: 'button',
+              class: `botao botao-grande botao-bloco${podeCompartilhar ? '' : ' botao-primario'}`,
+              onclick: () => {
+                baixarArquivo(arquivo);
+                aviso('PDF baixado.');
+              },
+            },
+            icone('baixar'),
+            'Baixar PDF',
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'botao botao-bloco',
+              onclick: () => {
+                const url = URL.createObjectURL(arquivo);
+                window.open(url, '_blank');
+                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              },
+            },
+            icone('pdf'),
+            'Visualizar',
+          ),
+        ),
+        podeCompartilhar
+          ? h('small', { class: 'dica' }, 'No celular, use “Salvar ou compartilhar” para guardar em Arquivos, mandar pelo WhatsApp ou por e-mail.')
+          : null,
+      ),
+    );
   }
 
   async function duplicar() {
@@ -655,13 +727,8 @@ export async function paginaEditor({ id, clienteId }) {
 
   async function enviarAoCliente() {
     if (!(await garantirSalvo())) return;
-    let pdf = null;
-    const nomeArquivo = `Orcamento-${formatarNumero(orc.numero)}.pdf`;
-    try {
-      pdf = new File([await baixarBlob(`/orcamentos/${orc.id}/pdf`)], nomeArquivo, { type: 'application/pdf' });
-    } catch (erro) {
-      return avisoErro(erro);
-    }
+    const pdf = await prepararPdf();
+    if (!pdf) return;
     const primeiroNome = (orc.cliente?.nome || '').trim().split(/\s+/)[0] || '';
     const mensagem = (empresa.mensagem_whatsapp || MENSAGEM_PADRAO).replaceAll('{cliente}', primeiroNome);
     const numero = numeroWhatsApp(orc.cliente?.whatsapp || orc.cliente?.telefone);
@@ -670,14 +737,7 @@ export async function paginaEditor({ id, clienteId }) {
     const enviado = await abrirModal('Enviar ao cliente', (fechar) => {
       const texto = h('textarea', { rows: '4', value: mensagem });
       const marcar = h('input', { type: 'checkbox', checked: ['rascunho', 'expirado'].includes(orc.status) });
-      const baixar = () => {
-        const url = URL.createObjectURL(pdf);
-        const a = h('a', { href: url, download: nomeArquivo });
-        document.body.append(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      };
+      const baixar = () => baixarArquivo(pdf);
       const concluir = () => fechar(marcar.checked);
       return h(
         'div',
@@ -940,6 +1000,26 @@ export async function paginaEditor({ id, clienteId }) {
       h('div', { class: 'cabecalho-acoes' }, menuBarra, botaoSalvar),
     ),
   );
+}
+
+/** Mesmo nome que o servidor usa: Orcamento-00001-joao-da-silva.pdf */
+function nomeDoPdf(orc) {
+  const cliente = (orc.cliente?.nome || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `Orcamento-${formatarNumero(orc.numero)}${cliente ? `-${cliente}` : ''}.pdf`;
+}
+
+function baixarArquivo(arquivo) {
+  const url = URL.createObjectURL(arquivo);
+  const a = h('a', { href: url, download: arquivo.name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function formatarDataHora(texto) {
