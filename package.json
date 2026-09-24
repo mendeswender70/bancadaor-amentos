@@ -1,0 +1,11 @@
+{
+  "name": "bancada-orcamentos",
+  "version": "1.0.0",
+  "description": "Orçamentos de móveis planejados: material, custo, mão de obra, m² e metro linear.",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "npx --yes serve ."
+  },
+  "license": "MIT"
+}
