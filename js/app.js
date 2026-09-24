@@ -34,10 +34,22 @@
   };
 
   // ---------- Dados iniciais (exemplos) ----------
+  function tabelaPrecosPadrao() {
+    return [
+      { id: 'tp-guarda-roupa', nome: 'Guarda-roupa', cobranca: 'm2', preco: 1100 },
+      { id: 'tp-balcao', nome: 'Balcão de cozinha', cobranca: 'm2', preco: 1000 },
+      { id: 'tp-aereo', nome: 'Armário aéreo', cobranca: 'm2', preco: 850 },
+      { id: 'tp-painel', nome: 'Painel de TV', cobranca: 'ml', preco: 800 },
+      { id: 'tp-banheiro', nome: 'Gabinete de banheiro', cobranca: 'm2', preco: 1000 },
+      { id: 'tp-closet', nome: 'Closet', cobranca: 'm2', preco: 1200 },
+    ];
+  }
+
   function configPadrao() {
     return {
       perdaChapa: 10,
       perdaFita: 10,
+      tabelaPrecos: tabelaPrecosPadrao(),
       materiais: [
         { id: 'mdf-br-15', nome: 'MDF Branco TX 15 mm', espessura: 15, chapaC: 2750, chapaL: 1850, preco: 289.9 },
         { id: 'mdf-br-18', nome: 'MDF Branco TX 18 mm', espessura: 18, chapaC: 2750, chapaL: 1850, preco: 339.9 },
@@ -66,6 +78,7 @@
       cliente: '',
       data: hoje(),
       comprimentoLinear: '',
+      itensMedida: [],
       pecas: [],
       ferragens: [],
       maoDeObra: [{ id: uid(), descricao: 'Produção e montagem', tipo: 'm2', valor: 0, qtd: 1 }],
@@ -110,15 +123,37 @@
     return p;
   }
 
+  function projetoExemploMedida() {
+    const p = projetoEmBranco();
+    Object.assign(p, { nome: 'Exemplo · Orçamento por medida', cliente: 'Cliente exemplo', margem: 0 });
+    p.maoDeObra = [];
+    p.itensMedida = [
+      { id: uid(), tabelaId: 'tp-guarda-roupa', descricao: 'Guarda-roupa casal', cobranca: 'm2', largura: 2.4, altura: 2.75, qtd: 1, preco: 1100 },
+      { id: uid(), tabelaId: 'tp-balcao', descricao: 'Balcão de cozinha', cobranca: 'm2', largura: 1.58, altura: 1.3, qtd: 1, preco: 1000 },
+      { id: uid(), tabelaId: 'tp-painel', descricao: 'Painel da sala', cobranca: 'ml', largura: 1.5, altura: 2.75, qtd: 1, preco: 800 },
+    ];
+    return p;
+  }
+
   // ---------- Estado ----------
   let config = armazem.ler(CHAVES.config, null) || configPadrao();
   let projetos = armazem.ler(CHAVES.projetos, null);
+  let projeto;
   if (!projetos || typeof projetos !== 'object' || !Object.keys(projetos).length) {
+    const exMedida = projetoExemploMedida();
     const ex = projetoExemplo();
-    projetos = { [ex.id]: ex };
+    projetos = { [exMedida.id]: exMedida, [ex.id]: ex };
+    projeto = exMedida;
+  } else if (!Array.isArray(config.tabelaPrecos)) {
+    // Dados da versão anterior: ganha a tabela de preços e um exemplo do orçamento por medida.
+    config.tabelaPrecos = tabelaPrecosPadrao();
+    const exMedida = projetoExemploMedida();
+    projetos[exMedida.id] = exMedida;
+    projeto = exMedida;
   }
-  let projeto = projetos[armazem.ler(CHAVES.atual, '')] || Object.values(projetos)[0];
-  let abaAtual = armazem.ler(CHAVES.aba, 'pecas');
+  ['materiais', 'fitas', 'ferragens', 'tabelaPrecos'].forEach((k) => { if (!Array.isArray(config[k])) config[k] = []; });
+  projeto = projeto || projetos[armazem.ler(CHAVES.atual, '')] || Object.values(projetos)[0];
+  let abaAtual = armazem.ler(CHAVES.aba, 'medida');
   let resultado = null;
 
   function salvar() {
@@ -185,6 +220,40 @@
     </tr>`;
   }
 
+  function linhaItemMedida(i) {
+    const l = 'itensMedida';
+    const tipos = config.tabelaPrecos;
+    const cobrancas = Object.entries(C.COBRANCAS_MEDIDA)
+      .map(([v, t]) => `<option value="${v}"${(i.cobranca || 'm2') === v ? ' selected' : ''}>${t}</option>`)
+      .join('');
+    const porMl = i.cobranca === 'ml';
+    return `<tr data-id="${esc(i.id)}">
+      <td data-rotulo="Tipo"><select ${attrs(l, i.id, 'tabelaId')}>${opcoes(tipos, i.tabelaId, 'Personalizado')}</select></td>
+      <td data-rotulo="Descrição">${inpTexto(l, i, 'descricao', 'Ex.: Guarda-roupa casal')}</td>
+      <td class="inteira" data-rotulo="Cobrança"><select ${attrs(l, i.id, 'cobranca')}>${cobrancas}</select></td>
+      <td class="n" data-rotulo="Largura (m)">${inpNum(l, i, 'largura', 'min="0" step="0.01" placeholder="0,00"')}</td>
+      <td class="n" data-rotulo="Altura (m)">${inpNum(l, i, 'altura', 'min="0" step="0.01" placeholder="0,00"')}</td>
+      <td class="n" data-rotulo="Qtd">${inpNum(l, i, 'qtd', 'min="0" step="1"')}</td>
+      <td class="n" data-rotulo="${porMl ? 'Preço por metro linear (R$)' : 'Preço por m² (R$)'}">${inpNum(l, i, 'preco', `min="0" step="0.01" aria-label="${porMl ? 'Preço por metro linear' : 'Preço por metro quadrado'}"`)}</td>
+      ${saida(i.id, 'medida', 'Medida')}
+      ${saida(i.id, 'total', 'Total')}
+      ${botoesLinha(l, i.id, true)}
+    </tr>`;
+  }
+
+  function linhaConfigTabela(t) {
+    const l = 'config.tabelaPrecos';
+    const cobrancas = Object.entries(C.COBRANCAS_MEDIDA)
+      .map(([v, txt]) => `<option value="${v}"${(t.cobranca || 'm2') === v ? ' selected' : ''}>${txt}</option>`)
+      .join('');
+    return `<tr data-id="${esc(t.id)}">
+      <td class="inteira" data-rotulo="Tipo de móvel">${inpTexto(l, t, 'nome')}</td>
+      <td data-rotulo="Cobrança"><select ${attrs(l, t.id, 'cobranca')}>${cobrancas}</select></td>
+      <td class="n" data-rotulo="Preço (R$)">${inpNum(l, t, 'preco', 'min="0" step="0.01"')}</td>
+      ${botoesLinha(l, t.id)}
+    </tr>`;
+  }
+
   function linhaFerragem(f) {
     return `<tr data-id="${esc(f.id)}">
       <td class="inteira" data-rotulo="Item"><select ${attrs('ferragens', f.id, 'ferragemId')}>${opcoes(config.ferragens, f.ferragemId, config.ferragens.some((c) => c.id === f.ferragemId) ? undefined : 'Escolha o item')}</select></td>
@@ -233,6 +302,8 @@
   }
 
   const TABELAS = {
+    itensMedida: { corpo: '#lista-itensMedida', linha: linhaItemMedida, colunas: 10, vazio: 'Nenhum móvel. Use “+ Móvel” e informe largura × altura.' },
+    'config.tabelaPrecos': { corpo: '#lista-config-tabelaPrecos', linha: linhaConfigTabela, colunas: 4, vazio: 'Cadastre os tipos de móvel e o preço por m² ou metro linear.' },
     pecas: { corpo: '#lista-pecas', linha: linhaPeca, colunas: 12, vazio: 'Nenhuma peça. Use “+ Peça” ou “+ Módulo rápido”.' },
     ferragens: { corpo: '#lista-ferragens', linha: linhaFerragem, colunas: 5, vazio: 'Nenhuma ferragem no orçamento.' },
     maoDeObra: { corpo: '#lista-maoDeObra', linha: linhaMao, colunas: 7, vazio: 'Nenhuma mão de obra cadastrada.' },
@@ -257,14 +328,15 @@
   }
 
   const ABAS = {
+    medida: ['itensMedida'],
     pecas: ['pecas'],
     ferragens: ['ferragens'],
     mao: ['maoDeObra'],
-    config: ['config.materiais', 'config.fitas', 'config.ferragens'],
+    config: ['config.tabelaPrecos', 'config.materiais', 'config.fitas', 'config.ferragens'],
   };
 
   function mostrarAba(nome) {
-    if (!ABAS[nome]) nome = 'pecas';
+    if (!ABAS[nome]) nome = 'medida';
     abaAtual = nome;
     armazem.gravar(CHAVES.aba, nome);
     $$('.tabs [data-aba]').forEach((b) => {
@@ -303,6 +375,7 @@
       'mod-fita-caixa': (config.fitas[0] || {}).id || '',
       'mod-fita-porta': (config.fitas[0] || {}).id || '',
       'mod-dobradica': (config.ferragens.find((f) => /dobradi/i.test(f.nome)) || {}).id || '',
+      'mod-corredica': (config.ferragens.find((f) => /corredi/i.test(f.nome)) || {}).id || '',
     };
     $$('#form-modulo select[data-opcoes]').forEach((sel) => {
       const itens = listas[sel.dataset.opcoes];
@@ -346,6 +419,14 @@
       outLinha(p.id, 'area', fmt(p.area, 3));
       outLinha(p.id, 'fita', fmt(p.fita));
     });
+    resultado.itensMedida.forEach((i) => {
+      const principal = i.cobranca === 'ml' ? `${fmt(i.ml)} m` : `${fmt(i.m2, 3)} m²`;
+      const outra = i.cobranca === 'ml' ? `${fmt(i.m2, 3)} m²` : `${fmt(i.ml)} m lin.`;
+      $$(`[data-out-id="${i.id}"][data-out-campo="medida"]`).forEach((el) => {
+        el.innerHTML = `${principal}<small>${outra}</small>`;
+      });
+      outLinha(i.id, 'total', brl(i.total));
+    });
     resultado.ferragens.forEach((f) => {
       outLinha(f.id, 'preco', brl(f.preco));
       outLinha(f.id, 'total', brl(f.total));
@@ -356,6 +437,9 @@
     });
     config.materiais.forEach((m) => outLinha(m.id, 'precoM2', brl(C.precoM2(m))));
 
+    out('n-medida', lista('itensMedida').length ? String(lista('itensMedida').length) : '');
+    out('t-medida-m2', `${fmt(t.areaMoveis, 3)} m²`);
+    out('t-medida', brl(t.vendaMedida));
     out('n-pecas', projeto.pecas.length ? String(t.qtdPecas) : '');
     out('n-ferragens', projeto.ferragens.length ? String(projeto.ferragens.length) : '');
     out('n-mao', projeto.maoDeObra.length ? String(projeto.maoDeObra.length) : '');
@@ -365,19 +449,25 @@
     out('t-mao', brl(t.custoMaoDeObra));
 
     out('preco-final', brl(t.precoFinal));
-    out('preco-m2', t.areaM2 > 0 ? brl(t.precoM2) : '—');
-    out('preco-ml', t.metroLinear > 0 ? brl(t.precoMl) : '—');
+    out('preco-m2', t.precoM2 > 0 ? brl(t.precoM2) : '—');
+    out('preco-m2-rotulo', t.baseM2 === 'moveis' ? 'por m² de móvel' : 'por m² de chapa');
+    out('preco-ml', t.precoMl > 0 ? brl(t.precoMl) : '—');
+    out('area-moveis', `${fmt(t.areaMoveis)} m²`);
+    out('qtd-pecas', `${fmt(t.qtdPecas, 0)} un.`);
     out('area', `${fmt(t.areaM2)} m²`);
     out('fita', `${fmt(t.fitaM, 1)} m`);
     out('chapas', `${fmt(t.qtdChapas, projeto.arredondarChapas === false ? 2 : 0)} un.`);
-    out('ml', t.metroLinear > 0 ? `${fmt(t.metroLinear)} m` : '—');
+    out('ml', t.metroLinearRef > 0 ? `${fmt(t.metroLinearRef)} m` : '—');
     out('c-chapas', brl(t.custoChapas));
     out('c-fitas', brl(t.custoFitas));
     out('c-ferragens', brl(t.custoFerragens));
     out('c-materiais', brl(t.custoMateriais));
     out('c-mao', brl(t.custoMaoDeObra));
     out('c-total', brl(t.custoTotal));
+    out('p-venda-det', brl(t.vendaDetalhada));
+    out('p-medida', brl(t.vendaMedida));
     out('p-venda', brl(t.precoVenda));
+    $('#linha-lucro').hidden = t.custoTotal <= 0;
     out('p-desconto', t.desconto > 0 ? `− ${brl(t.desconto)}` : brl(0));
     out('p-lucro', brl(t.lucro));
 
@@ -416,6 +506,21 @@
     return [...mapa.values()];
   }
 
+  function nomeItemMedida(i) {
+    const item = lista('itensMedida').find((x) => x.id === i.id) || {};
+    const tipo = config.tabelaPrecos.find((t) => t.id === item.tabelaId);
+    return (i.descricao || '').trim() || (tipo ? tipo.nome : 'Móvel');
+  }
+
+  function contaMedida(i) {
+    const qtd = i.qtd !== 1 ? `${fmt(i.qtd, 0)} × ` : '';
+    return i.cobranca === 'ml'
+      ? `${qtd}${fmt(i.largura)} m lineares × ${brl(i.preco)}/m`
+      : `${qtd}${fmt(i.largura)} × ${fmt(i.altura)} m = ${fmt(i.m2, 3)} m² × ${brl(i.preco)}/m²`;
+  }
+
+  const linhaTextoMedida = (i) => `• ${nomeItemMedida(i)}: ${contaMedida(i)} = ${brl(i.total)}`;
+
   function textoOrcamento() {
     const t = resultado.totais;
     const linhas = [
@@ -423,14 +528,18 @@
       projeto.cliente ? `Cliente: ${projeto.cliente}` : '',
       projeto.data ? `Data: ${dataBR(projeto.data)}` : '',
       '',
-      'AMBIENTES / MÓDULOS',
-      ...modulosDoProjeto().map((m) => `• ${m.nome}: ${fmt(m.pecas, 0)} peças, ${fmt(m.area)} m²`),
-      '',
-      'MEDIDAS',
-      `Área total de peças: ${fmt(t.areaM2)} m²`,
-      `Fita de borda: ${fmt(t.fitaM, 1)} m lineares`,
-      t.metroLinear > 0 ? `Comprimento do móvel: ${fmt(t.metroLinear)} m lineares` : '',
-      `Chapas: ${resultado.chapas.map((c) => `${fmt(c.chapas, projeto.arredondarChapas === false ? 2 : 0)} × ${c.nome}`).join('; ') || '—'}`,
+      ...(resultado.itensMedida.length ? ['MÓVEIS', ...resultado.itensMedida.map(linhaTextoMedida), ''] : []),
+      ...(projeto.pecas.length ? [
+        'MÓVEIS SOB PROJETO',
+        ...modulosDoProjeto().map((m) => `• ${m.nome}: ${fmt(m.pecas, 0)} peças, ${fmt(m.area)} m²`),
+        `Subtotal: ${brl(t.vendaDetalhada)}`,
+        '',
+        'MEDIDAS',
+        `Área total de peças: ${fmt(t.areaM2)} m²`,
+        `Fita de borda: ${fmt(t.fitaM, 1)} m lineares`,
+        t.metroLinear > 0 ? `Comprimento do móvel: ${fmt(t.metroLinear)} m lineares` : '',
+        `Chapas: ${resultado.chapas.map((c) => `${fmt(c.chapas, projeto.arredondarChapas === false ? 2 : 0)} × ${c.nome}`).join('; ') || '—'}`,
+      ] : []),
       resultado.ferragens.length ? '' : null,
       resultado.ferragens.length ? 'FERRAGENS' : null,
       ...resultado.ferragens.filter((f) => f.qtd > 0).map((f) => `• ${fmt(f.qtd, 0)} × ${f.nome}`),
@@ -439,7 +548,7 @@
       t.desconto > 0 ? `Valor: ${brl(t.precoVenda)}` : null,
       t.desconto > 0 ? `Desconto (${fmt(C.num(projeto.desconto), 1)}%): − ${brl(t.desconto)}` : null,
       `TOTAL: ${brl(t.precoFinal)}`,
-      [t.areaM2 > 0 ? `${brl(t.precoM2)}/m²` : '', t.metroLinear > 0 ? `${brl(t.precoMl)}/metro linear` : ''].filter(Boolean).join(' · '),
+      [t.precoM2 > 0 ? `${brl(t.precoM2)}/m²` : '', t.precoMl > 0 ? `${brl(t.precoMl)}/metro linear` : ''].filter(Boolean).join(' · '),
     ];
     return linhas.filter((l) => l !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
@@ -474,9 +583,15 @@
       <h1>Orçamento · ${esc(projeto.nome || 'Móveis planejados')}</h1>
       <p class="sub">${projeto.cliente ? `Cliente: ${esc(projeto.cliente)} · ` : ''}${dataBR(projeto.data)}</p>
 
-      <h2>Ambientes / módulos</h2>
+      ${resultado.itensMedida.length ? `<h2>Móveis</h2>
+      <table><thead><tr><th>Móvel</th><th>Medida</th><th class="n">Valor</th></tr></thead><tbody>
+        ${resultado.itensMedida.map((i) => `<tr><td>${esc(nomeItemMedida(i))}</td><td>${esc(contaMedida(i))}</td><td class="n">${brl(i.total)}</td></tr>`).join('')}
+      </tbody></table>` : ''}
+
+      ${projeto.pecas.length ? `<h2>Móveis sob projeto</h2>
       <table><thead><tr><th>Módulo</th><th class="n">Peças</th><th class="n">m²</th></tr></thead><tbody>
         ${modulosDoProjeto().map((m) => `<tr><td>${esc(m.nome)}</td><td class="n">${fmt(m.pecas, 0)}</td><td class="n">${fmt(m.area)}</td></tr>`).join('')}
+        <tr><td colspan="2">Subtotal</td><td class="n">${brl(t.vendaDetalhada)}</td></tr>
       </tbody></table>
 
       <h2>Materiais</h2>
@@ -484,19 +599,20 @@
         ${resultado.chapas.map((c) => `<tr><td>${esc(c.nome)}</td><td class="n">${fmt(c.chapas, inteiras ? 0 : 2)} chapa(s) · ${fmt(c.area)} m²</td></tr>`).join('')}
         ${resultado.fitas.map((f) => `<tr><td>${esc(f.nome)}</td><td class="n">${fmt(f.metrosComPerda, 1)} m</td></tr>`).join('')}
         ${resultado.ferragens.filter((f) => f.qtd > 0).map((f) => `<tr><td>${esc(f.nome)}</td><td class="n">${fmt(f.qtd, 0)} un.</td></tr>`).join('')}
-      </tbody></table>
+      </tbody></table>` : ''}
 
       <h2>Valor</h2>
       <table><tbody>
-        <tr><td>Área total de peças</td><td class="n">${fmt(t.areaM2)} m²</td></tr>
-        ${t.metroLinear > 0 ? `<tr><td>Comprimento do móvel</td><td class="n">${fmt(t.metroLinear)} m lineares</td></tr>` : ''}
+        ${t.areaMoveis > 0 ? `<tr><td>Área dos móveis</td><td class="n">${fmt(t.areaMoveis)} m²</td></tr>` : ''}
+        ${t.areaM2 > 0 ? `<tr><td>Área total de peças</td><td class="n">${fmt(t.areaM2)} m²</td></tr>` : ''}
+        ${t.metroLinearRef > 0 ? `<tr><td>Metro linear</td><td class="n">${fmt(t.metroLinearRef)} m</td></tr>` : ''}
         ${t.desconto > 0 ? `<tr><td>Valor</td><td class="n">${brl(t.precoVenda)}</td></tr><tr><td>Desconto (${fmt(C.num(projeto.desconto), 1)}%)</td><td class="n">− ${brl(t.desconto)}</td></tr>` : ''}
         <tr class="total"><td>Total</td><td class="n">${brl(t.precoFinal)}</td></tr>
-        ${t.areaM2 > 0 ? `<tr><td>Equivale a</td><td class="n">${brl(t.precoM2)}/m²${t.metroLinear > 0 ? ` · ${brl(t.precoMl)}/metro linear` : ''}</td></tr>` : ''}
+        ${t.precoM2 > 0 ? `<tr><td>Equivale a</td><td class="n">${brl(t.precoM2)}/m²${t.precoMl > 0 ? ` · ${brl(t.precoMl)}/metro linear` : ''}</td></tr>` : ''}
       </tbody></table>
       <p class="rodape">Orçamento gerado em ${dataBR(hoje())}.</p>
 
-      <div style="break-before: page">
+      ${projeto.pecas.length ? `<div style="break-before: page">
         <h1>Lista de peças</h1>
         <p class="sub">${esc(projeto.nome || '')} · medidas em mm · uso interno</p>
         <table><thead><tr><th>Módulo</th><th>Peça</th><th class="n">Qtd</th><th class="n">Comp.</th><th class="n">Larg.</th><th>Chapa</th><th>Fita (C/L)</th><th class="n">m²</th></tr></thead><tbody>
@@ -506,7 +622,7 @@
             return `<tr><td>${esc(p.modulo)}</td><td>${esc(p.nome)}</td><td class="n">${esc(p.qtd)}</td><td class="n">${esc(p.c)}</td><td class="n">${esc(p.l)}</td><td>${esc(nomeMat(p.materialId))}</td><td>${fita}</td><td class="n">${fmt(r.area, 3)}</td></tr>`;
           }).join('')}
         </tbody></table>
-      </div>`;
+      </div>` : ''}`;
   }
 
   // ---------- Importar / exportar ----------
@@ -543,7 +659,7 @@
     }
     // Acrescenta ao catálogo os itens que ainda não existem (pelo id).
     if (dados.config) {
-      ['materiais', 'fitas', 'ferragens'].forEach((k) => {
+      ['materiais', 'fitas', 'ferragens', 'tabelaPrecos'].forEach((k) => {
         (dados.config[k] || []).forEach((item) => {
           if (item && item.id && !config[k].some((i) => i.id === item.id)) config[k].push(item);
         });
@@ -571,6 +687,15 @@
       const item = lista(el.dataset.list).find((i) => i.id === el.dataset.id);
       if (!item) return;
       item[el.dataset.field] = v;
+      if (el.dataset.list === 'itensMedida' && el.dataset.field === 'tabelaId') {
+        const tipo = config.tabelaPrecos.find((t) => t.id === v);
+        if (tipo) {
+          const nomeAnterior = (config.tabelaPrecos.find((t) => t.nome === item.descricao) || {}).nome;
+          item.cobranca = tipo.cobranca || 'm2';
+          item.preco = tipo.preco;
+          if (!String(item.descricao || '').trim() || nomeAnterior) item.descricao = tipo.nome;
+        }
+      }
       return;
     }
     if (el.dataset.proj) {
@@ -618,6 +743,14 @@
   function novoItem(caminho) {
     const ultima = projeto.pecas[projeto.pecas.length - 1];
     switch (caminho) {
+      case 'itensMedida': {
+        const anterior = lista('itensMedida').slice(-1)[0];
+        const tipo = config.tabelaPrecos.find((t) => anterior && t.id === anterior.tabelaId) || config.tabelaPrecos[0];
+        return tipo
+          ? { id: uid(), tabelaId: tipo.id, descricao: tipo.nome, cobranca: tipo.cobranca || 'm2', largura: '', altura: '', qtd: 1, preco: tipo.preco }
+          : { id: uid(), tabelaId: '', descricao: '', cobranca: 'm2', largura: '', altura: '', qtd: 1, preco: 0 };
+      }
+      case 'config.tabelaPrecos': return { id: uid(), nome: 'Novo tipo', cobranca: 'm2', preco: 0 };
       case 'pecas':
         return {
           id: uid(), modulo: ultima ? ultima.modulo : '', nome: '', qtd: 1, c: '', l: '',
@@ -646,7 +779,8 @@
       lista(caminho).push(item);
       renderTabela(caminho);
       aposMudanca();
-      const primeiro = $(`[data-list="${caminho}"][data-id="${item.id}"]:not([disabled])`);
+      const primeiro = $(`[data-list="${caminho}"][data-id="${item.id}"][data-field="largura"]`) ||
+        $(`[data-list="${caminho}"][data-id="${item.id}"]:not([disabled])`);
       if (primeiro) primeiro.focus();
       return;
     }
@@ -752,6 +886,7 @@
       profundidade: val('mod-prof'),
       prateleiras: val('mod-prat'),
       portas: val('mod-portas'),
+      gavetas: val('mod-gavetas'),
       espessura: caixa.espessura,
       materialCaixaId: caixa.id,
       materialFundoId: val('mod-mat-fundo'),
@@ -762,15 +897,19 @@
     if (!r.pecas.length) { toast('Informe largura, altura e profundidade do módulo.'); return; }
     r.pecas.forEach((p) => projeto.pecas.push({ id: uid(), ...p }));
 
-    const dobId = val('mod-dobradica');
-    if (r.dobradicas > 0 && dobId) {
-      const existente = projeto.ferragens.find((f) => f.ferragemId === dobId);
-      if (existente) existente.qtd = C.num(existente.qtd) + r.dobradicas;
-      else projeto.ferragens.push({ id: uid(), ferragemId: dobId, qtd: r.dobradicas });
-    }
+    const somarFerragem = (ferragemId, qtd) => {
+      if (!ferragemId || qtd <= 0) return false;
+      const existente = projeto.ferragens.find((f) => f.ferragemId === ferragemId);
+      if (existente) existente.qtd = C.num(existente.qtd) + qtd;
+      else projeto.ferragens.push({ id: uid(), ferragemId, qtd });
+      return true;
+    };
+    const extras = [];
+    if (somarFerragem(val('mod-dobradica'), r.dobradicas)) extras.push(`${r.dobradicas} dobradiças`);
+    if (somarFerragem(val('mod-corredica'), r.corredicas)) extras.push(`${r.corredicas} pares de corrediça`);
     renderTabela('pecas');
     aposMudanca();
-    toast(`${r.pecas.length} tipos de peça adicionados${r.dobradicas && dobId ? ` e ${r.dobradicas} dobradiças` : ''}.`);
+    toast(`${r.pecas.length} tipos de peça adicionados${extras.length ? ` + ${extras.join(' e ')}` : ''}.`);
   });
 
   // ---------- Início ----------

@@ -63,11 +63,37 @@
     </div>
 
     <nav class="tabs" role="tablist" aria-label="Seções do orçamento">
-      <button type="button" role="tab" id="aba-pecas" aria-controls="painel-pecas" data-aba="pecas">Peças <span class="contador" data-out="n-pecas"></span></button>
+      <button type="button" role="tab" id="aba-medida" aria-controls="painel-medida" data-aba="medida">Móveis por medida <span class="contador" data-out="n-medida"></span></button>
+      <button type="button" role="tab" id="aba-pecas" aria-controls="painel-pecas" data-aba="pecas">Peças (detalhado) <span class="contador" data-out="n-pecas"></span></button>
       <button type="button" role="tab" id="aba-ferragens" aria-controls="painel-ferragens" data-aba="ferragens">Ferragens <span class="contador" data-out="n-ferragens"></span></button>
       <button type="button" role="tab" id="aba-mao" aria-controls="painel-mao" data-aba="mao">Mão de obra <span class="contador" data-out="n-mao"></span></button>
       <button type="button" role="tab" id="aba-config" aria-controls="painel-config" data-aba="config">Materiais e preços</button>
     </nav>
+
+    <!-- MÓVEIS POR MEDIDA -->
+    <div class="painel" role="tabpanel" id="painel-medida" aria-labelledby="aba-medida" hidden>
+      <div class="barra">
+        <button type="button" class="primario" data-add="itensMedida">+ Móvel</button>
+        <p class="dica">Orçamento rápido: informe só largura × altura do móvel em metros. O preço por m² ou por metro linear vem da tabela em Materiais e preços e já é o preço de venda.</p>
+      </div>
+      <div class="tabela-rolagem">
+        <table class="tabela tabela-medida">
+          <thead>
+            <tr>
+              <th>Tipo</th><th>Descrição</th><th>Cobrança</th><th class="n">Largura (m)</th><th class="n">Altura (m)</th>
+              <th class="n">Qtd</th><th class="n">Preço (R$)</th><th class="n">Medida</th><th class="n">Total</th><th><span class="sr-only">Ações</span></th>
+            </tr>
+          </thead>
+          <tbody id="lista-itensMedida"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="7">Total dos móveis por medida</td>
+              <td class="n" data-out="t-medida-m2"></td><td class="n" data-out="t-medida"></td><td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
 
     <!-- PEÇAS -->
     <div class="painel" role="tabpanel" id="painel-pecas" aria-labelledby="aba-pecas">
@@ -79,7 +105,7 @@
 
       <form id="form-modulo" class="modulo" hidden>
         <h3>Gerar peças de um módulo</h3>
-        <p class="dica">Caixa com laterais, base, tampo, prateleiras, fundo sobreposto e portas sobrepostas (folga de 3 mm). A espessura vem da chapa da caixa.</p>
+        <p class="dica">Caixa com laterais, base, tampo, prateleiras, fundo sobreposto, portas sobrepostas (folga de 3 mm) e gavetas. Com portas e gavetas juntas, as gavetas (frente de 180 mm) ficam embaixo. A espessura vem da chapa da caixa.</p>
         <div class="grade-modulo">
           <div class="campo largo"><label for="mod-nome">Nome do módulo</label><input id="mod-nome" type="text" value="Balcão pia"></div>
           <div class="campo"><label for="mod-largura">Largura (mm)</label><input id="mod-largura" type="number" min="1" value="800" inputmode="numeric"></div>
@@ -87,12 +113,14 @@
           <div class="campo"><label for="mod-prof">Profundidade (mm)</label><input id="mod-prof" type="number" min="1" value="550" inputmode="numeric"></div>
           <div class="campo"><label for="mod-prat">Prateleiras</label><input id="mod-prat" type="number" min="0" value="1" inputmode="numeric"></div>
           <div class="campo"><label for="mod-portas">Portas</label><input id="mod-portas" type="number" min="0" value="2" inputmode="numeric"></div>
+          <div class="campo"><label for="mod-gavetas">Gavetas</label><input id="mod-gavetas" type="number" min="0" value="0" inputmode="numeric"></div>
           <div class="campo"><label for="mod-mat-caixa">Chapa da caixa</label><select id="mod-mat-caixa" data-opcoes="materiais"></select></div>
           <div class="campo"><label for="mod-mat-fundo">Chapa do fundo</label><select id="mod-mat-fundo" data-opcoes="materiais" data-vazio="Sem fundo"></select></div>
-          <div class="campo"><label for="mod-mat-porta">Chapa das portas</label><select id="mod-mat-porta" data-opcoes="materiais"></select></div>
+          <div class="campo"><label for="mod-mat-porta">Chapa das portas e frentes</label><select id="mod-mat-porta" data-opcoes="materiais"></select></div>
           <div class="campo"><label for="mod-fita-caixa">Fita da caixa</label><select id="mod-fita-caixa" data-opcoes="fitas" data-vazio="Sem fita"></select></div>
-          <div class="campo"><label for="mod-fita-porta">Fita das portas</label><select id="mod-fita-porta" data-opcoes="fitas" data-vazio="Sem fita"></select></div>
+          <div class="campo"><label for="mod-fita-porta">Fita das portas e frentes</label><select id="mod-fita-porta" data-opcoes="fitas" data-vazio="Sem fita"></select></div>
           <div class="campo"><label for="mod-dobradica">Dobradiça (ferragens)</label><select id="mod-dobradica" data-opcoes="ferragens" data-vazio="Não adicionar"></select></div>
+          <div class="campo"><label for="mod-corredica">Corrediça (ferragens)</label><select id="mod-corredica" data-opcoes="ferragens" data-vazio="Não adicionar"></select></div>
         </div>
         <div class="barra">
           <button type="submit" class="primario">Gerar peças</button>
@@ -159,6 +187,16 @@
         <div class="campo"><label for="cfg-perda-fita">Perda de fita de borda (%)</label><input id="cfg-perda-fita" data-cfg="perdaFita" type="number" min="0" step="1" inputmode="decimal"></div>
       </div>
 
+      <h3>Tabela de preços por medida</h3>
+      <p class="dica">Preço de venda de cada tipo de móvel, usado na aba Móveis por medida.</p>
+      <div class="tabela-rolagem">
+        <table class="tabela">
+          <thead><tr><th>Tipo de móvel</th><th>Cobrança</th><th class="n">Preço (R$)</th><th><span class="sr-only">Remover</span></th></tr></thead>
+          <tbody id="lista-config-tabelaPrecos"></tbody>
+        </table>
+      </div>
+      <div class="barra"><button type="button" data-add="config.tabelaPrecos">+ Tipo de móvel</button></div>
+
       <h3>Chapas</h3>
       <div class="tabela-rolagem">
         <table class="tabela">
@@ -193,22 +231,24 @@
       <span class="rotulo">Preço final</span>
       <strong data-out="preco-final">R$ 0,00</strong>
       <div class="unitarios">
-        <span><b data-out="preco-m2"></b> por m²</span>
+        <span><b data-out="preco-m2"></b> <span data-out="preco-m2-rotulo">por m²</span></span>
         <span><b data-out="preco-ml"></b> por metro linear</span>
       </div>
     </div>
 
     <div class="medidas">
-      <div><span class="rotulo">Área de peças</span><b data-out="area"></b></div>
+      <div><span class="rotulo">Móveis (m²)</span><b data-out="area-moveis"></b></div>
+      <div><span class="rotulo">Metro linear</span><b data-out="ml"></b></div>
+      <div><span class="rotulo">Peças (m² de chapa)</span><b data-out="area"></b></div>
       <div><span class="rotulo">Fita de borda</span><b data-out="fita"></b></div>
       <div><span class="rotulo">Chapas</span><b data-out="chapas"></b></div>
-      <div><span class="rotulo">Móvel</span><b data-out="ml"></b></div>
+      <div><span class="rotulo">Peças</span><b data-out="qtd-pecas"></b></div>
     </div>
 
     <div id="resumo-chapas"></div>
     <ul id="resumo-avisos" class="avisos"></ul>
 
-    <h3>Custos</h3>
+    <h3>Custos (peças detalhadas)</h3>
     <dl class="linhas">
       <div><dt>Chapas</dt><dd data-out="c-chapas"></dd></div>
       <div><dt>Fita de borda</dt><dd data-out="c-fitas"></dd></div>
@@ -228,13 +268,15 @@
         <dt><label for="proj-margem">Margem sobre o custo (%)</label></dt>
         <dd><input id="proj-margem" data-proj="margem" type="number" step="1" inputmode="decimal" class="mini"></dd>
       </div>
-      <div><dt>Preço de venda</dt><dd data-out="p-venda"></dd></div>
+      <div><dt>Venda das peças detalhadas</dt><dd data-out="p-venda-det"></dd></div>
+      <div><dt>Móveis por medida</dt><dd data-out="p-medida"></dd></div>
+      <div class="subtotal"><dt>Preço de venda</dt><dd data-out="p-venda"></dd></div>
       <div>
         <dt><label for="proj-desconto">Desconto (%)</label></dt>
         <dd><input id="proj-desconto" data-proj="desconto" type="number" min="0" max="100" step="0.5" inputmode="decimal" class="mini"></dd>
       </div>
       <div><dt>Valor do desconto</dt><dd data-out="p-desconto"></dd></div>
-      <div class="subtotal"><dt>Lucro</dt><dd data-out="p-lucro"></dd></div>
+      <div class="subtotal" id="linha-lucro"><dt>Lucro das peças detalhadas</dt><dd data-out="p-lucro"></dd></div>
     </dl>
 
     <label class="check">

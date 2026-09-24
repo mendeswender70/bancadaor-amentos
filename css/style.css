@@ -70,6 +70,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -238,6 +239,14 @@ input.mini { width: 7.5em; }
 .tabela-pecas .saida { padding-inline: .4rem; }
 .acoes-linha { white-space: nowrap; }
 .sem-material select { border-color: var(--aviso); }
+.tabela-medida td:nth-child(1) { min-width: 7rem; }
+.tabela-medida td:nth-child(2) { min-width: 7rem; }
+.tabela-medida td:nth-child(3) { min-width: 7.5rem; }
+.tabela-medida td:nth-child(4) input, .tabela-medida td:nth-child(5) input { width: 4.6em; }
+.tabela-medida td:nth-child(6) input { width: 3.2em; }
+.tabela-medida td:nth-child(7) input { width: 5.8em; }
+.tabela-medida .saida { padding-inline: .4rem; }
+.saida small { display: block; color: var(--tinta-2); font-size: 11px; }
 
 .perdas { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 260px)); gap: .8rem; }
 
@@ -347,7 +356,8 @@ input.mini { width: 7.5em; }
 @media (max-width: 720px) {
   .brand { margin-right: 0; width: 100%; }
   .tabs button { font-size: .92rem; padding: .7em .6em; }
-  .projetos select { flex: 1 1 100%; max-width: none; }
+  .projetos { width: 100%; }
+  .projetos select { flex: 1 1 100%; width: 100%; max-width: none; }
   .campo.largo { grid-column: 1 / -1; }
   .tabela-rolagem { border: 0; background: transparent; overflow: visible; }
   .tabela, .tabela tbody, .tabela tfoot { display: block; }
@@ -372,7 +382,7 @@ input.mini { width: 7.5em; }
   .tabela .saida { padding: 0; }
   .tabela .vazia { display: block; }
   .tabela tfoot tr {
-    display: flex; justify-content: space-between; gap: 1rem;
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem 1rem;
     background: var(--superficie-2); border-radius: var(--raio); padding: .65rem .75rem;
   }
   .tabela tfoot td { display: block; padding: 0; border: 0; background: none; }

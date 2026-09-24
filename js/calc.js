@@ -23,6 +23,11 @@
     fixo: 'Valor fixo',
   };
 
+  const COBRANCAS_MEDIDA = {
+    m2: 'm² (larg. × alt.)',
+    ml: 'Metro linear',
+  };
+
   /** Converte entrada do usuário em número (aceita vírgula decimal). */
   function num(v, padrao = 0) {
     if (typeof v === 'number') return Number.isFinite(v) ? v : padrao;
@@ -59,6 +64,22 @@
     const ladosL = limitar(Math.round(num(peca.fitaL)), 0, 2);
     const fita = temFita ? ((c * ladosC + l * ladosL) / 1000) * qtd : 0;
     return { qtd, area, fita };
+  }
+
+  /**
+   * Móvel orçado só pela medida externa, em metros.
+   * m² = largura × altura × qtd ; metro linear = largura × qtd.
+   * O preço informado já é o preço de venda (R$/m² ou R$/m).
+   */
+  function medirItemMedida(item) {
+    const qtd = Math.max(0, num(item.qtd, 1));
+    const largura = Math.max(0, num(item.largura));
+    const altura = Math.max(0, num(item.altura));
+    const cobranca = item.cobranca === 'ml' ? 'ml' : 'm2';
+    const m2 = largura * altura * qtd;
+    const ml = largura * qtd;
+    const base = cobranca === 'ml' ? ml : m2;
+    return { qtd, largura, altura, cobranca, m2, ml, base, total: base * Math.max(0, num(item.preco)) };
   }
 
   function calcularMaoDeObra(item, base) {
@@ -182,12 +203,30 @@
       avisos.push('Há mão de obra por metro linear, mas o comprimento linear do móvel está zerado.');
     }
 
+    // Móveis por medida (preço de venda direto)
+    const itensMedida = (projeto.itensMedida || []).map((item) => ({
+      id: item.id,
+      descricao: item.descricao,
+      preco: Math.max(0, num(item.preco)),
+      ...medirItemMedida(item),
+    }));
+    const areaMoveis = soma(itensMedida, 'm2');
+    const mlMoveis = soma(itensMedida, 'ml');
+    const vendaMedida = soma(itensMedida, 'total');
+
     const custoMaoDeObra = soma(maoDeObra, 'total');
     const outrosCustos = Math.max(0, num(projeto.outrosCustos));
     const custoTotal = custoMateriais + custoMaoDeObra + outrosCustos;
-    const precoVenda = custoTotal * (1 + num(projeto.margem) / 100);
-    const desconto = precoVenda * (limitar(num(projeto.desconto), 0, 100) / 100);
+    const vendaDetalhada = custoTotal * (1 + num(projeto.margem) / 100);
+    const precoVenda = vendaDetalhada + vendaMedida;
+    const fatorDesconto = limitar(num(projeto.desconto), 0, 100) / 100;
+    const desconto = precoVenda * fatorDesconto;
     const precoFinal = precoVenda - desconto;
+
+    // Preço por m² e por metro linear: pela medida do móvel quando houver itens por medida,
+    // senão pela área das peças e pelo comprimento linear informado.
+    const baseM2 = areaMoveis > 0 ? areaMoveis : areaM2;
+    const baseMl = metroLinear > 0 ? metroLinear : mlMoveis;
 
     return {
       pecas,
@@ -195,6 +234,7 @@
       fitas: fitasUsadas,
       ferragens,
       maoDeObra,
+      itensMedida,
       avisos,
       totais: {
         qtdPecas: soma(pecas, 'qtd'),
@@ -210,12 +250,19 @@
         custoMaoDeObra,
         outrosCustos,
         custoTotal,
+        areaMoveis,
+        mlMoveis,
+        vendaMedida,
+        vendaDetalhada,
         precoVenda,
         desconto,
         precoFinal,
-        lucro: precoFinal - custoTotal,
-        precoM2: areaM2 > 0 ? precoFinal / areaM2 : 0,
-        precoMl: metroLinear > 0 ? precoFinal / metroLinear : 0,
+        // Lucro conhecido: só da parte detalhada (itens por medida não têm custo lançado).
+        lucro: vendaDetalhada * (1 - fatorDesconto) - custoTotal,
+        baseM2: areaMoveis > 0 ? 'moveis' : 'pecas',
+        precoM2: baseM2 > 0 ? precoFinal / baseM2 : 0,
+        metroLinearRef: baseMl,
+        precoMl: baseMl > 0 ? precoFinal / baseMl : 0,
       },
     };
   }
@@ -232,8 +279,11 @@
 
   /**
    * Gera as peças de um módulo (caixa) padrão:
-   * laterais, base, tampo, prateleiras, fundo sobreposto e portas sobrepostas.
-   * Fita: frente das peças da caixa e as 4 bordas das portas.
+   * laterais, base, tampo, prateleiras, fundo sobreposto, portas sobrepostas e gavetas.
+   * Com portas e gavetas juntas, as gavetas (180 mm de frente) ficam embaixo e as portas em cima.
+   * Gaveta: frente (chapa da porta, fita nos 4 lados), laterais, frente/traseira internas
+   * e fundo; desconta 13 mm por lado para a corrediça.
+   * Fita: frente das peças da caixa e as 4 bordas das portas e frentes.
    */
   function gerarModulo(opcoes) {
     const L = Math.max(0, num(opcoes.largura));
@@ -242,6 +292,7 @@
     const e = Math.max(0, num(opcoes.espessura, 15));
     const nPrat = Math.max(0, Math.round(num(opcoes.prateleiras)));
     const nPortas = Math.max(0, Math.round(num(opcoes.portas)));
+    const nGavetas = Math.max(0, Math.round(num(opcoes.gavetas)));
     const folga = 3; // mm entre portas e nas bordas
     const modulo = opcoes.nome || 'Módulo';
     const caixa = { materialId: opcoes.materialCaixaId, fitaId: opcoes.fitaCaixaId || opcoes.fitaId };
@@ -255,21 +306,44 @@
     if (nPrat > 0) add('Prateleira', nPrat, L - 2 * e - 2, P - 20, { ...caixa, fitaC: 1 });
     if (opcoes.materialFundoId) add('Fundo', 1, A - 4, L - 4, { materialId: opcoes.materialFundoId, fitaId: '' });
 
-    let dobradicas = 0;
-    if (nPortas > 0) {
-      const alturaPorta = A - 2 * folga;
-      const larguraPorta = (L - folga * (nPortas + 1)) / nPortas;
-      add('Porta', nPortas, alturaPorta, Math.floor(larguraPorta), {
-        materialId: opcoes.materialPortaId || opcoes.materialCaixaId,
-        fitaId: opcoes.fitaPortaId || opcoes.fitaId,
-        fitaC: 2,
-        fitaL: 2,
-      });
-      dobradicas = nPortas * dobradicasPorPorta(alturaPorta);
+    const frente = {
+      materialId: opcoes.materialPortaId || opcoes.materialCaixaId,
+      fitaId: opcoes.fitaPortaId || opcoes.fitaId,
+      fitaC: 2,
+      fitaL: 2,
+    };
+    let alturaGavetas = 0;
+    let corredicas = 0;
+    if (nGavetas > 0) {
+      const alturaFrente = nPortas > 0 ? 180 : (A - folga * (nGavetas + 1)) / nGavetas;
+      alturaGavetas = nGavetas * (alturaFrente + folga);
+      const vaoInterno = L - 2 * e - 26; // 13 mm de corrediça de cada lado
+      const alturaCaixa = alturaFrente - 40;
+      const profGaveta = P - 50;
+      add('Frente de gaveta', nGavetas, L - 2 * folga, Math.floor(alturaFrente), frente);
+      add('Lateral de gaveta', nGavetas * 2, profGaveta, alturaCaixa, { ...caixa, fitaC: 1 });
+      add('Frente/traseira interna de gaveta', nGavetas * 2, vaoInterno - 2 * e, alturaCaixa, { ...caixa, fitaC: 1 });
+      if (opcoes.materialFundoId) {
+        add('Fundo de gaveta', nGavetas, profGaveta, vaoInterno, { materialId: opcoes.materialFundoId, fitaId: '' });
+      }
+      corredicas = nGavetas;
     }
 
-    return { pecas: pecas.filter((p) => p.c > 0 && p.l > 0), dobradicas };
+    let dobradicas = 0;
+    if (nPortas > 0) {
+      const alturaPorta = A - 2 * folga - alturaGavetas;
+      const larguraPorta = (L - folga * (nPortas + 1)) / nPortas;
+      if (alturaPorta > 0) {
+        add('Porta', nPortas, alturaPorta, Math.floor(larguraPorta), frente);
+        dobradicas = nPortas * dobradicasPorPorta(alturaPorta);
+      }
+    }
+
+    return { pecas: pecas.filter((p) => p.c > 0 && p.l > 0), dobradicas, corredicas };
   }
 
-  return { TIPOS_MAO_DE_OBRA, num, areaChapa, precoM2, medirPeca, calcular, gerarModulo, dobradicasPorPorta };
+  return {
+    TIPOS_MAO_DE_OBRA, COBRANCAS_MEDIDA, num, areaChapa, precoM2, medirPeca, medirItemMedida,
+    calcular, gerarModulo, dobradicasPorPorta,
+  };
 });

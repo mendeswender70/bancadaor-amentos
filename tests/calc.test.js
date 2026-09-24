@@ -138,3 +138,76 @@ test('dobradiças por altura de porta', () => {
   assert.equal(Calc.dobradicasPorPorta(2000), 4);
   assert.equal(Calc.dobradicasPorPorta(2400), 5);
 });
+
+test('móvel por medida: balcão 1,58 × 1,30 dá 2,054 m²', () => {
+  const m = Calc.medirItemMedida({ largura: 1.58, altura: 1.3, qtd: 1, cobranca: 'm2', preco: 1000 });
+  perto(m.m2, 2.054);
+  perto(m.total, 2054);
+});
+
+test('painel por metro linear cobra só a largura', () => {
+  const m = Calc.medirItemMedida({ largura: 1.5, altura: 2.75, cobranca: 'ml', preco: 800 });
+  assert.equal(m.qtd, 1); // quantidade vazia vale 1
+  perto(m.ml, 1.5);
+  perto(m.m2, 4.125);
+  perto(m.total, 1200);
+});
+
+test('itens por medida entram no preço de venda sem receber margem de novo', () => {
+  const projeto = {
+    margem: 50,
+    desconto: 10,
+    itensMedida: [
+      { id: 'g', descricao: 'Guarda-roupa', cobranca: 'm2', largura: 2.4, altura: 2.75, qtd: 1, preco: 1000 },
+      { id: 'p', descricao: 'Painel', cobranca: 'ml', largura: 1.5, altura: 2.75, qtd: 1, preco: 800 },
+    ],
+    pecas: [{ id: 'a', qtd: 1, c: 1000, l: 1000, materialId: 'mdf15' }],
+  };
+  const t = Calc.calcular(projeto, config).totais;
+  perto(t.areaMoveis, 6.6 + 4.125);
+  perto(t.mlMoveis, 3.9);
+  perto(t.vendaMedida, 6600 + 1200);
+  perto(t.custoTotal, 300); // 1 chapa
+  perto(t.vendaDetalhada, 450);
+  perto(t.precoVenda, 8250);
+  perto(t.precoFinal, 8250 * 0.9);
+  perto(t.lucro, 450 * 0.9 - 300);
+  assert.equal(t.baseM2, 'moveis');
+  perto(t.precoM2, t.precoFinal / t.areaMoveis);
+  perto(t.precoMl, t.precoFinal / 3.9);
+});
+
+test('só itens por medida, sem peças, fecha o orçamento', () => {
+  const t = Calc.calcular(
+    { margem: 30, itensMedida: [{ id: 'b', cobranca: 'm2', largura: 1.58, altura: 1.3, preco: 1200 }] },
+    config,
+  ).totais;
+  perto(t.precoFinal, 2.054 * 1200);
+  assert.equal(t.custoTotal, 0);
+  assert.equal(t.lucro, 0);
+});
+
+test('gerarModulo com 4 gavetas e sem portas divide a altura', () => {
+  const { pecas, dobradicas, corredicas } = Calc.gerarModulo({
+    largura: 600, altura: 750, profundidade: 500, espessura: 15, gavetas: 4,
+    materialCaixaId: 'mdf15', materialFundoId: 'mdf6', fitaId: 'f22',
+  });
+  const por = Object.fromEntries(pecas.map((p) => [p.nome, p]));
+  assert.equal(dobradicas, 0);
+  assert.equal(corredicas, 4);
+  assert.deepEqual([por['Frente de gaveta'].qtd, por['Frente de gaveta'].c, por['Frente de gaveta'].l], [4, 594, 183]);
+  assert.deepEqual([por['Lateral de gaveta'].qtd, por['Lateral de gaveta'].c], [8, 450]);
+  assert.equal(por['Frente/traseira interna de gaveta'].c, 600 - 30 - 26 - 30);
+  assert.deepEqual([por['Fundo de gaveta'].c, por['Fundo de gaveta'].l], [450, 544]);
+});
+
+test('gerarModulo com portas e gavetas põe as gavetas embaixo', () => {
+  const { pecas, dobradicas } = Calc.gerarModulo({
+    largura: 1000, altura: 2750, profundidade: 550, espessura: 15, portas: 2, gavetas: 4,
+    materialCaixaId: 'mdf15', fitaId: 'f22',
+  });
+  const porta = pecas.find((p) => p.nome === 'Porta');
+  assert.equal(porta.c, 2750 - 6 - 4 * 183);
+  assert.equal(pecas.find((p) => p.nome === 'Frente de gaveta').l, 180);
+  assert.equal(dobradicas, 2 * 4);
+});
