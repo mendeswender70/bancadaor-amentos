@@ -1,7 +1,7 @@
 {
-  "name": "orcamentos-moveis-planejados",
+  "name": "esquadro",
   "version": "1.0.0",
-  "description": "Sistema de orçamentos para móveis planejados — cálculo por metro linear e metro quadrado, PDF para o cliente sem preços internos.",
+  "description": "esquadro — orçamentos de móveis planejados por metro linear, m² ou unidade, organizados por ambiente; PDF para o cliente sem preços internos.",
   "type": "module",
   "private": true,
   "engines": {

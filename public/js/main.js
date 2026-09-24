@@ -1,5 +1,5 @@
 import { api, cache, quandoPerderSessao } from './api.js';
-import { h, icone, substituir, carregando, avisoErro, campo, aviso, iniciais } from './ui.js';
+import { h, icone, substituir, carregando, avisoErro, campo, aviso, iniciais, marcaEsquadro } from './ui.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
@@ -124,6 +124,7 @@ function montarLayout() {
         ),
         h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
         h('nav', { class: 'lateral-nav' }, MENU.map((m) => link(m))),
+        h('a', { href: '#/config/conta', class: 'lateral-assinatura', title: 'esquadro' }, marcaEsquadro('marca-mini')),
         h(
           'div',
           { class: 'lateral-rodape' },
@@ -200,7 +201,7 @@ function cartaoAcesso(titulo, subtitulo, formulario) {
     h(
       'section',
       { class: 'acesso-marca' },
-      h('span', { class: 'monograma' }, icone('orcamentos')),
+      marcaEsquadro('marca-clara'),
       h(
         'div',
         {},
@@ -214,7 +215,7 @@ function cartaoAcesso(titulo, subtitulo, formulario) {
           vantagem('Envio direto pelo WhatsApp'),
         ),
       ),
-      h('small', {}, 'Sistema de orçamentos para marcenaria'),
+      h('small', {}, 'esquadro · orçamentos de marcenaria no esquadro'),
     ),
     h(
       'div',
@@ -222,7 +223,7 @@ function cartaoAcesso(titulo, subtitulo, formulario) {
       h(
         'div',
         { class: 'acesso-cartao' },
-        h('span', { class: 'monograma' }, icone('orcamentos')),
+        marcaEsquadro('marca-acesso'),
         h('h1', {}, titulo),
         subtitulo ? h('p', { class: 'suave' }, subtitulo) : null,
         formulario,
@@ -256,7 +257,7 @@ function telaEntrar() {
     botao,
   );
   setTimeout(() => email.focus());
-  return cartaoAcesso('Entrar', 'Sistema de orçamentos de móveis planejados', form);
+  return cartaoAcesso('Entrar', 'Que bom ter você de volta. Entre para ver seus orçamentos.', form);
 }
 
 function telaConfigurar() {
@@ -298,7 +299,7 @@ function telaConfigurar() {
     botao,
   );
   setTimeout(() => empresa.focus());
-  return cartaoAcesso('Bem-vindo!', 'Crie o acesso do administrador para começar a usar o sistema.', form);
+  return cartaoAcesso('Bem-vindo ao esquadro!', 'Crie o acesso do administrador para começar a fazer seus orçamentos.', form);
 }
 
 quandoPerderSessao(() => {

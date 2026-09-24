@@ -1,4 +1,6 @@
-# Sistema de Orçamentos para Móveis Planejados
+# esquadro — orçamentos de móveis planejados
+
+<img src="public/icons/esquadro.svg" width="72" alt="Logo do esquadro">
 
 Orçamentos rápidos para marcenaria: o móvel inteiro é avaliado por uma medida
 comercial (metro linear, metro quadrado ou unidade) e o sistema multiplica pelo

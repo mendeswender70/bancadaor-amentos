@@ -289,7 +289,9 @@ export function gerarPdf(v, logo) {
       .fontSize(8)
       .fillColor(COR.suave)
       .text(
-        [empresa.nome, `Orçamento nº ${v.numero}`, `Página ${i + 1} de ${paginas.count}`].filter(Boolean).join('  ·  '),
+        [empresa.nome, `Orçamento nº ${v.numero}`, `Página ${i + 1} de ${paginas.count}`, 'feito com esquadro']
+          .filter(Boolean)
+          .join('  ·  '),
         esquerda,
         y,
         { width: largura, align: 'center', lineBreak: false },

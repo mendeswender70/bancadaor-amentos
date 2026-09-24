@@ -223,6 +223,16 @@ export function vazioIlustrado(nomeIcone, titulo, texto, ...extras) {
   );
 }
 
+/** Logo do esquadro (ícone + nome). */
+export function marcaEsquadro(classe = '') {
+  return h(
+    'span',
+    { class: `marca-esquadro ${classe}` },
+    h('img', { src: '/icons/esquadro.svg', alt: '', width: '40', height: '40' }),
+    h('span', {}, 'esquadro'),
+  );
+}
+
 /** Iniciais para avatar: "João da Silva" → "JS". */
 export function iniciais(nome) {
   const partes = String(nome || '?')
