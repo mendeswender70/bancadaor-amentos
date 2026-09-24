@@ -328,16 +328,6 @@ export function gerarPdf(v, logo) {
     doc.y += 14;
   }
 
-  // ================================================================ Aceite
-  secao('Aceite da proposta', 70);
-  escrever('Estou de acordo com os itens, valores e condições desta proposta.', esq, doc.y, { t: 9, cor: COR.suave, width: largura });
-  const yAss = doc.y + 38;
-  const larguraAss = largura * 0.58;
-  fio(yAss, esq, esq + larguraAss, COR.suave, 0.6);
-  fio(yAss, esq + larguraAss + 30, dir, COR.suave, 0.6);
-  escrever(c.nome || 'Assinatura do cliente', esq, yAss + 6, { t: 8, cor: COR.suave, width: larguraAss });
-  escrever('Data', esq + larguraAss + 30, yAss + 6, { t: 8, cor: COR.suave, width: dir - esq - larguraAss - 30 });
-
   // ================================================================ Rodapé
   const paginas = doc.bufferedPageRange();
   for (let i = 0; i < paginas.count; i++) {

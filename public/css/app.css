@@ -534,7 +534,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  animation: surgir 220ms ease both;
+  animation: surgir 220ms ease backwards;
 }
 
 @keyframes surgir {
@@ -2653,7 +2653,12 @@ input.invalido {
   }
 
   .estrutura:has(.pagina-editor) .conteudo {
-    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  /* Espaço para a barra fixa não cobrir os últimos botões */
+  .estrutura:has(.pagina-editor) .pagina-editor {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 }
 
