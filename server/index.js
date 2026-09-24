@@ -6,6 +6,11 @@ const banco = configuracaoBanco();
 
 const app = criarApp({ banco });
 app.listen(porta, () => {
-  console.log(`Sistema de orçamentos rodando em http://localhost:${porta}`);
-  console.log(`Banco de dados: ${banco ? banco.url.replace(/\?.*$/, '') : 'arquivo local data/orcamentos.db'}`);
+  console.log(`esquadro rodando em http://localhost:${porta}`);
+  if (banco) {
+    const { hostname, pathname } = new URL(banco.url);
+    console.log(`Banco de dados: Postgres em ${hostname}${pathname}`);
+  } else {
+    console.log('Banco de dados: Postgres embutido na pasta data/pglite');
+  }
 });

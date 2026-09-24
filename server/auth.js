@@ -49,12 +49,12 @@ function opcoesCookie(req) {
 
 export async function criarSessao(db, req, res, usuarioId) {
   const token = randomBytes(32).toString('base64url');
-  await db.run(`DELETE FROM sessoes WHERE expira_em < datetime('now')`);
+  await db.run('DELETE FROM sessoes WHERE expira_em < now()');
   await db.run(
-    `INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, datetime('now', ?))`,
+    'INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, now() + ?::interval)',
     hashToken(token),
     usuarioId,
-    `+${DURACAO_SESSAO_DIAS} days`,
+    `${DURACAO_SESSAO_DIAS} days`,
   );
   res.setHeader('Set-Cookie', `${COOKIE}=${token}; Max-Age=${DURACAO_SESSAO_DIAS * 86400}; ${opcoesCookie(req)}`);
 }
@@ -71,7 +71,7 @@ export async function usuarioDaSessao(db, req) {
   return (
     (await db.get(
       `SELECT u.id, u.nome, u.email, u.tipo FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
-       WHERE s.token_hash = ? AND s.expira_em > datetime('now')`,
+       WHERE s.token_hash = ? AND s.expira_em > now()`,
       hashToken(token),
     )) || null
   );
@@ -103,10 +103,10 @@ export function exigirCabecalhoFetch(req, _res, next) {
  */
 export function criarLimitadorLogin({ maximo = 10, janelaMinutos = 15 } = {}) {
   const chave = (req) => `ip:${req.ip || 'desconhecido'}`;
-  const janela = `-${janelaMinutos} minutes`;
+  const janela = `${janelaMinutos} minutes`;
   return {
     async verificar(db, req) {
-      await db.run(`DELETE FROM tentativas_login WHERE inicio < datetime('now', ?)`, janela);
+      await db.run('DELETE FROM tentativas_login WHERE inicio < now() - ?::interval', janela);
       const registro = await db.get('SELECT quantidade FROM tentativas_login WHERE chave = ?', chave(req));
       if (registro && registro.quantidade >= maximo) {
         throw new ErroHttp(429, 'Muitas tentativas. Aguarde alguns minutos e tente novamente.');
@@ -114,8 +114,8 @@ export function criarLimitadorLogin({ maximo = 10, janelaMinutos = 15 } = {}) {
     },
     async falhou(db, req) {
       await db.run(
-        `INSERT INTO tentativas_login (chave, quantidade, inicio) VALUES (?, 1, datetime('now'))
-         ON CONFLICT(chave) DO UPDATE SET quantidade = quantidade + 1`,
+        `INSERT INTO tentativas_login (chave, quantidade, inicio) VALUES (?, 1, now())
+         ON CONFLICT (chave) DO UPDATE SET quantidade = tentativas_login.quantidade + 1`,
         chave(req),
       );
     },

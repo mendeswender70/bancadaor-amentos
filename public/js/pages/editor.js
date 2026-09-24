@@ -943,8 +943,8 @@ export async function paginaEditor({ id, clienteId }) {
 }
 
 function formatarDataHora(texto) {
-  // O servidor grava em UTC ("AAAA-MM-DD HH:MM:SS").
-  const d = new Date(`${String(texto).replace(' ', 'T')}Z`);
+  // O servidor envia a data em ISO (UTC).
+  const d = new Date(texto);
   if (Number.isNaN(d.getTime())) return texto;
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }

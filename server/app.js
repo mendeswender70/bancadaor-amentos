@@ -100,7 +100,8 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     const senha = validarSenha(req.body.senha);
     const r = await db.run(
       `INSERT INTO usuarios (nome, email, senha_hash, tipo)
-       SELECT ?, ?, ?, 'administrador' WHERE NOT EXISTS (SELECT 1 FROM usuarios)`,
+       SELECT ?::text, ?::text, ?::text, 'administrador' WHERE NOT EXISTS (SELECT 1 FROM usuarios)
+       RETURNING id`,
       nome,
       email,
       gerarHashSenha(senha),
@@ -202,7 +203,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       `SELECT c.*, COUNT(o.id) AS orcamentos, MAX(o.data) AS ultimo_orcamento
        FROM clientes c LEFT JOIN orcamentos o ON o.cliente_id = c.id
        ${onde.length ? `WHERE ${onde.join(' AND ')}` : ''}
-       GROUP BY c.id ORDER BY c.nome COLLATE NOCASE LIMIT ?`,
+       GROUP BY c.id ORDER BY lower(c.nome) LIMIT ?`,
       ...params,
       limite,
     );
@@ -212,7 +213,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.post('/clientes', async (req, res) => {
     const c = normalizarCliente(req.body);
     const r = await db.run(
-      `INSERT INTO clientes (${CAMPOS_CLIENTE.join(', ')}) VALUES (${CAMPOS_CLIENTE.map(() => '?').join(', ')})`,
+      `INSERT INTO clientes (${CAMPOS_CLIENTE.join(', ')}) VALUES (${CAMPOS_CLIENTE.map(() => '?').join(', ')}) RETURNING id`,
       ...CAMPOS_CLIENTE.map((k) => c[k]),
     );
     res.status(201).json(await lerCliente(r.lastInsertRowid));
@@ -228,7 +229,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.put('/clientes/:id', async (req, res) => {
     const c = normalizarCliente(req.body);
     const r = await db.run(
-      `UPDATE clientes SET ${CAMPOS_CLIENTE.map((k) => `${k} = ?`).join(', ')}, atualizado_em = datetime('now') WHERE id = ?`,
+      `UPDATE clientes SET ${CAMPOS_CLIENTE.map((k) => `${k} = ?`).join(', ')}, atualizado_em = now() WHERE id = ?`,
       ...CAMPOS_CLIENTE.map((k) => c[k]),
       id(req.params.id),
     );
@@ -259,7 +260,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     };
   };
   const CAMPOS_TIPO = ['nome', 'nome_cliente', 'unidade', 'metodo_calculo', 'preco_padrao_cents', 'ativo'];
-  const listarTipos = () => db.all('SELECT * FROM tipos_moveis ORDER BY ativo DESC, nome COLLATE NOCASE');
+  const listarTipos = () => db.all('SELECT * FROM tipos_moveis ORDER BY ativo DESC, lower(nome)');
 
   api.get('/tipos-moveis', async (_req, res) => {
     res.json(await listarTipos());
@@ -268,7 +269,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.post('/tipos-moveis', async (req, res) => {
     const t = normalizarTipo(req.body);
     const r = await db.run(
-      `INSERT INTO tipos_moveis (${CAMPOS_TIPO.join(', ')}) VALUES (${CAMPOS_TIPO.map(() => '?').join(', ')})`,
+      `INSERT INTO tipos_moveis (${CAMPOS_TIPO.join(', ')}) VALUES (${CAMPOS_TIPO.map(() => '?').join(', ')}) RETURNING id`,
       ...CAMPOS_TIPO.map((k) => t[k]),
     );
     res.status(201).json(await db.get('SELECT * FROM tipos_moveis WHERE id = ?', r.lastInsertRowid));
@@ -277,7 +278,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.put('/tipos-moveis/:id', async (req, res) => {
     const t = normalizarTipo(req.body);
     const r = await db.run(
-      `UPDATE tipos_moveis SET ${CAMPOS_TIPO.map((k) => `${k} = ?`).join(', ')}, atualizado_em = datetime('now') WHERE id = ?`,
+      `UPDATE tipos_moveis SET ${CAMPOS_TIPO.map((k) => `${k} = ?`).join(', ')}, atualizado_em = now() WHERE id = ?`,
       ...CAMPOS_TIPO.map((k) => t[k]),
       id(req.params.id),
     );
@@ -307,7 +308,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     await db.transacao(async (t) => {
       for (const p of validados) {
         await t.run(
-          `UPDATE tipos_moveis SET preco_padrao_cents = ?, atualizado_em = datetime('now') WHERE id = ? AND preco_padrao_cents <> ?`,
+          `UPDATE tipos_moveis SET preco_padrao_cents = ?, atualizado_em = now() WHERE id = ? AND preco_padrao_cents <> ?`,
           p.preco,
           p.id,
           p.preco,
@@ -343,7 +344,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.post('/condicoes-pagamento', async (req, res) => {
     const c = normalizarCondicao(req.body);
     const r = await db.run(
-      `INSERT INTO condicoes_pagamento (${CAMPOS_CONDICAO.join(', ')}) VALUES (${CAMPOS_CONDICAO.map(() => '?').join(', ')})`,
+      `INSERT INTO condicoes_pagamento (${CAMPOS_CONDICAO.join(', ')}) VALUES (${CAMPOS_CONDICAO.map(() => '?').join(', ')}) RETURNING id`,
       ...CAMPOS_CONDICAO.map((k) => c[k]),
     );
     res.status(201).json(await db.get('SELECT * FROM condicoes_pagamento WHERE id = ?', r.lastInsertRowid));
@@ -411,7 +412,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (!(png || jpg)) throw invalido('Arquivo de imagem inválido. Use PNG ou JPG.');
     if (bytes.length > 2 * 1024 * 1024) throw invalido('A logo deve ter no máximo 2 MB.');
     await db.run(
-      `UPDATE empresa SET logo = ?, logo_mime = ?, logo_atualizado_em = datetime('now') WHERE id = 1`,
+      `UPDATE empresa SET logo = ?, logo_mime = ?, logo_atualizado_em = now() WHERE id = 1`,
       bytes,
       png ? 'image/png' : 'image/jpeg',
     );

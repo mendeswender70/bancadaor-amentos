@@ -291,7 +291,7 @@ async function gravarFilhos(db, orcamentoId, orc) {
      VALUES (?, ?, ?, ${COLUNAS_ITEM.map(() => '?').join(', ')})`;
   for (const [i, ambiente] of orc.ambientes.entries()) {
     const { lastInsertRowid: ambienteId } = await db.run(
-      'INSERT INTO orcamento_ambientes (orcamento_id, ordem, nome, descricao) VALUES (?, ?, ?, ?)',
+      'INSERT INTO orcamento_ambientes (orcamento_id, ordem, nome, descricao) VALUES (?, ?, ?, ?) RETURNING id',
       orcamentoId,
       i,
       ambiente.nome,
@@ -319,7 +319,7 @@ async function inserir(db, orc, duplicadoDeId = null) {
   const { n: numero } = await db.get('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM orcamentos');
   const resultado = await db.run(
     `INSERT INTO orcamentos (numero, duplicado_de_id, ${COLUNAS.join(', ')})
-     VALUES (?, ?, ${COLUNAS.map(() => '?').join(', ')})`,
+     VALUES (?, ?, ${COLUNAS.map(() => '?').join(', ')}) RETURNING id`,
     numero,
     duplicadoDeId,
     ...COLUNAS.map((c) => orc[c]),
@@ -343,7 +343,7 @@ export function atualizarOrcamento(db, id, body, usuarioId) {
     if (!anterior) throw naoEncontrado('Orçamento não encontrado.');
     const novo = await normalizarOrcamento(t, body);
     await t.run(
-      `UPDATE orcamentos SET ${COLUNAS.map((c) => `${c} = ?`).join(', ')}, atualizado_em = datetime('now') WHERE id = ?`,
+      `UPDATE orcamentos SET ${COLUNAS.map((c) => `${c} = ?`).join(', ')}, atualizado_em = now() WHERE id = ?`,
       ...COLUNAS.map((c) => novo[c]),
       id,
     );
@@ -360,7 +360,7 @@ export function alterarStatus(db, id, status, usuarioId) {
     const atual = await t.get('SELECT status FROM orcamentos WHERE id = ?', id);
     if (!atual) throw naoEncontrado('Orçamento não encontrado.');
     if (atual.status === status) return;
-    await t.run(`UPDATE orcamentos SET status = ?, atualizado_em = datetime('now') WHERE id = ?`, status, id);
+    await t.run('UPDATE orcamentos SET status = ?, atualizado_em = now() WHERE id = ?', status, id);
     await registrarHistorico(t, id, `Status: ${STATUS[atual.status]} → ${STATUS[status]}`, usuarioId);
   });
 }
@@ -392,7 +392,7 @@ export async function expirarVencidos(db, dataHoje) {
   await db.transacao(async (t) => {
     for (const { id } of vencidos) {
       const r = await t.run(
-        `UPDATE orcamentos SET status = 'expirado', atualizado_em = datetime('now')
+        `UPDATE orcamentos SET status = 'expirado', atualizado_em = now()
          WHERE id = ? AND status IN ('enviado', 'negociacao')`,
         id,
       );
@@ -412,7 +412,7 @@ export async function listarOrcamentos(db, filtros = {}) {
   const params = [];
   const q = String(filtros.q ?? '').trim().replace(/^#/, '');
   if (q) {
-    if (/^\d+$/.test(q)) {
+    if (/^\d{1,9}$/.test(q)) {
       onde.push(
         `(o.numero = ? OR c.nome_busca LIKE ? ESCAPE '\\' OR c.telefone_digitos LIKE ? ESCAPE '\\' OR c.whatsapp_digitos LIKE ? ESCAPE '\\')`,
       );
@@ -476,7 +476,7 @@ export async function resumoDashboard(db, dataHoje) {
   const mes_ = await db.get(
     `SELECT COUNT(*) AS quantidade,
             COALESCE(SUM(CASE WHEN status <> 'cancelado' THEN total_cents END), 0) AS valor_cents,
-            COALESCE(SUM(status = 'aprovado'), 0) AS aprovados,
+            COUNT(*) FILTER (WHERE status = 'aprovado') AS aprovados,
             COALESCE(SUM(CASE WHEN status = 'aprovado' THEN total_cents END), 0) AS aprovados_cents
      FROM orcamentos WHERE data >= ? AND data < ?`,
     inicioMes,

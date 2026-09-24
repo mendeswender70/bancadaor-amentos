@@ -9,32 +9,27 @@ preço cadastrado. Nada de calcular peça por peça.
 > **Regra de ouro:** o preço por metro é uma ferramenta de cálculo interna. O
 > cliente vê apenas a descrição e o valor final de cada móvel.
 
-## Publicar na Vercel (via GitHub)
+## Publicar na Vercel (via GitHub) com banco Supabase
 
-A Vercel roda o sistema como funções serverless, que não guardam arquivos.
-Por isso os dados ficam em um banco **Turso** (SQLite na nuvem, com plano grátis),
-conectado pela própria Vercel.
+Os dados ficam em um banco **Postgres no Supabase** (projeto `esquadro`, região
+São Paulo). A Vercel roda o sistema como função serverless na região `gru1`
+(São Paulo), perto do banco.
 
-1. Em <https://vercel.com>, entre com sua conta do GitHub.
-2. **Add New… → Project** → escolha o repositório `bancadaor-amentos` → **Import**.
-   Não é preciso mudar nada nas opções de build (o `vercel.json` já configura tudo).
-   Clique em **Deploy**. O primeiro deploy abre o site, mas avisa que o banco não
-   está configurado — é o próximo passo.
-3. No projeto, abra a aba **Storage → Create Database → Turso** (ou
-   *Browse Marketplace → Turso Cloud*). Crie o banco e conecte ao projeto,
-   marcando os ambientes *Production* e *Preview*. As variáveis de conexão
-   (`TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` ou com outro prefixo) são criadas
-   automaticamente — o sistema encontra qualquer prefixo.
-4. **Deployments → ⋯ no último deploy → Redeploy**, para o site pegar as variáveis.
-5. Abra o endereço do projeto (ex.: `https://bancadaor-amentos.vercel.app`) e crie
-   o administrador. As tabelas são criadas sozinhas no primeiro acesso.
+1. **Supabase → projeto esquadro → botão Connect → Transaction pooler**: copie o
+   endereço (`postgresql://postgres.<ref>:[YOUR-PASSWORD]@…pooler.supabase.com:6543/postgres`).
+2. Troque `[YOUR-PASSWORD]` pela senha do banco. Se não souber a senha, gere uma
+   nova em **Project Settings → Database → Reset database password** (use só
+   letras e números).
+3. **Vercel → projeto → Settings → Environment Variables**: crie `DATABASE_URL`
+   com esse endereço, marcando *Production* e *Preview*.
+4. **Deployments → ⋯ → Redeploy**. As tabelas são criadas sozinhas se ainda não
+   existirem.
 
-A cada `git push` no branch de produção, a Vercel publica a nova versão.
-O branch de produção fica em **Settings → Git → Production Branch**.
+Também funciona com a integração Supabase ↔ Vercel, que cria `POSTGRES_URL`
+automaticamente — o sistema reconhece essa variável.
 
-Se preferir criar o banco direto no site do Turso (<https://turso.tech>), cadastre
-em **Settings → Environment Variables** da Vercel:
-`TURSO_DATABASE_URL` (ex.: `libsql://meu-banco-usuario.turso.io`) e `TURSO_AUTH_TOKEN`.
+A cada `git push` no branch de produção a Vercel publica a nova versão, e os
+dados continuam no Supabase.
 
 ## Rodar no computador
 
@@ -45,19 +40,20 @@ npm install
 npm start
 ```
 
-Abra <http://localhost:3000>. Sem configuração, os dados ficam no arquivo
-`data/orcamentos.db`. Para usar o mesmo banco da Vercel, defina
-`TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` antes do `npm start`.
+Abra <http://localhost:3000>. Sem configuração, os dados ficam em um Postgres
+embutido (PGlite) na pasta `data/pglite`. Para usar o banco do Supabase, defina
+`DATABASE_URL` antes do `npm start`.
 
-| Variável                               | Para que serve                                            |
-| -------------------------------------- | --------------------------------------------------------- |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Banco Turso (também aceita `DATABASE_URL` ou outro prefixo) |
-| `PORT`                                 | Porta HTTP local (padrão `3000`)                          |
-| `TZ_EMPRESA`                           | Fuso usado para "hoje" (padrão `America/Sao_Paulo`)       |
-| `COOKIE_SECURE`                        | `1` para cookie `Secure` fora da Vercel (HTTPS)           |
-| `TRUST_PROXY`                          | Ex.: `1` atrás de proxy reverso (automático na Vercel)    |
+| Variável        | Para que serve                                                |
+| --------------- | ------------------------------------------------------------- |
+| `DATABASE_URL`  | Endereço Postgres (Supabase). Também aceita `POSTGRES_URL`    |
+| `PORT`          | Porta HTTP local (padrão `3000`)                              |
+| `TZ_EMPRESA`    | Fuso usado para "hoje" (padrão `America/Sao_Paulo`)           |
+| `COOKIE_SECURE` | `1` para cookie `Secure` fora da Vercel (HTTPS)               |
+| `TRUST_PROXY`   | Ex.: `1` atrás de proxy reverso (automático na Vercel)        |
 
-Testes: `npm test`.
+Testes: `npm test` — roda a API duas vezes: no Postgres embutido e com o driver
+de produção (`postgres`) conectado pela rede.
 
 ## Fluxo
 
@@ -123,7 +119,7 @@ public/                 interface (HTML, CSS e JavaScript sem etapa de build)
 public/shared/calc.js   cálculos e formatação (servidor e navegador)
 api/index.js            entrada da função serverless na Vercel
 server/app.js           rotas da API (Express)
-server/db.js            conexão libSQL/Turso e migrações
+server/db.js            conexão Postgres (Supabase ou PGlite) e migrações
 server/orcamentos.js    salvar, duplicar, histórico, busca, painel
 server/visaoCliente.js  dados que o cliente pode ver
 server/pdf.js           geração do PDF (PDFKit)
@@ -135,5 +131,6 @@ vercel.json             configuração da Vercel
 
 ## Backup
 
-Na Vercel, os dados ficam no Turso (o painel do Turso permite exportar o banco).
-Rodando no computador sem Turso, copie periodicamente o arquivo `data/orcamentos.db`.
+Os dados ficam no Supabase, que faz cópias diárias no plano pago (no plano grátis,
+exporte pelo painel: **Database → Backups** ou `pg_dump`). Rodando no computador
+sem Supabase, copie a pasta `data/pglite`.

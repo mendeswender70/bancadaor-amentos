@@ -13,6 +13,8 @@ let cookie = '';
 let hojeFalso = '2026-09-24';
 let app;
 let pastaTemp;
+let pgliteServidor;
+let socketServidor;
 
 async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false } = {}) {
   const headers = {};
@@ -29,7 +31,19 @@ async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho 
 
 before(async () => {
   pastaTemp = mkdtempSync(join(tmpdir(), 'orcamentos-'));
-  app = criarApp({ banco: { url: `file:${join(pastaTemp, 'teste.db')}` }, dataHoje: () => hojeFalso });
+  let url = 'memory://';
+  if (process.env.TEST_BANCO === 'socket') {
+    // Mesmo driver da produção (postgres.js), falando com um Postgres de verdade
+    // pela rede — aqui o PGlite exposto como servidor.
+    const { PGlite } = await import('@electric-sql/pglite');
+    const { PGLiteSocketServer } = await import('@electric-sql/pglite-socket');
+    pgliteServidor = await PGlite.create();
+    socketServidor = new PGLiteSocketServer({ db: pgliteServidor, port: 0, host: '127.0.0.1', maxConnections: 10 });
+    await socketServidor.start();
+    const porta = socketServidor.server.address().port;
+    url = `postgres://postgres:postgres@127.0.0.1:${porta}/postgres?sslmode=disable`;
+  }
+  app = criarApp({ banco: { url }, dataHoje: () => hojeFalso });
   await new Promise((resolve) => {
     servidor = app.listen(0, resolve);
   });
@@ -38,7 +52,9 @@ before(async () => {
 
 after(async () => {
   servidor.close();
-  (await app.locals.obterDb()).close();
+  await (await app.locals.obterDb()).close();
+  await socketServidor?.stop();
+  await pgliteServidor?.close();
   rmSync(pastaTemp, { recursive: true, force: true });
 });
 
