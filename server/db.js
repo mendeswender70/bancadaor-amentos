@@ -314,6 +314,16 @@ class Banco {
 function driverPostgres(url) {
   // Parâmetros da URL (sslmode, supa…) são tratados aqui, não repassados ao servidor.
   const endereco = new URL(url);
+  // Erro comum ao copiar do Supabase: deixar "[YOUR-PASSWORD]" ou os colchetes.
+  let senha = decodeURIComponent(endereco.password);
+  if (/^\[.*\]$/.test(senha)) senha = senha.slice(1, -1);
+  if (!senha || /^YOUR[-_ ]PASSWORD$/i.test(senha)) {
+    throw new ErroHttp(
+      503,
+      'Falta a senha na DATABASE_URL: troque o texto [YOUR-PASSWORD] (com os colchetes) pela senha do banco e faça um novo deploy.',
+    );
+  }
+  endereco.password = encodeURIComponent(senha);
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(endereco.hostname);
   const semSsl = local || endereco.searchParams.get('sslmode') === 'disable';
   endereco.search = '';
@@ -412,7 +422,7 @@ export async function abrirBanco(config = configuracaoBanco()) {
     try {
       driver = driverPostgres(url);
     } catch (erro) {
-      throw new ErroHttp(503, explicarErroBanco(erro));
+      throw erro instanceof ErroHttp ? erro : new ErroHttp(503, explicarErroBanco(erro));
     }
   } else if (url === 'memory://' || url?.startsWith('pglite:')) {
     driver = await driverEmbutido(url === 'memory://' ? url : url.slice('pglite:'.length));
