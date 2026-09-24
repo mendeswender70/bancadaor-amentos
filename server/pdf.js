@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { formatarData, formatarDinheiro } from '../shared/calc.js';
+import { formatarData, formatarDinheiro } from '../public/shared/calc.js';
 
 const COR = {
   destaque: '#7a4a1f',

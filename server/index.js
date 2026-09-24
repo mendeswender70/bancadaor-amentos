@@ -1,10 +1,11 @@
 import { criarApp } from './app.js';
+import { configuracaoBanco } from './db.js';
 
 const porta = Number(process.env.PORT) || 3000;
-const caminhoBanco = process.env.DB_PATH || new URL('../data/orcamentos.db', import.meta.url).pathname;
+const banco = configuracaoBanco();
 
-const app = criarApp({ caminhoBanco });
+const app = criarApp({ banco });
 app.listen(porta, () => {
   console.log(`Sistema de orçamentos rodando em http://localhost:${porta}`);
-  console.log(`Banco de dados: ${caminhoBanco}`);
+  console.log(`Banco de dados: ${banco ? banco.url.replace(/\?.*$/, '') : 'arquivo local data/orcamentos.db'}`);
 });

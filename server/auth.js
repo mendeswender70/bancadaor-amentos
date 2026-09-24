@@ -47,42 +47,39 @@ function opcoesCookie(req) {
   return ['Path=/', 'HttpOnly', 'SameSite=Lax', seguro ? 'Secure' : ''].filter(Boolean).join('; ');
 }
 
-export function criarSessao(db, req, res, usuarioId) {
+export async function criarSessao(db, req, res, usuarioId) {
   const token = randomBytes(32).toString('base64url');
-  db.prepare(`DELETE FROM sessoes WHERE expira_em < datetime('now')`).run();
-  db.prepare(`INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, datetime('now', ?))`).run(
+  await db.run(`DELETE FROM sessoes WHERE expira_em < datetime('now')`);
+  await db.run(
+    `INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, datetime('now', ?))`,
     hashToken(token),
     usuarioId,
     `+${DURACAO_SESSAO_DIAS} days`,
   );
-  res.setHeader(
-    'Set-Cookie',
-    `${COOKIE}=${token}; Max-Age=${DURACAO_SESSAO_DIAS * 86400}; ${opcoesCookie(req)}`,
-  );
+  res.setHeader('Set-Cookie', `${COOKIE}=${token}; Max-Age=${DURACAO_SESSAO_DIAS * 86400}; ${opcoesCookie(req)}`);
 }
 
-export function encerrarSessao(db, req, res) {
+export async function encerrarSessao(db, req, res) {
   const token = lerCookies(req)[COOKIE];
-  if (token) db.prepare('DELETE FROM sessoes WHERE token_hash = ?').run(hashToken(token));
+  if (token) await db.run('DELETE FROM sessoes WHERE token_hash = ?', hashToken(token));
   res.setHeader('Set-Cookie', `${COOKIE}=; Max-Age=0; ${opcoesCookie(req)}`);
 }
 
-export function usuarioDaSessao(db, req) {
+export async function usuarioDaSessao(db, req) {
   const token = lerCookies(req)[COOKIE];
   if (!token) return null;
   return (
-    db
-      .prepare(
-        `SELECT u.id, u.nome, u.email, u.tipo FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
-         WHERE s.token_hash = ? AND s.expira_em > datetime('now')`,
-      )
-      .get(hashToken(token)) || null
+    (await db.get(
+      `SELECT u.id, u.nome, u.email, u.tipo FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
+       WHERE s.token_hash = ? AND s.expira_em > datetime('now')`,
+      hashToken(token),
+    )) || null
   );
 }
 
-export function exigirLogin(db) {
-  return (req, _res, next) => {
-    const usuario = usuarioDaSessao(db, req);
+export function exigirLogin(obterDb) {
+  return async (req, _res, next) => {
+    const usuario = await usuarioDaSessao(await obterDb(), req);
     if (!usuario) return next(new ErroHttp(401, 'Faça login para continuar.'));
     req.usuario = usuario;
     next();
@@ -100,25 +97,30 @@ export function exigirCabecalhoFetch(req, _res, next) {
   next();
 }
 
-/** Limita tentativas de login erradas por IP (10 a cada 15 minutos). */
-export function criarLimitadorLogin({ maximo = 10, janelaMs = 15 * 60 * 1000 } = {}) {
-  const falhas = new Map();
-  const chave = (req) => req.ip || 'desconhecido';
+/**
+ * Limita tentativas de login erradas por IP (10 a cada 15 minutos). Fica no
+ * banco porque, na Vercel, cada requisição pode cair em uma instância diferente.
+ */
+export function criarLimitadorLogin({ maximo = 10, janelaMinutos = 15 } = {}) {
+  const chave = (req) => `ip:${req.ip || 'desconhecido'}`;
+  const janela = `-${janelaMinutos} minutes`;
   return {
-    verificar(req) {
-      const registro = falhas.get(chave(req));
-      if (registro && registro.inicio + janelaMs < Date.now()) falhas.delete(chave(req));
-      else if (registro && registro.quantidade >= maximo) {
+    async verificar(db, req) {
+      await db.run(`DELETE FROM tentativas_login WHERE inicio < datetime('now', ?)`, janela);
+      const registro = await db.get('SELECT quantidade FROM tentativas_login WHERE chave = ?', chave(req));
+      if (registro && registro.quantidade >= maximo) {
         throw new ErroHttp(429, 'Muitas tentativas. Aguarde alguns minutos e tente novamente.');
       }
     },
-    falhou(req) {
-      const registro = falhas.get(chave(req)) || { quantidade: 0, inicio: Date.now() };
-      registro.quantidade += 1;
-      falhas.set(chave(req), registro);
+    async falhou(db, req) {
+      await db.run(
+        `INSERT INTO tentativas_login (chave, quantidade, inicio) VALUES (?, 1, datetime('now'))
+         ON CONFLICT(chave) DO UPDATE SET quantidade = quantidade + 1`,
+        chave(req),
+      );
     },
-    limpar(req) {
-      falhas.delete(chave(req));
+    async limpar(db, req) {
+      await db.run('DELETE FROM tentativas_login WHERE chave = ?', chave(req));
     },
   };
 }

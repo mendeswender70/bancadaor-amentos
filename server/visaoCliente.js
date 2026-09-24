@@ -1,4 +1,4 @@
-import { descreverPagamento, formatarNumero } from '../shared/calc.js';
+import { descreverPagamento, formatarNumero } from '../public/shared/calc.js';
 
 /**
  * Tudo o que o cliente pode ver de um orçamento — e nada além disso.

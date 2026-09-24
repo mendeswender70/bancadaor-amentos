@@ -1,4 +1,7 @@
 import { test, before, after } from 'node:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { criarApp } from '../server/app.js';
 import { visaoCliente } from '../server/visaoCliente.js';
@@ -9,6 +12,7 @@ let base;
 let cookie = '';
 let hojeFalso = '2026-09-24';
 let app;
+let pastaTemp;
 
 async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false } = {}) {
   const headers = {};
@@ -24,14 +28,19 @@ async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho 
 }
 
 before(async () => {
-  app = criarApp({ caminhoBanco: ':memory:', dataHoje: () => hojeFalso });
+  pastaTemp = mkdtempSync(join(tmpdir(), 'orcamentos-'));
+  app = criarApp({ banco: { url: `file:${join(pastaTemp, 'teste.db')}` }, dataHoje: () => hojeFalso });
   await new Promise((resolve) => {
     servidor = app.listen(0, resolve);
   });
   base = `http://127.0.0.1:${servidor.address().port}/api`;
 });
 
-after(() => servidor.close());
+after(async () => {
+  servidor.close();
+  (await app.locals.obterDb()).close();
+  rmSync(pastaTemp, { recursive: true, force: true });
+});
 
 let clienteId;
 let tipos;
@@ -182,11 +191,11 @@ test('preço personalizado só vale para aquele orçamento', async () => {
   assert.equal(tipo.preco_padrao_cents, 200000);
 });
 
-test('a visão do cliente não contém nenhum dado interno de preço', () => {
-  const db = app.locals.db;
-  const orc = carregarOrcamento(db, orcamentoId);
+test('a visão do cliente não contém nenhum dado interno de preço', async () => {
+  const db = await app.locals.obterDb();
+  const orc = await carregarOrcamento(db, orcamentoId);
   orc.observacoes_internas = 'margem de 40%';
-  const empresa = db.prepare('SELECT * FROM empresa WHERE id = 1').get();
+  const empresa = await db.get('SELECT * FROM empresa WHERE id = 1');
   const v = visaoCliente(orc, empresa);
   const chaves = [];
   const coletar = (obj) => {

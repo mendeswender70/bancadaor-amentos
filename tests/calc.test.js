@@ -15,7 +15,7 @@ import {
   lerMedida,
   lerPercentual,
   somarDias,
-} from '../shared/calc.js';
+} from '../public/shared/calc.js';
 
 const linear = (m, preco, extra = {}) => ({
   metodo_calculo: 'linear',

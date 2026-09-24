@@ -7,25 +7,53 @@ preço cadastrado. Nada de calcular peça por peça.
 > **Regra de ouro:** o preço por metro é uma ferramenta de cálculo interna. O
 > cliente vê apenas a descrição e o valor final de cada móvel.
 
-## Como rodar
+## Publicar na Vercel (via GitHub)
 
-Requisitos: **Node.js 22.13 ou mais novo** (o banco usa o SQLite embutido no Node).
+A Vercel roda o sistema como funções serverless, que não guardam arquivos.
+Por isso os dados ficam em um banco **Turso** (SQLite na nuvem, com plano grátis),
+conectado pela própria Vercel.
+
+1. Em <https://vercel.com>, entre com sua conta do GitHub.
+2. **Add New… → Project** → escolha o repositório `bancadaor-amentos` → **Import**.
+   Não é preciso mudar nada nas opções de build (o `vercel.json` já configura tudo).
+   Clique em **Deploy**. O primeiro deploy abre o site, mas avisa que o banco não
+   está configurado — é o próximo passo.
+3. No projeto, abra a aba **Storage → Create Database → Turso** (ou
+   *Browse Marketplace → Turso Cloud*). Crie o banco e conecte ao projeto,
+   marcando os ambientes *Production* e *Preview*. As variáveis de conexão
+   (`TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` ou com outro prefixo) são criadas
+   automaticamente — o sistema encontra qualquer prefixo.
+4. **Deployments → ⋯ no último deploy → Redeploy**, para o site pegar as variáveis.
+5. Abra o endereço do projeto (ex.: `https://bancadaor-amentos.vercel.app`) e crie
+   o administrador. As tabelas são criadas sozinhas no primeiro acesso.
+
+A cada `git push` no branch de produção, a Vercel publica a nova versão.
+O branch de produção fica em **Settings → Git → Production Branch**.
+
+Se preferir criar o banco direto no site do Turso (<https://turso.tech>), cadastre
+em **Settings → Environment Variables** da Vercel:
+`TURSO_DATABASE_URL` (ex.: `libsql://meu-banco-usuario.turso.io`) e `TURSO_AUTH_TOKEN`.
+
+## Rodar no computador
+
+Requisitos: **Node.js 22 ou mais novo**.
 
 ```bash
 npm install
 npm start
 ```
 
-Abra <http://localhost:3000>. No primeiro acesso o sistema pede para criar o
-administrador (nome da empresa, seu nome, e-mail e senha).
+Abra <http://localhost:3000>. Sem configuração, os dados ficam no arquivo
+`data/orcamentos.db`. Para usar o mesmo banco da Vercel, defina
+`TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` antes do `npm start`.
 
-| Variável         | Padrão                 | Para que serve                                            |
-| ---------------- | ---------------------- | --------------------------------------------------------- |
-| `PORT`           | `3000`                 | Porta HTTP                                                |
-| `DB_PATH`        | `data/orcamentos.db`   | Arquivo do banco SQLite (faça backup deste arquivo)       |
-| `TZ_EMPRESA`     | `America/Sao_Paulo`    | Fuso usado para "hoje" (data do orçamento, validade)      |
-| `COOKIE_SECURE`  | —                      | `1` para marcar o cookie de sessão como `Secure` (HTTPS)  |
-| `TRUST_PROXY`    | —                      | Ex.: `1` quando estiver atrás de um proxy reverso (HTTPS) |
+| Variável                               | Para que serve                                            |
+| -------------------------------------- | --------------------------------------------------------- |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Banco Turso (também aceita `DATABASE_URL` ou outro prefixo) |
+| `PORT`                                 | Porta HTTP local (padrão `3000`)                          |
+| `TZ_EMPRESA`                           | Fuso usado para "hoje" (padrão `America/Sao_Paulo`)       |
+| `COOKIE_SECURE`                        | `1` para cookie `Secure` fora da Vercel (HTTPS)           |
+| `TRUST_PROXY`                          | Ex.: `1` atrás de proxy reverso (automático na Vercel)    |
 
 Testes: `npm test`.
 
@@ -40,7 +68,8 @@ Testes: `npm test`.
 
 ## Funcionalidades (primeira versão)
 
-- Login com administrador (sessão por cookie `HttpOnly`, senha com scrypt).
+- Login com administrador (sessão por cookie `HttpOnly`, senha com scrypt,
+  limite de tentativas erradas).
 - Painel: orçamentos do mês, em aberto, aprovados, valor orçado e recentes.
 - Clientes: cadastro simples e busca por nome, telefone ou WhatsApp.
 - Tipos de móveis com método de cálculo e preço padrão; tela de **Preços**
@@ -68,7 +97,7 @@ Testes: `npm test`.
   preços depois não muda orçamentos já feitos — nem ao reabri-los e salvá-los.
 - **O servidor recalcula tudo.** Os valores enviados pelo navegador são
   ignorados; o servidor refaz as contas com o mesmo módulo
-  (`shared/calc.js`) usado na tela.
+  (`public/shared/calc.js`) usado na tela.
 - **Sem erro de arredondamento.** Dinheiro é guardado em centavos inteiros,
   medidas em milímetros e percentuais em centésimos de ponto. O valor de uma
   unidade é arredondado para centavos e depois multiplicado pela quantidade.
@@ -84,18 +113,21 @@ Testes: `npm test`.
 ## Estrutura
 
 ```
-shared/calc.js          cálculos e formatação (servidor e navegador)
+public/                 interface (HTML, CSS e JavaScript sem etapa de build)
+public/shared/calc.js   cálculos e formatação (servidor e navegador)
+api/index.js            entrada da função serverless na Vercel
 server/app.js           rotas da API (Express)
-server/db.js            banco SQLite e migrações
+server/db.js            conexão libSQL/Turso e migrações
 server/orcamentos.js    salvar, duplicar, histórico, busca, painel
 server/visaoCliente.js  dados que o cliente pode ver
 server/pdf.js           geração do PDF (PDFKit)
 server/auth.js          senhas, sessões, proteção CSRF, limite de tentativas
-public/                 interface (HTML, CSS e JavaScript sem etapa de build)
+server/index.js         servidor local (npm start)
 tests/                  testes (node --test)
+vercel.json             configuração da Vercel
 ```
 
 ## Backup
 
-Todos os dados ficam no arquivo indicado em `DB_PATH` (por padrão
-`data/orcamentos.db`). Copie esse arquivo periodicamente.
+Na Vercel, os dados ficam no Turso (o painel do Turso permite exportar o banco).
+Rodando no computador sem Turso, copie periodicamente o arquivo `data/orcamentos.db`.

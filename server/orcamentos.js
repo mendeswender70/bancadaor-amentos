@@ -9,8 +9,8 @@ import {
   calcularTotais,
   formatarNumero,
   somarDias,
-} from '../shared/calc.js';
-import { semAcento, transacao } from './db.js';
+} from '../public/shared/calc.js';
+import { semAcento } from './db.js';
 import { dataIso, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
 
 const MAX_ITENS = 200;
@@ -58,22 +58,20 @@ const COLUNAS_ITEM = [
   'observacoes',
 ];
 
-const semPrototipo = (linha) => (linha ? { ...linha } : linha);
-
-export function carregarOrcamento(db, id) {
-  const orc = semPrototipo(db.prepare('SELECT * FROM orcamentos WHERE id = ?').get(id));
+export async function carregarOrcamento(db, id) {
+  const orc = await db.get('SELECT * FROM orcamentos WHERE id = ?', id);
   if (!orc) return null;
-  orc.cliente = semPrototipo(db.prepare('SELECT * FROM clientes WHERE id = ?').get(orc.cliente_id));
-  orc.itens = db
-    .prepare('SELECT * FROM orcamento_itens WHERE orcamento_id = ? ORDER BY ordem, id')
-    .all(id)
-    .map(semPrototipo);
-  orc.servicos = db
-    .prepare('SELECT * FROM orcamento_servicos WHERE orcamento_id = ? ORDER BY ordem, id')
-    .all(id)
-    .map(semPrototipo);
+  const cliente = await db.get('SELECT * FROM clientes WHERE id = ?', orc.cliente_id);
+  if (cliente) {
+    delete cliente.nome_busca;
+    delete cliente.telefone_digitos;
+    delete cliente.whatsapp_digitos;
+  }
+  orc.cliente = cliente;
+  orc.itens = await db.all('SELECT * FROM orcamento_itens WHERE orcamento_id = ? ORDER BY ordem, id', id);
+  orc.servicos = await db.all('SELECT * FROM orcamento_servicos WHERE orcamento_id = ? ORDER BY ordem, id', id);
   orc.duplicado_de_numero = orc.duplicado_de_id
-    ? (db.prepare('SELECT numero FROM orcamentos WHERE id = ?').get(orc.duplicado_de_id)?.numero ?? null)
+    ? ((await db.get('SELECT numero FROM orcamentos WHERE id = ?', orc.duplicado_de_id))?.numero ?? null)
     : null;
   return orc;
 }
@@ -89,12 +87,12 @@ function ajuste(body, prefixo, nome) {
   return { tipo, valor };
 }
 
-function normalizarItem(db, item, i) {
+async function normalizarItem(db, item, i) {
   const n = i + 1;
   const metodo = umDe(item?.metodo_calculo, Object.keys(METODOS), `Método de cálculo do móvel ${n}`);
   const medida = (valor, campo) => inteiro(valor, { min: 1, max: LIMITES.medidaMm, campo: `${campo} do móvel ${n}` });
   let tipoId = inteiro(item.tipo_movel_id, { min: 1, opcional: true, campo: 'Tipo de móvel' });
-  if (tipoId && !db.prepare('SELECT 1 FROM tipos_moveis WHERE id = ?').get(tipoId)) tipoId = null;
+  if (tipoId && !(await db.get('SELECT 1 AS ok FROM tipos_moveis WHERE id = ?', tipoId))) tipoId = null;
 
   const normalizado = {
     tipo_movel_id: tipoId,
@@ -130,9 +128,9 @@ function normalizarServico(servico, i) {
   return s;
 }
 
-export function normalizarOrcamento(db, body) {
+export async function normalizarOrcamento(db, body) {
   const clienteId = inteiro(body?.cliente_id, { min: 1, campo: 'Cliente' });
-  if (!db.prepare('SELECT 1 FROM clientes WHERE id = ?').get(clienteId)) throw invalido('Selecione um cliente.');
+  if (!(await db.get('SELECT 1 AS ok FROM clientes WHERE id = ?', clienteId))) throw invalido('Selecione um cliente.');
   const itensBrutos = Array.isArray(body.itens) ? body.itens : [];
   const servicosBrutos = Array.isArray(body.servicos) ? body.servicos : [];
   if (itensBrutos.length > MAX_ITENS || servicosBrutos.length > MAX_ITENS) throw invalido('Itens demais no orçamento.');
@@ -161,9 +159,10 @@ export function normalizarOrcamento(db, body) {
     prazo_entrega: texto(body.prazo_entrega, { max: 200, campo: 'Prazo de entrega' }),
     observacoes: texto(body.observacoes, { max: 5000, campo: 'Observações' }),
     observacoes_internas: texto(body.observacoes_internas, { max: 5000, campo: 'Observações internas' }),
-    itens: itensBrutos.map((item, i) => normalizarItem(db, item, i)),
+    itens: [],
     servicos: servicosBrutos.map(normalizarServico),
   };
+  for (let i = 0; i < itensBrutos.length; i++) orc.itens.push(await normalizarItem(db, itensBrutos[i], i));
   return Object.assign(orc, calcularTotais(orc));
 }
 
@@ -171,11 +170,16 @@ export function normalizarOrcamento(db, body) {
 // Histórico de alterações
 // ---------------------------------------------------------------------------
 
-function registrarHistorico(db, orcamentoId, evento, usuarioId) {
-  const orc = carregarOrcamento(db, orcamentoId);
-  db.prepare(
+async function registrarHistorico(db, orcamentoId, evento, usuarioId) {
+  const orc = await carregarOrcamento(db, orcamentoId);
+  await db.run(
     'INSERT INTO orcamento_historico (orcamento_id, evento, total_cents, usuario_id, snapshot) VALUES (?, ?, ?, ?, ?)',
-  ).run(orcamentoId, evento, orc.total_cents, usuarioId ?? null, JSON.stringify(orc));
+    orcamentoId,
+    evento,
+    orc.total_cents,
+    usuarioId ?? null,
+    JSON.stringify(orc),
+  );
 }
 
 const assinaturaItens = (itens) =>
@@ -237,81 +241,87 @@ export function descreverAlteracoes(anterior, novo) {
 }
 
 export function listarHistorico(db, orcamentoId) {
-  return db
-    .prepare(
-      `SELECT h.id, h.data_hora, h.evento, h.total_cents, u.nome AS usuario_nome
-       FROM orcamento_historico h LEFT JOIN usuarios u ON u.id = h.usuario_id
-       WHERE h.orcamento_id = ? ORDER BY h.id`,
-    )
-    .all(orcamentoId)
-    .map(semPrototipo);
+  return db.all(
+    `SELECT h.id, h.data_hora, h.evento, h.total_cents, u.nome AS usuario_nome
+     FROM orcamento_historico h LEFT JOIN usuarios u ON u.id = h.usuario_id
+     WHERE h.orcamento_id = ? ORDER BY h.id`,
+    orcamentoId,
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Gravação
 // ---------------------------------------------------------------------------
 
-function gravarFilhos(db, orcamentoId, orc) {
-  db.prepare('DELETE FROM orcamento_itens WHERE orcamento_id = ?').run(orcamentoId);
-  db.prepare('DELETE FROM orcamento_servicos WHERE orcamento_id = ?').run(orcamentoId);
-  const inserirItem = db.prepare(
-    `INSERT INTO orcamento_itens (orcamento_id, ordem, ${COLUNAS_ITEM.join(', ')})
-     VALUES (?, ?, ${COLUNAS_ITEM.map(() => '?').join(', ')})`,
-  );
-  orc.itens.forEach((item, i) => inserirItem.run(orcamentoId, i, ...COLUNAS_ITEM.map((c) => item[c] ?? null)));
-  const inserirServico = db.prepare(
-    `INSERT INTO orcamento_servicos (orcamento_id, ordem, descricao, valor_cents, quantidade, total_cents)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  );
-  orc.servicos.forEach((s, i) =>
-    inserirServico.run(orcamentoId, i, s.descricao, s.valor_cents, s.quantidade, s.total_cents),
-  );
+async function gravarFilhos(db, orcamentoId, orc) {
+  await db.run('DELETE FROM orcamento_itens WHERE orcamento_id = ?', orcamentoId);
+  await db.run('DELETE FROM orcamento_servicos WHERE orcamento_id = ?', orcamentoId);
+  const sqlItem = `INSERT INTO orcamento_itens (orcamento_id, ordem, ${COLUNAS_ITEM.join(', ')})
+     VALUES (?, ?, ${COLUNAS_ITEM.map(() => '?').join(', ')})`;
+  for (const [i, item] of orc.itens.entries()) {
+    await db.run(sqlItem, orcamentoId, i, ...COLUNAS_ITEM.map((c) => item[c] ?? null));
+  }
+  for (const [i, s] of orc.servicos.entries()) {
+    await db.run(
+      `INSERT INTO orcamento_servicos (orcamento_id, ordem, descricao, valor_cents, quantidade, total_cents)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      orcamentoId,
+      i,
+      s.descricao,
+      s.valor_cents,
+      s.quantidade,
+      s.total_cents,
+    );
+  }
 }
 
-function inserir(db, orc, duplicadoDeId = null) {
-  const numero = db.prepare('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM orcamentos').get().n;
-  const resultado = db
-    .prepare(
-      `INSERT INTO orcamentos (numero, duplicado_de_id, ${COLUNAS.join(', ')})
-       VALUES (?, ?, ${COLUNAS.map(() => '?').join(', ')})`,
-    )
-    .run(numero, duplicadoDeId, ...COLUNAS.map((c) => orc[c]));
-  const id = Number(resultado.lastInsertRowid);
-  gravarFilhos(db, id, orc);
+async function inserir(db, orc, duplicadoDeId = null) {
+  const { n: numero } = await db.get('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM orcamentos');
+  const resultado = await db.run(
+    `INSERT INTO orcamentos (numero, duplicado_de_id, ${COLUNAS.join(', ')})
+     VALUES (?, ?, ${COLUNAS.map(() => '?').join(', ')})`,
+    numero,
+    duplicadoDeId,
+    ...COLUNAS.map((c) => orc[c]),
+  );
+  const id = resultado.lastInsertRowid;
+  await gravarFilhos(db, id, orc);
   return id;
 }
 
 export function criarOrcamento(db, body, usuarioId) {
-  return transacao(db, () => {
-    const id = inserir(db, normalizarOrcamento(db, body));
-    registrarHistorico(db, id, 'Orçamento criado', usuarioId);
+  return db.transacao(async (t) => {
+    const id = await inserir(t, await normalizarOrcamento(t, body));
+    await registrarHistorico(t, id, 'Orçamento criado', usuarioId);
     return id;
   });
 }
 
 export function atualizarOrcamento(db, id, body, usuarioId) {
-  return transacao(db, () => {
-    const anterior = carregarOrcamento(db, id);
+  return db.transacao(async (t) => {
+    const anterior = await carregarOrcamento(t, id);
     if (!anterior) throw naoEncontrado('Orçamento não encontrado.');
-    const novo = normalizarOrcamento(db, body);
-    db.prepare(
+    const novo = await normalizarOrcamento(t, body);
+    await t.run(
       `UPDATE orcamentos SET ${COLUNAS.map((c) => `${c} = ?`).join(', ')}, atualizado_em = datetime('now') WHERE id = ?`,
-    ).run(...COLUNAS.map((c) => novo[c]), id);
-    gravarFilhos(db, id, novo);
+      ...COLUNAS.map((c) => novo[c]),
+      id,
+    );
+    await gravarFilhos(t, id, novo);
     const evento = descreverAlteracoes(anterior, novo);
-    if (evento) registrarHistorico(db, id, evento, usuarioId);
+    if (evento) await registrarHistorico(t, id, evento, usuarioId);
     return id;
   });
 }
 
 export function alterarStatus(db, id, status, usuarioId) {
   umDe(status, Object.keys(STATUS), 'Status');
-  return transacao(db, () => {
-    const atual = db.prepare('SELECT status FROM orcamentos WHERE id = ?').get(id);
+  return db.transacao(async (t) => {
+    const atual = await t.get('SELECT status FROM orcamentos WHERE id = ?', id);
     if (!atual) throw naoEncontrado('Orçamento não encontrado.');
     if (atual.status === status) return;
-    db.prepare(`UPDATE orcamentos SET status = ?, atualizado_em = datetime('now') WHERE id = ?`).run(status, id);
-    registrarHistorico(db, id, `Status: ${STATUS[atual.status]} → ${STATUS[status]}`, usuarioId);
+    await t.run(`UPDATE orcamentos SET status = ?, atualizado_em = datetime('now') WHERE id = ?`, status, id);
+    await registrarHistorico(t, id, `Status: ${STATUS[atual.status]} → ${STATUS[status]}`, usuarioId);
   });
 }
 
@@ -320,28 +330,33 @@ export function alterarStatus(db, id, status, usuarioId) {
  * e status Rascunho. Os preços gravados no original são mantidos.
  */
 export function duplicarOrcamento(db, id, usuarioId, dataHoje) {
-  return transacao(db, () => {
-    const original = carregarOrcamento(db, id);
+  return db.transacao(async (t) => {
+    const original = await carregarOrcamento(t, id);
     if (!original) throw naoEncontrado('Orçamento não encontrado.');
-    const copia = normalizarOrcamento(db, { ...original, data: dataHoje, status: 'rascunho' });
-    const novoId = inserir(db, copia, id);
-    const novoNumero = db.prepare('SELECT numero FROM orcamentos WHERE id = ?').get(novoId).numero;
-    registrarHistorico(db, novoId, `Orçamento criado a partir do nº ${formatarNumero(original.numero)}`, usuarioId);
-    registrarHistorico(db, id, `Duplicado como nº ${formatarNumero(novoNumero)}`, usuarioId);
+    const copia = await normalizarOrcamento(t, { ...original, data: dataHoje, status: 'rascunho' });
+    const novoId = await inserir(t, copia, id);
+    const { numero: novoNumero } = await t.get('SELECT numero FROM orcamentos WHERE id = ?', novoId);
+    await registrarHistorico(t, novoId, `Orçamento criado a partir do nº ${formatarNumero(original.numero)}`, usuarioId);
+    await registrarHistorico(t, id, `Duplicado como nº ${formatarNumero(novoNumero)}`, usuarioId);
     return novoId;
   });
 }
 
 /** Orçamentos enviados ou em negociação cuja validade passou viram "Expirado". */
-export function expirarVencidos(db, dataHoje) {
-  const vencidos = db
-    .prepare(`SELECT id FROM orcamentos WHERE status IN ('enviado', 'negociacao') AND data_validade < ?`)
-    .all(dataHoje);
+export async function expirarVencidos(db, dataHoje) {
+  const vencidos = await db.all(
+    `SELECT id FROM orcamentos WHERE status IN ('enviado', 'negociacao') AND data_validade < ?`,
+    dataHoje,
+  );
   if (!vencidos.length) return;
-  transacao(db, () => {
+  await db.transacao(async (t) => {
     for (const { id } of vencidos) {
-      db.prepare(`UPDATE orcamentos SET status = 'expirado', atualizado_em = datetime('now') WHERE id = ?`).run(id);
-      registrarHistorico(db, id, 'Validade vencida — status alterado para Expirado', null);
+      const r = await t.run(
+        `UPDATE orcamentos SET status = 'expirado', atualizado_em = datetime('now')
+         WHERE id = ? AND status IN ('enviado', 'negociacao')`,
+        id,
+      );
+      if (r.changes) await registrarHistorico(t, id, 'Validade vencida — status alterado para Expirado', null);
     }
   });
 }
@@ -352,18 +367,18 @@ export function expirarVencidos(db, dataHoje) {
 
 const padraoLike = (s) => `%${String(s).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
-export function listarOrcamentos(db, filtros = {}) {
+export async function listarOrcamentos(db, filtros = {}) {
   const onde = [];
   const params = [];
   const q = String(filtros.q ?? '').trim().replace(/^#/, '');
   if (q) {
     if (/^\d+$/.test(q)) {
       onde.push(
-        `(o.numero = ? OR sem_acento(c.nome) LIKE ? ESCAPE '\\' OR digitos(c.telefone) LIKE ? ESCAPE '\\' OR digitos(c.whatsapp) LIKE ? ESCAPE '\\')`,
+        `(o.numero = ? OR c.nome_busca LIKE ? ESCAPE '\\' OR c.telefone_digitos LIKE ? ESCAPE '\\' OR c.whatsapp_digitos LIKE ? ESCAPE '\\')`,
       );
       params.push(Number(q), padraoLike(q), padraoLike(q), padraoLike(q));
     } else {
-      onde.push(`sem_acento(c.nome) LIKE ? ESCAPE '\\'`);
+      onde.push(`c.nome_busca LIKE ? ESCAPE '\\'`);
       params.push(padraoLike(semAcento(q)));
     }
   }
@@ -398,41 +413,43 @@ export function listarOrcamentos(db, filtros = {}) {
   const limite = Math.min(Math.max(Number(filtros.limite) || 50, 1), 200);
   const deslocamento = Math.max(Number(filtros.deslocamento) || 0, 0);
 
-  const total = db.prepare(`SELECT COUNT(*) AS n FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id ${where}`).get(
+  const { n: total } = await db.get(
+    `SELECT COUNT(*) AS n FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id ${where}`,
     ...params,
-  ).n;
-  const orcamentos = db
-    .prepare(
-      `SELECT o.id, o.numero, o.data, o.data_validade, o.status, o.total_cents, o.cliente_id,
-              c.nome AS cliente_nome, c.telefone AS cliente_telefone
-       FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
-       ${where} ORDER BY o.numero DESC LIMIT ? OFFSET ?`,
-    )
-    .all(...params, limite, deslocamento)
-    .map(semPrototipo);
+  );
+  const orcamentos = await db.all(
+    `SELECT o.id, o.numero, o.data, o.data_validade, o.status, o.total_cents, o.cliente_id,
+            c.nome AS cliente_nome, c.telefone AS cliente_telefone
+     FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+     ${where} ORDER BY o.numero DESC LIMIT ? OFFSET ?`,
+    ...params,
+    limite,
+    deslocamento,
+  );
   return { total, orcamentos };
 }
 
-export function resumoDashboard(db, dataHoje) {
+export async function resumoDashboard(db, dataHoje) {
   const inicioMes = `${dataHoje.slice(0, 7)}-01`;
   const [ano, mes] = dataHoje.split('-').map(Number);
   const inicioProximo = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
-  const mes_ = db
-    .prepare(
-      `SELECT COUNT(*) AS quantidade,
-              COALESCE(SUM(CASE WHEN status <> 'cancelado' THEN total_cents END), 0) AS valor_cents,
-              COALESCE(SUM(status = 'aprovado'), 0) AS aprovados,
-              COALESCE(SUM(CASE WHEN status = 'aprovado' THEN total_cents END), 0) AS aprovados_cents
-       FROM orcamentos WHERE data >= ? AND data < ?`,
-    )
-    .get(inicioMes, inicioProximo);
-  const abertos = db
-    .prepare(`SELECT COUNT(*) AS n FROM orcamentos WHERE status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`)
-    .get(...STATUS_ABERTOS).n;
+  const mes_ = await db.get(
+    `SELECT COUNT(*) AS quantidade,
+            COALESCE(SUM(CASE WHEN status <> 'cancelado' THEN total_cents END), 0) AS valor_cents,
+            COALESCE(SUM(status = 'aprovado'), 0) AS aprovados,
+            COALESCE(SUM(CASE WHEN status = 'aprovado' THEN total_cents END), 0) AS aprovados_cents
+     FROM orcamentos WHERE data >= ? AND data < ?`,
+    inicioMes,
+    inicioProximo,
+  );
+  const { n: abertos } = await db.get(
+    `SELECT COUNT(*) AS n FROM orcamentos WHERE status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`,
+    ...STATUS_ABERTOS,
+  );
   return {
-    mes: { ...mes_ },
+    mes: mes_,
     em_aberto: abertos,
-    recentes: listarOrcamentos(db, { limite: 8 }).orcamentos,
+    recentes: (await listarOrcamentos(db, { limite: 8 })).orcamentos,
   };
 }
 
