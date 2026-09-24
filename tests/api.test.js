@@ -131,7 +131,9 @@ test('cria orçamento e o servidor recalcula os valores', async () => {
   orcamentoId = r.dados.id;
   assert.equal(r.dados.numero, 1);
   assert.equal(r.dados.data_validade, '2026-10-04');
-  assert.deepEqual(r.dados.itens.map((i) => i.valor_total_cents), [576000, 225000, 768000]);
+  assert.deepEqual(r.dados.ambientes[0].itens.map((i) => i.valor_total_cents), [576000, 225000, 768000]);
+  assert.equal(r.dados.ambientes[0].nome, 'Móveis', 'lista simples vira o ambiente Móveis');
+  assert.equal(r.dados.itens, undefined);
   assert.equal(r.dados.total_cents, 1569000);
 });
 
@@ -150,7 +152,7 @@ test('mudar o preço cadastrado não altera orçamentos antigos', async () => {
   let r = await chamar('PUT', '/precos', { precos: [{ id: tipos['Guarda-roupa'].id, preco_padrao_cents: 200000 }] });
   assert.equal(r.status, 200);
   r = await chamar('GET', `/orcamentos/${orcamentoId}`);
-  assert.equal(r.dados.itens[0].preco_unitario_interno_cents, 180000);
+  assert.equal(r.dados.ambientes[0].itens[0].preco_unitario_interno_cents, 180000);
   assert.equal(r.dados.total_cents, 1569000);
   // Salvar o orçamento antigo de novo também mantém o preço gravado.
   r = await chamar('PUT', `/orcamentos/${orcamentoId}`, r.dados);
@@ -183,10 +185,10 @@ test('edição registra histórico com os valores', async () => {
 test('preço personalizado só vale para aquele orçamento', async () => {
   const r = await chamar('GET', `/orcamentos/${orcamentoId}`);
   const orc = r.dados;
-  orc.itens[0].preco_unitario_interno_cents = 165000;
+  orc.ambientes[0].itens[0].preco_unitario_interno_cents = 165000;
   const salvo = (await chamar('PUT', `/orcamentos/${orcamentoId}`, orc)).dados;
-  assert.equal(salvo.itens[0].valor_total_cents, 528000);
-  assert.equal(salvo.itens[0].preco_padrao_cents, 180000);
+  assert.equal(salvo.ambientes[0].itens[0].valor_total_cents, 528000);
+  assert.equal(salvo.ambientes[0].itens[0].preco_padrao_cents, 180000);
   const tipo = (await chamar('GET', '/tipos-moveis')).dados.find((t) => t.nome === 'Guarda-roupa');
   assert.equal(tipo.preco_padrao_cents, 200000);
 });
@@ -226,7 +228,7 @@ test('a visão do cliente não contém nenhum dado interno de preço', async () 
   assert.ok(!json.includes('165000') && !json.includes('180000'));
   assert.ok(!json.includes('margem de 40%'));
   assert.deepEqual(
-    v.itens.map((i) => [i.descricao, i.valor_cents]),
+    v.ambientes.flatMap((a) => a.itens).map((i) => [i.descricao, i.valor_cents]),
     [
       ['Guarda-roupa planejado', 528000],
       ['Painel planejado', 225000],
@@ -267,15 +269,15 @@ test('duplica o orçamento com novo número e mesmos preços', async () => {
   assert.equal(r.dados.status, 'rascunho');
   assert.equal(r.dados.duplicado_de_numero, 1);
   assert.equal(r.dados.total_cents, 1552000); // 5.280 + 2.250 + 7.680 + 900 − 590
-  assert.equal(r.dados.itens[0].preco_unitario_interno_cents, 165000);
+  assert.equal(r.dados.ambientes[0].itens[0].preco_unitario_interno_cents, 165000);
 
   // Altera a medida na cópia: 3,50 m × R$ 1.650
   const copia = r.dados;
-  copia.itens[0].largura_mm = 3500;
+  copia.ambientes[0].itens[0].largura_mm = 3500;
   const salvo = (await chamar('PUT', `/orcamentos/${duplicadoId}`, copia)).dados;
-  assert.equal(salvo.itens[0].valor_total_cents, 577500);
+  assert.equal(salvo.ambientes[0].itens[0].valor_total_cents, 577500);
   const original = (await chamar('GET', `/orcamentos/${orcamentoId}`)).dados;
-  assert.equal(original.itens[0].largura_mm, 3200);
+  assert.equal(original.ambientes[0].itens[0].largura_mm, 3200);
 });
 
 test('histórico de orçamentos: busca por nome, número, status e valor', async () => {
@@ -317,4 +319,51 @@ test('orçamento enviado expira após a validade', async () => {
 test('não exclui cliente com orçamentos', async () => {
   const r = await chamar('DELETE', `/clientes/${clienteId}`);
   assert.equal(r.status, 400);
+});
+
+let orcamentoAmbientesId;
+test('orçamento com móveis separados por ambiente', async () => {
+  const modelo = (await chamar('GET', '/orcamentos/modelo')).dados;
+  let r = await chamar('POST', '/orcamentos', {
+    ...modelo,
+    cliente_id: clienteId,
+    ambientes: [
+      {
+        nome: 'Quarto do casal',
+        descricao: 'MDF branco, puxador cava',
+        itens: [item(tipos['Guarda-roupa'], { largura_mm: 3200 }), item(tipos['Criado-mudo'], { quantidade: 2 })],
+      },
+      { nome: 'Cozinha', itens: [item(tipos['Cozinha planejada'], { largura_mm: 4800 })] },
+      { nome: 'Sala de estar', itens: [] },
+    ],
+  });
+  assert.equal(r.status, 201, JSON.stringify(r.dados));
+  orcamentoAmbientesId = r.dados.id;
+  assert.deepEqual(
+    r.dados.ambientes.map((a) => [a.nome, a.itens.length]),
+    [
+      ['Quarto do casal', 2],
+      ['Cozinha', 1],
+      ['Sala de estar', 0],
+    ],
+  );
+  // guarda-roupa 3,20 m × R$ 1.800 + 2 criados-mudos + cozinha
+  assert.equal(r.dados.total_cents, 576000 + 160000 + 768000);
+
+  // Move a cozinha para o quarto e remove a sala
+  const orc = r.dados;
+  orc.ambientes[0].itens.push(orc.ambientes[1].itens[0]);
+  orc.ambientes.splice(1, 2);
+  r = await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
+  assert.deepEqual(r.dados.ambientes.map((a) => [a.nome, a.itens.length]), [['Quarto do casal', 3]]);
+  assert.equal(r.dados.total_cents, 576000 + 160000 + 768000);
+  const hist = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/historico`)).dados;
+  assert.equal(hist.at(-1).evento, 'Ambiente removido; Móveis alterados');
+
+  r = await chamar('POST', '/orcamentos', { ...modelo, cliente_id: clienteId, ambientes: [{ nome: '', itens: [] }] });
+  assert.equal(r.status, 400);
+  assert.match(r.dados.erro, /Nome do ambiente/);
+
+  const pdf = await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/pdf`);
+  assert.equal(pdf.status, 200);
 });

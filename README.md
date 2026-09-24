@@ -60,7 +60,8 @@ Testes: `npm test`.
 ## Fluxo
 
 1. **+ NOVO ORÇAMENTO** → escolher ou cadastrar o cliente.
-2. **+ ADICIONAR MÓVEL** → tocar no tipo (ex.: Guarda-roupa) → informar `3,20`.
+2. **Adicionar ambiente** (ex.: Quarto do casal) → **Adicionar móvel** → tocar no tipo
+   (ex.: Guarda-roupa) → informar `3,20`.
    O valor aparece na hora: `3,20 m × R$ 1.800,00/m = R$ 5.760,00`.
 3. Adicionar outros móveis, serviços (frete, montagem…), desconto ou acréscimo.
 4. Conferir o total → **Salvar** → **Gerar PDF** / **Enviar ao cliente**
@@ -74,6 +75,9 @@ Testes: `npm test`.
 - Clientes: cadastro simples e busca por nome, telefone ou WhatsApp.
 - Tipos de móveis com método de cálculo e preço padrão; tela de **Preços**
   para ajustar todos de uma vez.
+- **Ambientes**: os móveis ficam agrupados por cômodo (Quarto do casal, Sala,
+  Cozinha…), com detalhes do ambiente (materiais, cores) e subtotal no PDF.
+  Dá para renomear, duplicar, reordenar e mover móveis entre ambientes.
 - Cálculo por **metro linear**, **metro quadrado** (largura × altura) e **por unidade**;
   quantidade; **preço personalizado** por orçamento.
 - Serviços adicionais, desconto e acréscimo em R$ ou %.

@@ -1,19 +1,23 @@
 import { STATUS, formatarData, formatarDinheiro, formatarNumero } from '/shared/calc.js';
 import { api } from './api.js';
-import { h, campo, abrirModal, avisoErro, aviso, debounce, substituir, vazio, icone, carregando } from './ui.js';
+import { h, campo, abrirModal, avisoErro, aviso, debounce, substituir, vazio, icone, carregando, iniciais, vazioIlustrado } from './ui.js';
 
 export function selo(status) {
   return h('span', { class: `selo selo-${status}` }, STATUS[status] || status);
 }
 
-export function cabecalhoPagina(titulo, { voltar, acoes } = {}) {
+export function cabecalhoPagina(titulo, { voltar, acoes, subtitulo } = {}) {
   return h(
     'div',
     { class: 'cabecalho-pagina' },
     voltar ? h('a', { href: voltar, class: 'voltar', 'aria-label': 'Voltar' }, icone('voltar')) : null,
-    h('h1', {}, titulo),
+    h('div', { class: 'titulos' }, h('h1', {}, titulo), subtitulo ? h('p', {}, subtitulo) : null),
     acoes ? h('div', { class: 'cabecalho-acoes' }, acoes) : null,
   );
+}
+
+export function avatar(nome, classe = '') {
+  return h('span', { class: `avatar ${classe}`, 'aria-hidden': 'true' }, iniciais(nome));
 }
 
 /** Lista de orçamentos em formato de linhas clicáveis. */
@@ -25,6 +29,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true } = {}) {
       h(
         'a',
         { href: `#/orcamentos/${o.id}`, class: 'linha-orcamento' },
+        mostrarCliente ? avatar(o.cliente_nome) : h('span', { class: 'selo-icone' }, icone('orcamentos')),
         h(
           'div',
           { class: 'linha-principal' },
@@ -37,6 +42,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true } = {}) {
           ),
         ),
         h('div', { class: 'linha-valor' }, h('strong', {}, formatarDinheiro(o.total_cents)), selo(o.status)),
+        icone('seta', 'icone linha-seta'),
       ),
     ),
   );
@@ -125,7 +131,9 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
       if (!clientes.length) {
         substituir(
           lista,
-          vazio(busca.value ? 'Nenhum cliente encontrado. Use “Novo cliente” para cadastrar.' : 'Nenhum cliente cadastrado ainda.'),
+          busca.value
+            ? vazioIlustrado('busca', 'Nenhum cliente encontrado', 'Confira o nome ou use “Novo cliente” para cadastrar.')
+            : vazioIlustrado('clientes', 'Nenhum cliente cadastrado ainda', 'Toque em “Novo cliente” para cadastrar o primeiro.'),
         );
         return;
       }
@@ -134,9 +142,15 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
         clientes.map((c) =>
           h(
             'button',
-            { type: 'button', class: 'linha-cliente', onclick: () => aoEscolher(c) },
-            h('strong', {}, c.nome),
-            h('span', { class: 'suave' }, [c.whatsapp || c.telefone, c.cidade].filter(Boolean).join(' · ') || ' '),
+            { type: 'button', class: 'linha-orcamento', onclick: () => aoEscolher(c) },
+            avatar(c.nome),
+            h(
+              'div',
+              { class: 'linha-principal' },
+              h('strong', {}, c.nome),
+              h('span', { class: 'suave' }, [c.whatsapp || c.telefone, c.cidade].filter(Boolean).join(' · ') || 'Sem telefone'),
+            ),
+            icone('seta', 'icone linha-seta'),
           ),
         ),
       );
@@ -159,7 +173,7 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
     h(
       'button',
       { type: 'button', class: 'botao botao-primario botao-grande botao-bloco', onclick: novo },
-      icone('mais'),
+      icone('usuarioMais'),
       'Novo cliente',
     ),
     h('div', { class: 'separador' }, h('span', {}, 'ou selecione um cliente existente')),

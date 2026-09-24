@@ -201,6 +201,25 @@ const MIGRACOES = [
       ],
     },
   ],
+
+  // v2 — Ambientes: os móveis passam a ser agrupados por ambiente
+  // (Quarto do casal, Sala, Cozinha…). Orçamentos antigos ganham um
+  // ambiente "Móveis" com todos os itens.
+  [
+    `CREATE TABLE orcamento_ambientes (
+      id INTEGER PRIMARY KEY,
+      orcamento_id INTEGER NOT NULL REFERENCES orcamentos(id) ON DELETE CASCADE,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      nome TEXT NOT NULL,
+      descricao TEXT NOT NULL DEFAULT ''
+    )`,
+    `CREATE INDEX ambientes_orcamento ON orcamento_ambientes(orcamento_id)`,
+    `ALTER TABLE orcamento_itens ADD COLUMN ambiente_id INTEGER REFERENCES orcamento_ambientes(id) ON DELETE CASCADE`,
+    `INSERT INTO orcamento_ambientes (orcamento_id, ordem, nome)
+      SELECT DISTINCT orcamento_id, 0, 'Móveis' FROM orcamento_itens`,
+    `UPDATE orcamento_itens SET ambiente_id =
+      (SELECT a.id FROM orcamento_ambientes a WHERE a.orcamento_id = orcamento_itens.orcamento_id)`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------

@@ -36,10 +36,15 @@ export function visaoCliente(orc, empresa) {
       cidade: cliente.cidade,
       estado: cliente.estado,
     },
-    itens: orc.itens.map((i) => ({
-      descricao: i.descricao || i.tipo_nome,
-      quantidade: i.quantidade,
-      valor_cents: i.valor_total_cents,
+    ambientes: orc.ambientes.map((a) => ({
+      nome: a.nome,
+      descricao: a.descricao,
+      subtotal_cents: a.itens.reduce((soma, i) => soma + i.valor_total_cents, 0),
+      itens: a.itens.map((i) => ({
+        descricao: i.descricao || i.tipo_nome,
+        quantidade: i.quantidade,
+        valor_cents: i.valor_total_cents,
+      })),
     })),
     servicos: orc.servicos.map((s) => ({
       descricao: s.descricao,

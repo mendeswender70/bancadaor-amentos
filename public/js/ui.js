@@ -48,6 +48,25 @@ const ICONES = {
   busca: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
   historico: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
   salvar: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/>',
+  regua: '<path d="M3 15.5L15.5 3 21 8.5 8.5 21z"/><path d="M7 11.5l2 2M10 8.5l2 2M13 5.5l2 2"/>',
+  area: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 4v16"/>',
+  caixa: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  ambiente: '<path d="M3 21V10l9-7 9 7v11"/><path d="M9 21v-6h6v6"/>',
+  pontos: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  cima: '<path d="M6 15l6-6 6 6"/>',
+  baixo: '<path d="M6 9l6 6 6-6"/>',
+  seta: '<path d="M9 6l6 6-6 6"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  alerta: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.01"/>',
+  preco: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+  empresa: '<path d="M4 21V5l8-3v19M12 8h8v13M8 8v.01M8 12v.01M8 16v.01M16 12v.01M16 16v.01"/>',
+  calendario: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  dinheiro: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  relogio: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  aprovado: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+  usuarioMais: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M19 8v6M16 11h6"/>',
+  pagamento: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+  servico: '<path d="M14.5 5.5a4 4 0 0 0-5 5L4 16l4 4 5.5-5.5a4 4 0 0 0 5-5L16 12l-4-4z"/>',
 };
 
 export function icone(nome, classe = 'icone') {
@@ -66,7 +85,7 @@ export function aviso(mensagem, tipo = 'sucesso') {
     areaAvisos = h('div', { class: 'avisos', role: 'status', 'aria-live': 'polite' });
     document.body.append(areaAvisos);
   }
-  const el = h('div', { class: `aviso aviso-${tipo}` }, mensagem);
+  const el = h('div', { class: `aviso aviso-${tipo}` }, icone(tipo === 'erro' ? 'alerta' : 'check'), h('span', {}, mensagem));
   areaAvisos.append(el);
   setTimeout(() => el.classList.add('saindo'), 3200);
   setTimeout(() => el.remove(), 3600);
@@ -190,4 +209,90 @@ export function carregando() {
 
 export function vazio(texto, ...extras) {
   return h('div', { class: 'vazio' }, h('p', {}, texto), ...extras);
+}
+
+/** Estado vazio com ícone, título e texto. */
+export function vazioIlustrado(nomeIcone, titulo, texto, ...extras) {
+  return h(
+    'div',
+    { class: 'vazio' },
+    h('span', { class: 'selo-icone' }, icone(nomeIcone, 'icone icone-grande')),
+    h('strong', {}, titulo),
+    texto ? h('p', {}, texto) : null,
+    ...extras,
+  );
+}
+
+/** Iniciais para avatar: "João da Silva" → "JS". */
+export function iniciais(nome) {
+  const partes = String(nome || '?')
+    .trim()
+    .split(/\s+/)
+    .filter((p) => p.length > 2 || /^[A-ZÀ-Ú]/.test(p));
+  const lista = partes.length ? partes : [String(nome || '?')];
+  return ((lista[0]?.[0] || '') + (lista.length > 1 ? lista[lista.length - 1][0] : '')).toUpperCase() || '?';
+}
+
+let menuAberto = null;
+document.addEventListener('click', (e) => {
+  if (menuAberto && !menuAberto.contains(e.target)) fecharMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') fecharMenu();
+});
+function fecharMenu() {
+  menuAberto?.querySelector('.menu-opcoes')?.remove();
+  menuAberto?.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false');
+  menuAberto = null;
+}
+
+/**
+ * Botão "⋯" com lista de ações.
+ * @param {Array<[string, string, Function, {perigo?: boolean, desativado?: boolean}] | '-'>} opcoes
+ */
+export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
+  const raiz = h('div', { class: 'menu-suspenso' });
+  const botao = h('button', {
+    type: 'button',
+    class: 'botao-icone',
+    'aria-label': rotulo,
+    title: rotulo,
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false',
+    onclick: (e) => {
+      e.stopPropagation();
+      const estavaAberto = menuAberto === raiz;
+      fecharMenu();
+      if (estavaAberto) return;
+      const lista = h(
+        'div',
+        { class: 'menu-opcoes', role: 'menu' },
+        opcoes.map((op) =>
+          op === '-'
+            ? h('hr', {})
+            : h(
+                'button',
+                {
+                  type: 'button',
+                  role: 'menuitem',
+                  class: op[3]?.perigo ? 'perigo' : '',
+                  disabled: Boolean(op[3]?.desativado),
+                  onclick: () => {
+                    fecharMenu();
+                    op[2]();
+                  },
+                },
+                icone(op[0]),
+                op[1],
+              ),
+        ),
+      );
+      raiz.append(lista);
+      botao.setAttribute('aria-expanded', 'true');
+      menuAberto = raiz;
+      lista.querySelector('button:not(:disabled)')?.focus();
+    },
+  }, icone('pontos'));
+  raiz.append(botao);
+  return raiz;
 }

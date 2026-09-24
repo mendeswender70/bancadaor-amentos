@@ -1,6 +1,6 @@
 import { STATUS, lerDinheiro } from '/shared/calc.js';
 import { api } from '../api.js';
-import { h, icone, debounce, substituir, carregando, vazio, campo } from '../ui.js';
+import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, campo } from '../ui.js';
 import { cabecalhoPagina, listaOrcamentos } from '../comum.js';
 
 const FILTROS_STATUS = [['', 'Todos'], ['abertos', 'Em aberto'], ...Object.entries(STATUS)];
@@ -45,7 +45,19 @@ export async function paginaOrcamentos(query) {
     if (!acrescentar) substituir(resultado);
     resultado.querySelector('.carregar-mais')?.remove();
     if (!r.total) {
-      substituir(resultado, vazio('Nenhum orçamento encontrado.', h('a', { href: '#/orcamentos/novo', class: 'botao' }, '+ Novo orçamento')));
+      substituir(
+        resultado,
+        h(
+          'div',
+          { class: 'lista' },
+          vazioIlustrado(
+            'busca',
+            'Nenhum orçamento encontrado',
+            'Tente outro nome, número ou filtro.',
+            h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario' }, icone('mais'), 'Novo orçamento'),
+          ),
+        ),
+      );
       return;
     }
     resultado.append(lista);
@@ -69,7 +81,7 @@ export async function paginaOrcamentos(query) {
     }),
   });
 
-  const chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Filtrar por status' });
+  const chips = h('div', { class: 'chips chips-rolagem', role: 'group', 'aria-label': 'Filtrar por status' });
   const desenharChips = () =>
     substituir(
       chips,
@@ -126,6 +138,7 @@ export async function paginaOrcamentos(query) {
     'div',
     { class: 'pagina' },
     cabecalhoPagina('Orçamentos', {
+      subtitulo: 'Todos os orçamentos, do mais novo para o mais antigo',
       acoes: h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario' }, icone('mais'), 'Novo orçamento'),
     }),
     h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),

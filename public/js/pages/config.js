@@ -18,7 +18,7 @@ export async function paginaConfiguracoes(aba = 'empresa') {
   return h(
     'div',
     { class: 'pagina' },
-    cabecalhoPagina('Configurações'),
+    cabecalhoPagina('Configurações', { subtitulo: 'Empresa, preços, tipos de móveis e condições de pagamento' }),
     h(
       'nav',
       { class: 'abas', 'aria-label': 'Seções das configurações' },

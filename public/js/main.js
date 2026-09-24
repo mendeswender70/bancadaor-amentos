@@ -1,5 +1,5 @@
 import { api, cache, quandoPerderSessao } from './api.js';
-import { h, icone, substituir, carregando, avisoErro, campo, aviso } from './ui.js';
+import { h, icone, substituir, carregando, avisoErro, campo, aviso, iniciais } from './ui.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
@@ -86,43 +86,79 @@ export function irPara(hash) {
 
 const MENU = [
   ['#/', 'Início', 'inicio', /^\/?$/],
-  ['#/orcamentos', 'Orçamentos', 'orcamentos', /^\/orcamentos/],
+  ['#/orcamentos', 'Orçamentos', 'orcamentos', /^\/orcamentos(?!\/novo)/],
   ['#/clientes', 'Clientes', 'clientes', /^\/clientes/],
   ['#/config', 'Configurações', 'config', /^\/config/],
 ];
 
+export const usuarioAtual = () => usuario;
+
+/** Quadradinho com a logo da empresa (ou as iniciais do nome). */
+export function monograma() {
+  const e = cache.empresa;
+  return h(
+    'span',
+    { class: 'monograma', 'aria-hidden': 'true' },
+    e?.tem_logo ? h('img', { src: `/api/empresa/logo?v=${encodeURIComponent(e.logo_atualizado_em || '')}`, alt: '' }) : iniciais(e?.nome || 'O'),
+  );
+}
+
 function montarLayout() {
   const empresa = cache.empresa;
-  const links = (classe) =>
-    MENU.map(([href, texto, ic, padrao]) =>
-      h('a', { href, class: classe, 'data-padrao': padrao.source }, icone(ic), h('span', {}, texto)),
-    );
+  const link = ([href, texto, ic, padrao], rotuloCurto) =>
+    h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
+
   substituir(
     raiz,
     h(
-      'header',
-      { class: 'topo' },
+      'div',
+      { class: 'estrutura' },
       h(
-        'div',
-        { class: 'topo-interno' },
-        h('a', { href: '#/', class: 'marca' }, empresa?.nome || 'Orçamentos'),
-        h('nav', { class: 'menu-topo', 'aria-label': 'Menu principal' }, links('menu-link')),
+        'aside',
+        { class: 'lateral', 'aria-label': 'Menu principal' },
         h(
-          'button',
-          { type: 'button', class: 'botao-sair', title: 'Sair', onclick: sair },
-          icone('sair'),
-          h('span', {}, 'Sair'),
+          'a',
+          { href: '#/', class: 'lateral-marca' },
+          monograma(),
+          h('div', {}, h('strong', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos'), h('small', {}, 'Orçamentos de móveis')),
+        ),
+        h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
+        h('nav', { class: 'lateral-nav' }, MENU.map((m) => link(m))),
+        h(
+          'div',
+          { class: 'lateral-rodape' },
+          h('span', { class: 'avatar' }, iniciais(usuario?.nome)),
+          h('div', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, usuario?.email || '')),
+          h('button', { type: 'button', class: 'botao-icone', title: 'Sair', 'aria-label': 'Sair', onclick: sair }, icone('sair')),
         ),
       ),
+      h(
+        'div',
+        { class: 'area-principal' },
+        h(
+          'header',
+          { class: 'topo' },
+          h('a', { href: '#/', class: 'topo-marca' }, monograma(), h('span', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos')),
+          h('button', { type: 'button', class: 'botao-icone', title: 'Sair', 'aria-label': 'Sair', onclick: sair }, icone('sair')),
+        ),
+        h('main', { id: 'conteudo', class: 'conteudo' }),
+      ),
+      h(
+        'nav',
+        { class: 'menu-inferior', 'aria-label': 'Menu' },
+        link(MENU[0]),
+        link(MENU[1]),
+        h('a', { href: '#/orcamentos/novo', class: 'botao-central', 'aria-label': 'Novo orçamento' }, h('span', {}, icone('mais')), h('span', {}, 'Novo')),
+        link(MENU[2]),
+        link(MENU[3], 'Ajustes'),
+      ),
     ),
-    h('main', { id: 'conteudo', class: 'conteudo' }),
-    h('nav', { class: 'menu-inferior', 'aria-label': 'Menu' }, links('menu-link')),
   );
 }
 
 export function atualizarMarca() {
-  const marca = raiz.querySelector('.marca');
-  if (marca) marca.textContent = cache.empresa?.nome || 'Orçamentos';
+  for (const el of raiz.querySelectorAll('.marca-nome')) el.textContent = cache.empresa?.nome || 'Orçamentos';
+  for (const el of raiz.querySelectorAll('.monograma')) el.replaceWith(monograma());
 }
 
 function marcarMenu(caminho) {
@@ -157,10 +193,41 @@ async function mostrarAcesso() {
 }
 
 function cartaoAcesso(titulo, subtitulo, formulario) {
+  const vantagem = (texto) => h('li', {}, icone('check'), texto);
   return h(
     'div',
     { class: 'acesso' },
-    h('div', { class: 'acesso-cartao' }, h('h1', {}, titulo), subtitulo ? h('p', { class: 'suave' }, subtitulo) : null, formulario),
+    h(
+      'section',
+      { class: 'acesso-marca' },
+      h('span', { class: 'monograma' }, icone('orcamentos')),
+      h(
+        'div',
+        {},
+        h('h2', {}, 'Orçamentos de móveis planejados em poucos minutos.'),
+        h(
+          'ul',
+          {},
+          vantagem('Cálculo automático por metro linear, m² ou unidade'),
+          vantagem('Móveis organizados por ambiente'),
+          vantagem('PDF profissional sem mostrar seu preço por metro'),
+          vantagem('Envio direto pelo WhatsApp'),
+        ),
+      ),
+      h('small', {}, 'Sistema de orçamentos para marcenaria'),
+    ),
+    h(
+      'div',
+      { class: 'acesso-lado' },
+      h(
+        'div',
+        { class: 'acesso-cartao' },
+        h('span', { class: 'monograma' }, icone('orcamentos')),
+        h('h1', {}, titulo),
+        subtitulo ? h('p', { class: 'suave' }, subtitulo) : null,
+        formulario,
+      ),
+    ),
   );
 }
 

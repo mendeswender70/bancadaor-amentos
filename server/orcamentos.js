@@ -14,6 +14,7 @@ import { semAcento } from './db.js';
 import { dataIso, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
 
 const MAX_ITENS = 200;
+const MAX_AMBIENTES = 50;
 
 // Colunas do cabeçalho do orçamento gravadas a cada salvamento.
 const COLUNAS = [
@@ -68,7 +69,14 @@ export async function carregarOrcamento(db, id) {
     delete cliente.whatsapp_digitos;
   }
   orc.cliente = cliente;
-  orc.itens = await db.all('SELECT * FROM orcamento_itens WHERE orcamento_id = ? ORDER BY ordem, id', id);
+  const ambientes = await db.all('SELECT * FROM orcamento_ambientes WHERE orcamento_id = ? ORDER BY ordem, id', id);
+  const itens = await db.all('SELECT * FROM orcamento_itens WHERE orcamento_id = ? ORDER BY ordem, id', id);
+  for (const a of ambientes) a.itens = itens.filter((i) => i.ambiente_id === a.id);
+  const avulsos = itens.filter((i) => !ambientes.some((a) => a.id === i.ambiente_id));
+  if (avulsos.length) ambientes.push({ id: null, nome: 'Móveis', descricao: '', itens: avulsos });
+  orc.ambientes = ambientes;
+  // Lista plana só para uso interno (cálculos e histórico); não vai no JSON.
+  Object.defineProperty(orc, 'itens', { value: ambientes.flatMap((a) => a.itens), enumerable: false, writable: true });
   orc.servicos = await db.all('SELECT * FROM orcamento_servicos WHERE orcamento_id = ? ORDER BY ordem, id', id);
   orc.duplicado_de_numero = orc.duplicado_de_id
     ? ((await db.get('SELECT numero FROM orcamentos WHERE id = ?', orc.duplicado_de_id))?.numero ?? null)
@@ -87,8 +95,7 @@ function ajuste(body, prefixo, nome) {
   return { tipo, valor };
 }
 
-async function normalizarItem(db, item, i) {
-  const n = i + 1;
+async function normalizarItem(db, item, n) {
   const metodo = umDe(item?.metodo_calculo, Object.keys(METODOS), `Método de cálculo do móvel ${n}`);
   const medida = (valor, campo) => inteiro(valor, { min: 1, max: LIMITES.medidaMm, campo: `${campo} do móvel ${n}` });
   let tipoId = inteiro(item.tipo_movel_id, { min: 1, opcional: true, campo: 'Tipo de móvel' });
@@ -131,9 +138,15 @@ function normalizarServico(servico, i) {
 export async function normalizarOrcamento(db, body) {
   const clienteId = inteiro(body?.cliente_id, { min: 1, campo: 'Cliente' });
   if (!(await db.get('SELECT 1 AS ok FROM clientes WHERE id = ?', clienteId))) throw invalido('Selecione um cliente.');
-  const itensBrutos = Array.isArray(body.itens) ? body.itens : [];
+  // Formato antigo (lista simples de itens) vira um ambiente "Móveis".
+  let ambientesBrutos = Array.isArray(body.ambientes) ? body.ambientes : null;
+  if (!ambientesBrutos) {
+    ambientesBrutos = Array.isArray(body.itens) && body.itens.length ? [{ nome: 'Móveis', itens: body.itens }] : [];
+  }
   const servicosBrutos = Array.isArray(body.servicos) ? body.servicos : [];
-  if (itensBrutos.length > MAX_ITENS || servicosBrutos.length > MAX_ITENS) throw invalido('Itens demais no orçamento.');
+  const totalItens = ambientesBrutos.reduce((s, a) => s + (Array.isArray(a?.itens) ? a.itens.length : 0), 0);
+  if (ambientesBrutos.length > MAX_AMBIENTES) throw invalido('Ambientes demais no orçamento.');
+  if (totalItens > MAX_ITENS || servicosBrutos.length > MAX_ITENS) throw invalido('Itens demais no orçamento.');
 
   const data = dataIso(body.data);
   const validadeDias = inteiro(body.validade_dias ?? 10, { max: 3650, campo: 'Validade' });
@@ -159,10 +172,20 @@ export async function normalizarOrcamento(db, body) {
     prazo_entrega: texto(body.prazo_entrega, { max: 200, campo: 'Prazo de entrega' }),
     observacoes: texto(body.observacoes, { max: 5000, campo: 'Observações' }),
     observacoes_internas: texto(body.observacoes_internas, { max: 5000, campo: 'Observações internas' }),
-    itens: [],
+    ambientes: [],
     servicos: servicosBrutos.map(normalizarServico),
   };
-  for (let i = 0; i < itensBrutos.length; i++) orc.itens.push(await normalizarItem(db, itensBrutos[i], i));
+  let n = 0;
+  for (const [i, a] of ambientesBrutos.entries()) {
+    const ambiente = {
+      nome: texto(a?.nome, { max: 100, obrigatorio: true, campo: `Nome do ambiente ${i + 1}` }),
+      descricao: texto(a?.descricao, { max: 1000, campo: 'Detalhes do ambiente' }),
+      itens: [],
+    };
+    for (const item of Array.isArray(a.itens) ? a.itens : []) ambiente.itens.push(await normalizarItem(db, item, ++n));
+    orc.ambientes.push(ambiente);
+  }
+  orc.itens = orc.ambientes.flatMap((a) => a.itens);
   return Object.assign(orc, calcularTotais(orc));
 }
 
@@ -196,6 +219,8 @@ const assinaturaItens = (itens) =>
       i.observacoes,
     ]),
   );
+const assinaturaAmbientes = (ambientes) =>
+  JSON.stringify(ambientes.map((a) => [a.nome, a.descricao, assinaturaItens(a.itens)]));
 const assinaturaServicos = (servicos) =>
   JSON.stringify(servicos.map((s) => [s.descricao, s.valor_cents, s.quantidade]));
 
@@ -211,7 +236,12 @@ function descreverAjuste(anterior, novo, prefixo, nome) {
 export function descreverAlteracoes(anterior, novo) {
   const partes = [];
   if (anterior.cliente_id !== novo.cliente_id) partes.push('Cliente alterado');
-  if (assinaturaItens(anterior.itens) !== assinaturaItens(novo.itens)) {
+  const nomesAntes = anterior.ambientes.map((a) => [a.nome, a.descricao].join('|'));
+  const nomesDepois = novo.ambientes.map((a) => [a.nome, a.descricao].join('|'));
+  if (novo.ambientes.length > anterior.ambientes.length) partes.push('Ambiente adicionado');
+  else if (novo.ambientes.length < anterior.ambientes.length) partes.push('Ambiente removido');
+  else if (JSON.stringify(nomesAntes) !== JSON.stringify(nomesDepois)) partes.push('Ambientes alterados');
+  if (assinaturaAmbientes(anterior.ambientes) !== assinaturaAmbientes(novo.ambientes)) {
     if (novo.itens.length > anterior.itens.length) partes.push('Móvel adicionado');
     else if (novo.itens.length < anterior.itens.length) partes.push('Móvel removido');
     else partes.push('Móveis alterados');
@@ -255,11 +285,21 @@ export function listarHistorico(db, orcamentoId) {
 
 async function gravarFilhos(db, orcamentoId, orc) {
   await db.run('DELETE FROM orcamento_itens WHERE orcamento_id = ?', orcamentoId);
+  await db.run('DELETE FROM orcamento_ambientes WHERE orcamento_id = ?', orcamentoId);
   await db.run('DELETE FROM orcamento_servicos WHERE orcamento_id = ?', orcamentoId);
-  const sqlItem = `INSERT INTO orcamento_itens (orcamento_id, ordem, ${COLUNAS_ITEM.join(', ')})
-     VALUES (?, ?, ${COLUNAS_ITEM.map(() => '?').join(', ')})`;
-  for (const [i, item] of orc.itens.entries()) {
-    await db.run(sqlItem, orcamentoId, i, ...COLUNAS_ITEM.map((c) => item[c] ?? null));
+  const sqlItem = `INSERT INTO orcamento_itens (orcamento_id, ambiente_id, ordem, ${COLUNAS_ITEM.join(', ')})
+     VALUES (?, ?, ?, ${COLUNAS_ITEM.map(() => '?').join(', ')})`;
+  for (const [i, ambiente] of orc.ambientes.entries()) {
+    const { lastInsertRowid: ambienteId } = await db.run(
+      'INSERT INTO orcamento_ambientes (orcamento_id, ordem, nome, descricao) VALUES (?, ?, ?, ?)',
+      orcamentoId,
+      i,
+      ambiente.nome,
+      ambiente.descricao,
+    );
+    for (const [j, item] of ambiente.itens.entries()) {
+      await db.run(sqlItem, orcamentoId, ambienteId, j, ...COLUNAS_ITEM.map((c) => item[c] ?? null));
+    }
   }
   for (const [i, s] of orc.servicos.entries()) {
     await db.run(

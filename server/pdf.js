@@ -7,6 +7,7 @@ const COR = {
   suave: '#5f6670',
   linha: '#e3ded7',
   fundo: '#f7f4f0',
+  grupo: '#f5ede4',
 };
 
 const MARGEM = 45;
@@ -145,27 +146,73 @@ export function gerarPdf(v, logo) {
     doc.text('VALOR', direita - colunaValor - 12, y + 7, { width: colunaValor, align: 'right' });
     doc.y = y + 22;
   };
-  const linhas = [...v.itens, ...v.servicos].map((l) => ({
+  const descreverLinha = (l) => ({
     descricao: l.quantidade > 1 ? `${l.descricao} (${l.quantidade} unidades)` : l.descricao,
     valor: formatarDinheiro(l.valor_cents),
-  }));
+  });
+  // Cada ambiente vira um grupo com título e subtotal; os serviços, um grupo no final.
+  const grupos = v.ambientes
+    .filter((a) => a.itens.length)
+    .map((a) => ({ titulo: a.nome, detalhe: a.descricao, subtotal: a.subtotal_cents, linhas: a.itens.map(descreverLinha) }));
+  if (v.servicos.length) {
+    grupos.push({
+      titulo: 'Serviços adicionais',
+      detalhe: '',
+      subtotal: v.servicos.reduce((soma, x) => soma + x.valor_cents, 0),
+      linhas: v.servicos.map(descreverLinha),
+    });
+  }
 
-  garantirEspaco(22 + 26);
-  cabecalhoTabela();
-  linhas.forEach((linha, i) => {
+  const alturaLinha = (texto) => {
     doc.font('Helvetica').fontSize(10.5);
-    const altura = Math.max(doc.heightOfString(linha.descricao, { width: larguraDescricao }), 12) + 14;
-    if (doc.y + altura > limiteInferior()) {
+    return Math.max(doc.heightOfString(texto, { width: larguraDescricao - 12 }), 12) + 12;
+  };
+  const tituloGrupo = (grupo, continuacao = false) => {
+    const y = doc.y;
+    doc.rect(esquerda, y, largura, 26).fill(COR.grupo);
+    doc.rect(esquerda, y, 3, 26).fill(COR.destaque);
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(11)
+      .fillColor(COR.destaque)
+      .text(continuacao ? `${grupo.titulo} (continuação)` : grupo.titulo, esquerda + 12, y + 8, { width: larguraDescricao });
+    if (!continuacao) {
+      doc.text(formatarDinheiro(grupo.subtotal), direita - colunaValor - 12, y + 8, { width: colunaValor, align: 'right' });
+    }
+    doc.y = y + 26;
+    if (grupo.detalhe && !continuacao) {
+      doc.font('Helvetica-Oblique').fontSize(9).fillColor(COR.suave);
+      doc.text(grupo.detalhe, esquerda + 12, doc.y + 5, { width: largura - 24 });
+      doc.y += 3;
+    }
+  };
+
+  garantirEspaco(22 + 26 + 26);
+  cabecalhoTabela();
+  for (const grupo of grupos) {
+    // O título do grupo nunca fica sozinho no fim da página.
+    if (doc.y + 26 + alturaLinha(grupo.linhas[0].descricao) + 8 > limiteInferior()) {
       doc.addPage();
       cabecalhoTabela();
     }
-    const y = doc.y;
-    if (i % 2 === 1) doc.rect(esquerda, y, largura, altura).fill(COR.fundo);
-    doc.fillColor(COR.texto).font('Helvetica').fontSize(10.5);
-    doc.text(linha.descricao, esquerda + 12, y + 7, { width: larguraDescricao });
-    doc.text(linha.valor, direita - colunaValor - 12, y + 7, { width: colunaValor, align: 'right' });
-    doc.y = y + altura;
-  });
+    doc.y += 6;
+    tituloGrupo(grupo);
+    for (const linha of grupo.linhas) {
+      const altura = alturaLinha(linha.descricao);
+      if (doc.y + altura > limiteInferior()) {
+        doc.addPage();
+        cabecalhoTabela();
+        tituloGrupo(grupo, true);
+      }
+      const y = doc.y;
+      doc.fillColor(COR.texto).font('Helvetica').fontSize(10.5);
+      doc.text(linha.descricao, esquerda + 24, y + 6, { width: larguraDescricao - 12 });
+      doc.text(linha.valor, direita - colunaValor - 12, y + 6, { width: colunaValor, align: 'right' });
+      doc.y = y + altura;
+      doc.moveTo(esquerda + 12, doc.y).lineTo(direita, doc.y).lineWidth(0.5).strokeColor(COR.linha).stroke();
+    }
+  }
+  doc.y += 6;
   doc.moveTo(esquerda, doc.y).lineTo(direita, doc.y).lineWidth(0.8).strokeColor(COR.linha).stroke();
   doc.y += 10;
 

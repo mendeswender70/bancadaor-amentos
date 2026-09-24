@@ -26,6 +26,22 @@ export const STATUS_ABERTOS = ['rascunho', 'enviado', 'negociacao'];
 
 export const TIPOS_AJUSTE = ['nenhum', 'valor', 'percentual'];
 
+// Sugestões rápidas ao criar um ambiente.
+export const AMBIENTES_SUGERIDOS = [
+  'Quarto do casal',
+  'Quarto de solteiro',
+  'Quarto infantil',
+  'Sala de estar',
+  'Sala de jantar',
+  'Cozinha',
+  'Banheiro',
+  'Lavanderia',
+  'Escritório',
+  'Área gourmet',
+  'Closet',
+  'Varanda',
+];
+
 export const LIMITES = {
   medidaMm: 100_000, // 100 m
   quantidade: 9_999,
@@ -224,8 +240,17 @@ export function calcularServico(servico) {
  * Desconto e acréscimo percentuais incidem sobre o subtotal.
  * Total = subtotal + acréscimo − desconto (nunca negativo).
  */
+/** Todos os móveis do orçamento, de todos os ambientes. */
+export function todosOsItens(orc) {
+  return orc.ambientes ? orc.ambientes.flatMap((a) => a.itens || []) : orc.itens || [];
+}
+
+export function subtotalAmbiente(ambiente) {
+  return (ambiente.itens || []).reduce((s, i) => s + calcularItem(i).valor_total_cents, 0);
+}
+
 export function calcularTotais(orc) {
-  const subtotalMoveis = (orc.itens || []).reduce((s, i) => s + calcularItem(i).valor_total_cents, 0);
+  const subtotalMoveis = todosOsItens(orc).reduce((s, i) => s + calcularItem(i).valor_total_cents, 0);
   const subtotalServicos = (orc.servicos || []).reduce((s, x) => s + calcularServico(x).total_cents, 0);
   const subtotal = subtotalMoveis + subtotalServicos;
   const acrescimo = calcularAjuste(orc.acrescimo_tipo, orc.acrescimo_valor, subtotal);
