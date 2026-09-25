@@ -2,6 +2,8 @@
 
 <img src="public/icons/esquadro.svg" width="72" alt="Logo do esquadro">
 
+**Endereço:** <https://esquadro.site>
+
 Orçamentos rápidos para marcenaria: o móvel inteiro é avaliado por uma medida
 comercial (metro linear, metro quadrado ou unidade) e o sistema multiplica pelo
 preço cadastrado. Nada de calcular peça por peça.
