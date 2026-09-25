@@ -64,17 +64,27 @@ de produção (`postgres`) conectado pela rede.
    (ex.: Guarda-roupa) → informar `3,20`.
    O valor aparece na hora: `3,20 m × R$ 1.800,00/m = R$ 5.760,00`.
 3. Adicionar outros móveis, serviços (frete, montagem…), desconto ou acréscimo.
-4. Conferir o total → **Salvar** → **Gerar PDF** / **Enviar ao cliente**
-   (compartilha o PDF ou abre o WhatsApp com a mensagem pronta).
+4. Conferir o total (o orçamento **salva sozinho** a cada alteração) →
+   **Enviar ao cliente**: abre o WhatsApp com a mensagem e o **link da proposta**
+   (ou manda o PDF).
+5. O cliente abre o link (`/p/<código>`), vê ambientes, valores e condições e
+   toca em **Aprovar proposta**. O orçamento vira "Aprovado" na hora e aparece
+   em **Precisa de atenção** no painel.
 
 ## Funcionalidades (primeira versão)
 
 - Login com administrador (sessão por cookie `HttpOnly`, senha com scrypt,
   limite de tentativas erradas).
-- Painel: orçamentos do mês, em aberto, aprovados, valor orçado e recentes.
+- Painel: **Precisa de atenção** (aprovações pelo link, propostas vencendo,
+  cliente que abriu a proposta, enviados sem resposta, rascunhos parados),
+  valor orçado e aprovado no mês com comparação ao mês anterior, taxa de
+  aprovação (90 dias), valor médio e recentes.
+- **Link da proposta** para o cliente, com botão de aprovar. Mostra só o que o
+  PDF mostra (sem telefone/documento do cliente) e conta as visitas — as da
+  própria empresa, logada, não contam.
 - Clientes: cadastro simples e busca por nome, telefone ou WhatsApp.
-- Tipos de móveis com método de cálculo e preço padrão; tela de **Preços**
-  para ajustar todos de uma vez.
+- **Móveis e preços**: tipos de móveis com método de cálculo e preço padrão,
+  editáveis na mesma lista.
 - **Ambientes**: os móveis ficam agrupados por cômodo (Quarto do casal, Sala,
   Cozinha…), com detalhes do ambiente (materiais, cores) e subtotal no PDF.
   Dá para renomear, duplicar, reordenar e mover móveis entre ambientes.

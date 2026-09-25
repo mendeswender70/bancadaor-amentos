@@ -24,6 +24,12 @@ export const STATUS = {
 // Orçamentos que ainda aguardam resposta do cliente.
 export const STATUS_ABERTOS = ['rascunho', 'enviado', 'negociacao'];
 
+// Orçamentos que não viraram venda.
+export const STATUS_PERDIDOS = ['recusado', 'cancelado', 'expirado'];
+
+// Caminho normal de um orçamento (as outras situações ficam fora dele).
+export const ETAPAS = ['rascunho', 'enviado', 'negociacao', 'aprovado'];
+
 export const TIPOS_AJUSTE = ['nenhum', 'valor', 'percentual'];
 
 // Sugestões rápidas ao criar um ambiente.
@@ -309,4 +315,17 @@ export function descreverPagamento(total, pagamento) {
     linhas.push(`Parcelamento: ${parcelasTexto()}`);
   }
   return linhas;
+}
+
+/**
+ * Texto da condição para o cliente, a partir da entrada e das parcelas:
+ * "À vista", "50% de entrada + restante na entrega", "Entrada de R$ 1.000,00 + 3x".
+ */
+export function textoPagamento({ entrada_tipo, entrada_valor, parcelas } = {}) {
+  const n = Math.max(0, Math.floor(Number(parcelas) || 0));
+  const temEntrada = entrada_tipo !== 'nenhum' && Number(entrada_valor) > 0;
+  const entrada =
+    entrada_tipo === 'percentual' ? `${formatarPercentual(entrada_valor)}% de entrada` : `Entrada de ${formatarDinheiro(entrada_valor)}`;
+  if (!temEntrada) return n > 1 ? `Parcelado em ${n}x` : 'À vista';
+  return n > 1 ? `${entrada} + ${n}x` : `${entrada} + restante na entrega`;
 }

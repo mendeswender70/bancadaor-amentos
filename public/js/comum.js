@@ -1,6 +1,23 @@
 import { STATUS, formatarData, formatarDinheiro, formatarNumero } from '/shared/calc.js';
-import { api } from './api.js';
-import { h, campo, abrirModal, avisoErro, aviso, debounce, substituir, vazio, icone, carregando, iniciais, vazioIlustrado } from './ui.js';
+import { api, baixarBlob } from './api.js';
+import {
+  h,
+  campo,
+  abrirModal,
+  avisoErro,
+  aviso,
+  debounce,
+  substituir,
+  vazio,
+  icone,
+  carregando,
+  iniciais,
+  vazioIlustrado,
+  menuSuspenso,
+  haQuanto,
+  diasAte,
+  copiarTexto,
+} from './ui.js';
 
 export function selo(status) {
   return h('span', { class: `selo selo-${status}` }, STATUS[status] || status);
@@ -20,29 +37,130 @@ export function avatar(nome, classe = '') {
   return h('span', { class: `avatar ${classe}`, 'aria-hidden': 'true' }, iniciais(nome));
 }
 
-/** Lista de orçamentos em formato de linhas clicáveis. */
-export function listaOrcamentos(orcamentos, { mostrarCliente = true } = {}) {
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
+/** Etiquetas de uma linha: ambientes, validade e o que o cliente fez pelo link. */
+function etiquetasOrcamento(o) {
+  const etiquetas = [];
+  const aberto = ['enviado', 'negociacao'].includes(o.status);
+  if (o.status === 'aprovado' && o.aprovado_pelo_link) etiquetas.push(['sucesso', 'aprovado pelo cliente']);
+  else if (aberto && o.visualizacoes) etiquetas.push(['info', `cliente viu ${haQuanto(o.ultima_visualizacao_em)}`]);
+  if (aberto && o.data_validade) {
+    const d = diasAte(o.data_validade);
+    if (d < 0) etiquetas.push(['alerta', 'validade vencida']);
+    else if (d <= 3) etiquetas.push(['alerta', d === 0 ? 'vence hoje' : d === 1 ? 'vence amanhã' : `vence em ${d} dias`]);
+    else etiquetas.push(['', `válido até ${formatarData(o.data_validade)}`]);
+  }
+  if (o.ambientes) etiquetas.push(['', plural(o.ambientes, 'ambiente', 'ambientes')]);
+  return etiquetas;
+}
+
+async function enviarDaLista(o, aoMudar) {
+  const { abrirEnvio } = await import('./envio.js');
+  const marcar = await abrirEnvio({
+    id: o.id,
+    numero: o.numero,
+    status: o.status,
+    cliente: { nome: o.cliente_nome, whatsapp: o.cliente_whatsapp, telefone: o.cliente_telefone },
+  });
+  if (marcar && o.status !== 'enviado') {
+    try {
+      await api.patch(`/orcamentos/${o.id}/status`, { status: 'enviado' });
+      aviso('Orçamento marcado como enviado.');
+      aoMudar?.();
+    } catch (erro) {
+      avisoErro(erro);
+    }
+  }
+}
+
+async function acaoDuplicar(o) {
+  try {
+    const copia = await api.post(`/orcamentos/${o.id}/duplicar`);
+    aviso(`Cópia criada: orçamento nº ${formatarNumero(copia.numero)}.`);
+    location.hash = `#/orcamentos/${copia.id}`;
+  } catch (erro) {
+    avisoErro(erro);
+  }
+}
+
+async function acaoPdf(o) {
+  try {
+    aviso('Gerando o PDF…');
+    const blob = await baixarBlob(`/orcamentos/${o.id}/pdf`);
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { href: url, download: `Orcamento-${formatarNumero(o.numero)}.pdf` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (erro) {
+    avisoErro(erro);
+  }
+}
+
+async function acaoCopiarLink(o) {
+  try {
+    const { linkDaProposta } = await import('./envio.js');
+    aviso((await copiarTexto(await linkDaProposta(o.id))) ? 'Link da proposta copiado.' : 'Não foi possível copiar.');
+  } catch (erro) {
+    avisoErro(erro);
+  }
+}
+
+/**
+ * Lista de orçamentos: a linha abre o orçamento; à direita ficam os atalhos
+ * (WhatsApp e o menu com duplicar, PDF e link).
+ */
+export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar } = {}) {
   return h(
     'div',
     { class: 'lista' },
     orcamentos.map((o) =>
       h(
-        'a',
-        { href: `#/orcamentos/${o.id}`, class: 'linha-orcamento' },
-        mostrarCliente ? avatar(o.cliente_nome) : h('span', { class: 'selo-icone' }, icone('orcamentos')),
+        'div',
+        { class: 'linha-orcamento linha-com-acoes' },
         h(
-          'div',
-          { class: 'linha-principal' },
-          h('strong', {}, mostrarCliente ? o.cliente_nome : `Orçamento nº ${formatarNumero(o.numero)}`),
+          'a',
+          { href: `#/orcamentos/${o.id}`, class: 'linha-link' },
+          mostrarCliente ? avatar(o.cliente_nome, 'avatar-linha') : h('span', { class: 'selo-icone avatar-linha' }, icone('orcamentos')),
+          h(
+            'div',
+            { class: 'linha-principal' },
+            h('strong', {}, mostrarCliente ? o.cliente_nome : `Orçamento nº ${formatarNumero(o.numero)}`),
+            h('span', { class: 'suave' }, mostrarCliente ? `nº ${formatarNumero(o.numero)} · ` : '', formatarData(o.data)),
+          ),
+          h('div', { class: 'linha-valor' }, h('strong', {}, formatarDinheiro(o.total_cents)), selo(o.status)),
           h(
             'span',
-            { class: 'suave' },
-            mostrarCliente ? `nº ${formatarNumero(o.numero)} · ` : '',
-            formatarData(o.data),
+            { class: 'etiquetas' },
+            etiquetasOrcamento(o).map(([tipo, texto]) => h('span', { class: `etiqueta-linha ${tipo}` }, texto)),
           ),
         ),
-        h('div', { class: 'linha-valor' }, h('strong', {}, formatarDinheiro(o.total_cents)), selo(o.status)),
-        icone('seta', 'icone linha-seta'),
+        h(
+          'div',
+          { class: 'linha-acoes' },
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'botao-icone botao-icone-whatsapp so-computador',
+              title: 'Enviar ao cliente',
+              'aria-label': `Enviar o orçamento nº ${formatarNumero(o.numero)} ao cliente`,
+              onclick: () => enviarDaLista(o, aoMudar),
+            },
+            icone('whatsapp'),
+          ),
+          menuSuspenso(
+            [
+              ['whatsapp', 'Enviar ao cliente', () => enviarDaLista(o, aoMudar)],
+              ['link', 'Copiar link da proposta', () => acaoCopiarLink(o)],
+              ['pdf', 'Baixar PDF', () => acaoPdf(o)],
+              ['copiar', 'Duplicar', () => acaoDuplicar(o)],
+            ],
+            { rotulo: `Ações do orçamento nº ${formatarNumero(o.numero)}` },
+          ),
+        ),
       ),
     ),
   );

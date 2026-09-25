@@ -3,6 +3,7 @@ import {
   METODOS,
   STATUS,
   STATUS_ABERTOS,
+  STATUS_PERDIDOS,
   TIPOS_AJUSTE,
   calcularItem,
   calcularServico,
@@ -10,8 +11,9 @@ import {
   formatarNumero,
   somarDias,
 } from '../public/shared/calc.js';
+import { randomBytes } from 'node:crypto';
 import { semAcento } from './db.js';
-import { dataIso, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
+import { ErroHttp, dataIso, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
 
 const MAX_ITENS = 200;
 const MAX_AMBIENTES = 50;
@@ -193,16 +195,58 @@ export async function normalizarOrcamento(db, body) {
 // Histórico de alterações
 // ---------------------------------------------------------------------------
 
-async function registrarHistorico(db, orcamentoId, evento, usuarioId) {
+async function registrarHistorico(db, orcamentoId, evento, usuarioId, tipo = 'evento') {
   const orc = await carregarOrcamento(db, orcamentoId);
   await db.run(
-    'INSERT INTO orcamento_historico (orcamento_id, evento, total_cents, usuario_id, snapshot) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO orcamento_historico (orcamento_id, evento, total_cents, usuario_id, snapshot, tipo) VALUES (?, ?, ?, ?, ?, ?)',
     orcamentoId,
     evento,
     orc.total_cents,
     usuarioId ?? null,
     JSON.stringify(orc),
+    tipo,
   );
+}
+
+// Edições seguidas do mesmo usuário (o salvamento automático grava a cada
+// alteração) viram um único registro no histórico.
+const JANELA_EDICAO = '10 minutes';
+
+async function registrarEdicao(db, orcamentoId, evento, usuarioId) {
+  const ultimo = await db.get(
+    `SELECT id, evento, tipo, usuario_id, data_hora > now() - ?::interval AS recente
+     FROM orcamento_historico WHERE orcamento_id = ? ORDER BY id DESC LIMIT 1`,
+    JANELA_EDICAO,
+    orcamentoId,
+  );
+  if (!ultimo || ultimo.tipo !== 'edicao' || !ultimo.recente || ultimo.usuario_id !== (usuarioId ?? null)) {
+    return registrarHistorico(db, orcamentoId, evento, usuarioId, 'edicao');
+  }
+  const partes = [...new Set([...ultimo.evento.split('; '), ...evento.split('; ')])];
+  const orc = await carregarOrcamento(db, orcamentoId);
+  await db.run(
+    'UPDATE orcamento_historico SET evento = ?, total_cents = ?, snapshot = ?, data_hora = now() WHERE id = ?',
+    partes.join('; '),
+    orc.total_cents,
+    JSON.stringify(orc),
+    ultimo.id,
+  );
+}
+
+/** Datas que acompanham a mudança de situação (envio e aprovação). */
+async function marcarDatasStatus(db, id, anterior, novo, { peloLink = false, nome = '' } = {}) {
+  if (anterior === novo) return;
+  if (novo === 'enviado') await db.run('UPDATE orcamentos SET enviado_em = now() WHERE id = ?', id);
+  if (novo === 'aprovado') {
+    await db.run(
+      'UPDATE orcamentos SET aprovado_em = now(), aprovado_por = ?, aprovado_pelo_link = ? WHERE id = ?',
+      nome,
+      peloLink ? 1 : 0,
+      id,
+    );
+  } else if (anterior === 'aprovado') {
+    await db.run(`UPDATE orcamentos SET aprovado_em = NULL, aprovado_por = '', aprovado_pelo_link = 0 WHERE id = ?`, id);
+  }
 }
 
 const assinaturaItens = (itens) =>
@@ -348,8 +392,9 @@ export function atualizarOrcamento(db, id, body, usuarioId) {
       id,
     );
     await gravarFilhos(t, id, novo);
+    await marcarDatasStatus(t, id, anterior.status, novo.status);
     const evento = descreverAlteracoes(anterior, novo);
-    if (evento) await registrarHistorico(t, id, evento, usuarioId);
+    if (evento) await registrarEdicao(t, id, evento, usuarioId);
     return id;
   });
 }
@@ -361,6 +406,7 @@ export function alterarStatus(db, id, status, usuarioId) {
     if (!atual) throw naoEncontrado('Orçamento não encontrado.');
     if (atual.status === status) return;
     await t.run('UPDATE orcamentos SET status = ?, atualizado_em = now() WHERE id = ?', status, id);
+    await marcarDatasStatus(t, id, atual.status, status);
     await registrarHistorico(t, id, `Status: ${STATUS[atual.status]} → ${STATUS[status]}`, usuarioId);
   });
 }
@@ -422,9 +468,10 @@ export async function listarOrcamentos(db, filtros = {}) {
       params.push(padraoLike(semAcento(q)));
     }
   }
-  if (filtros.status === 'abertos') {
-    onde.push(`o.status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`);
-    params.push(...STATUS_ABERTOS);
+  const grupos = { abertos: STATUS_ABERTOS, perdidos: STATUS_PERDIDOS };
+  if (grupos[filtros.status]) {
+    onde.push(`o.status IN (${grupos[filtros.status].map(() => '?').join(', ')})`);
+    params.push(...grupos[filtros.status]);
   } else if (filtros.status && STATUS[filtros.status]) {
     onde.push('o.status = ?');
     params.push(filtros.status);
@@ -459,7 +506,9 @@ export async function listarOrcamentos(db, filtros = {}) {
   );
   const orcamentos = await db.all(
     `SELECT o.id, o.numero, o.data, o.data_validade, o.status, o.total_cents, o.cliente_id,
-            c.nome AS cliente_nome, c.telefone AS cliente_telefone
+            o.visualizacoes, o.ultima_visualizacao_em, o.aprovado_pelo_link,
+            (SELECT COUNT(*) FROM orcamento_ambientes a WHERE a.orcamento_id = o.id) AS ambientes,
+            c.nome AS cliente_nome, c.telefone AS cliente_telefone, c.whatsapp AS cliente_whatsapp
      FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
      ${where} ORDER BY o.numero DESC LIMIT ? OFFSET ?`,
     ...params,
@@ -469,27 +518,156 @@ export async function listarOrcamentos(db, filtros = {}) {
   return { total, orcamentos };
 }
 
-export async function resumoDashboard(db, dataHoje) {
-  const inicioMes = `${dataHoje.slice(0, 7)}-01`;
-  const [ano, mes] = dataHoje.split('-').map(Number);
-  const inicioProximo = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
-  const mes_ = await db.get(
+const inicioDoMes = (iso) => `${iso.slice(0, 7)}-01`;
+function somarMeses(inicio, meses) {
+  const [ano, mes] = inicio.split('-').map(Number);
+  const d = new Date(Date.UTC(ano, mes - 1 + meses, 1));
+  return d.toISOString().slice(0, 10);
+}
+
+async function numerosDoPeriodo(db, de, ate) {
+  return db.get(
     `SELECT COUNT(*) AS quantidade,
+            COUNT(*) FILTER (WHERE status <> 'cancelado') AS validos,
             COALESCE(SUM(CASE WHEN status <> 'cancelado' THEN total_cents END), 0) AS valor_cents,
             COUNT(*) FILTER (WHERE status = 'aprovado') AS aprovados,
             COALESCE(SUM(CASE WHEN status = 'aprovado' THEN total_cents END), 0) AS aprovados_cents
      FROM orcamentos WHERE data >= ? AND data < ?`,
-    inicioMes,
-    inicioProximo,
+    de,
+    ate,
+  );
+}
+
+/**
+ * O que pede uma ação agora, do mais importante para o menos:
+ * aprovação pelo link, validade acabando, cliente que abriu a proposta,
+ * enviado sem resposta e rascunho esquecido.
+ */
+async function precisaAtencao(db, dataHoje) {
+  const colunas = `o.id, o.numero, o.status, o.total_cents, o.data_validade, c.nome AS cliente_nome`;
+  const consultas = [
+    [
+      'aprovado',
+      `SELECT ${colunas}, o.aprovado_em AS quando FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+       WHERE o.status = 'aprovado' AND o.aprovado_pelo_link = 1 AND o.aprovado_em > now() - interval '7 days'
+       ORDER BY o.aprovado_em DESC LIMIT 6`,
+    ],
+    [
+      'vence',
+      `SELECT ${colunas}, o.data_validade AS quando FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+       WHERE o.status IN ('enviado', 'negociacao') AND o.data_validade >= ? AND o.data_validade <= ?
+       ORDER BY o.data_validade LIMIT 6`,
+      dataHoje,
+      somarDias(dataHoje, 3),
+    ],
+    [
+      'visto',
+      `SELECT ${colunas}, o.ultima_visualizacao_em AS quando FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+       WHERE o.status IN ('enviado', 'negociacao') AND o.ultima_visualizacao_em > now() - interval '3 days'
+       ORDER BY o.ultima_visualizacao_em DESC LIMIT 6`,
+    ],
+    [
+      'sem_resposta',
+      `SELECT ${colunas}, COALESCE(o.enviado_em, o.atualizado_em) AS quando FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+       WHERE o.status = 'enviado' AND COALESCE(o.enviado_em, o.atualizado_em) < now() - interval '5 days'
+       ORDER BY COALESCE(o.enviado_em, o.atualizado_em) LIMIT 6`,
+    ],
+    [
+      'rascunho',
+      `SELECT ${colunas}, o.atualizado_em AS quando FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+       WHERE o.status = 'rascunho' AND o.atualizado_em < now() - interval '3 days'
+       ORDER BY o.atualizado_em LIMIT 6`,
+    ],
+  ];
+  const vistos = new Set();
+  const lista = [];
+  for (const [motivo, sql, ...params] of consultas) {
+    for (const linha of await db.all(sql, ...params)) {
+      if (vistos.has(linha.id)) continue;
+      vistos.add(linha.id);
+      lista.push({ ...linha, motivo });
+    }
+  }
+  return lista.slice(0, 6);
+}
+
+export async function resumoDashboard(db, dataHoje) {
+  const inicioMes = inicioDoMes(dataHoje);
+  const mes = await numerosDoPeriodo(db, inicioMes, somarMeses(inicioMes, 1));
+  const anterior = await numerosDoPeriodo(db, somarMeses(inicioMes, -1), inicioMes);
+  // Taxa de aprovação dos últimos 90 dias, só entre os que chegaram ao cliente.
+  const conversao = await db.get(
+    `SELECT COUNT(*) AS enviados, COUNT(*) FILTER (WHERE status = 'aprovado') AS aprovados
+     FROM orcamentos WHERE data >= ? AND status NOT IN ('rascunho', 'cancelado')`,
+    somarDias(dataHoje, -90),
   );
   const { n: abertos } = await db.get(
     `SELECT COUNT(*) AS n FROM orcamentos WHERE status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`,
     ...STATUS_ABERTOS,
   );
   return {
-    mes: mes_,
+    mes,
+    mes_anterior: anterior,
+    conversao,
     em_aberto: abertos,
-    recentes: (await listarOrcamentos(db, { limite: 8 })).orcamentos,
+    atencao: await precisaAtencao(db, dataHoje),
+    recentes: (await listarOrcamentos(db, { limite: 6 })).orcamentos,
   };
 }
 
+// ---------------------------------------------------------------------------
+// Link da proposta para o cliente
+// ---------------------------------------------------------------------------
+
+const FORMATO_TOKEN = /^[A-Za-z0-9_-]{32,64}$/;
+
+/** Cria (uma vez) o endereço secreto da proposta e devolve o token. */
+export async function garantirToken(db, id) {
+  const atual = await db.get('SELECT token_publico FROM orcamentos WHERE id = ?', id);
+  if (!atual) throw naoEncontrado('Orçamento não encontrado.');
+  if (atual.token_publico) return atual.token_publico;
+  await db.run('UPDATE orcamentos SET token_publico = ? WHERE id = ? AND token_publico IS NULL', randomBytes(24).toString('base64url'), id);
+  return (await db.get('SELECT token_publico FROM orcamentos WHERE id = ?', id)).token_publico;
+}
+
+export async function idPorToken(db, token) {
+  const t = String(token ?? '');
+  const linha = FORMATO_TOKEN.test(t) ? await db.get('SELECT id FROM orcamentos WHERE token_publico = ?', t) : null;
+  if (!linha) throw naoEncontrado('Proposta não encontrada. Confira o link recebido.');
+  return linha.id;
+}
+
+export async function registrarVisualizacao(db, id) {
+  await db.transacao(async (t) => {
+    const r = await t.get(
+      `UPDATE orcamentos SET visualizacoes = visualizacoes + 1, ultima_visualizacao_em = now(),
+         visualizado_em = COALESCE(visualizado_em, now())
+       WHERE id = ? RETURNING visualizacoes`,
+      id,
+    );
+    if (r?.visualizacoes === 1) await registrarHistorico(t, id, 'Cliente abriu a proposta pelo link', null);
+  });
+}
+
+/** O cliente pode aprovar enquanto a proposta está aberta e dentro da validade. */
+export function podeAprovar(orc, dataHoje) {
+  return ['rascunho', 'enviado', 'negociacao'].includes(orc.status) && orc.data_validade >= dataHoje;
+}
+
+export function aprovarPeloLink(db, id, nome, dataHoje) {
+  return db.transacao(async (t) => {
+    const orc = await t.get('SELECT status, data_validade FROM orcamentos WHERE id = ?', id);
+    if (orc.status === 'aprovado') return;
+    if (!podeAprovar(orc, dataHoje)) {
+      throw new ErroHttp(
+        409,
+        orc.data_validade < dataHoje || orc.status === 'expirado'
+          ? 'Esta proposta passou da validade. Fale com a empresa para receber uma nova.'
+          : 'Esta proposta não está mais disponível para aprovação.',
+      );
+    }
+    await t.run(`UPDATE orcamentos SET status = 'aprovado', atualizado_em = now() WHERE id = ?`, id);
+    await marcarDatasStatus(t, id, orc.status, 'aprovado', { peloLink: true, nome });
+    await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})`, null);
+  });
+}

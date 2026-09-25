@@ -1,5 +1,5 @@
 import { api, cache, quandoPerderSessao } from './api.js';
-import { h, icone, substituir, carregando, avisoErro, campo, aviso, iniciais, marcaEsquadro } from './ui.js';
+import { h, anexar, icone, substituir, carregando, avisoErro, campo, aviso, iniciais, marcaEsquadro } from './ui.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
@@ -82,25 +82,38 @@ export function irPara(hash) {
   location.hash = hash;
 }
 
+/** Troca o endereço sem recarregar a página (ex.: orçamento novo que acabou de ganhar número). */
+export function substituirEndereco(hash) {
+  history.replaceState(null, '', hash);
+  hashAtual = location.hash;
+}
+
 // ------------------------------------------------------------------ Layout
 
 const MENU = [
   ['#/', 'Início', 'inicio', /^\/?$/],
   ['#/orcamentos', 'Orçamentos', 'orcamentos', /^\/orcamentos(?!\/novo)/],
   ['#/clientes', 'Clientes', 'clientes', /^\/clientes/],
-  ['#/config', 'Configurações', 'config', /^\/config/],
+  ['#/config', 'Ajustes', 'config', /^\/config/],
 ];
 
 export const usuarioAtual = () => usuario;
 
-/** Quadradinho com a logo da empresa (ou as iniciais do nome). */
+/**
+ * Logo da empresa (ou as iniciais do nome). Logos compridas ganham um
+ * espaço retangular em vez de ficarem espremidas no quadradinho.
+ */
 export function monograma() {
   const e = cache.empresa;
-  return h(
-    'span',
-    { class: 'monograma', 'aria-hidden': 'true' },
-    e?.tem_logo ? h('img', { src: `/api/empresa/logo?v=${encodeURIComponent(e.logo_atualizado_em || '')}`, alt: '' }) : iniciais(e?.nome || 'O'),
-  );
+  const caixa = h('span', { class: 'monograma', 'aria-hidden': 'true' });
+  if (!e?.tem_logo) return anexar(caixa, [iniciais(e?.nome || 'O')]);
+  const img = h('img', { src: `/api/empresa/logo?v=${encodeURIComponent(e.logo_atualizado_em || '')}`, alt: '' });
+  img.addEventListener('load', () => {
+    const largo = img.naturalWidth / Math.max(1, img.naturalHeight) > 1.4;
+    caixa.classList.toggle('monograma-largo', largo);
+    caixa.closest('.lateral-marca')?.classList.toggle('com-logo-larga', largo);
+  });
+  return anexar(caixa, [img]);
 }
 
 function montarLayout() {
@@ -128,8 +141,12 @@ function montarLayout() {
         h(
           'div',
           { class: 'lateral-rodape' },
-          h('span', { class: 'avatar' }, iniciais(usuario?.nome)),
-          h('div', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, usuario?.email || '')),
+          h(
+            'a',
+            { href: '#/config/conta', class: 'lateral-usuario', title: 'Minha conta' },
+            h('span', { class: 'avatar' }, iniciais(usuario?.nome)),
+            h('div', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, usuario?.email || '')),
+          ),
           h('button', { type: 'button', class: 'botao-icone', title: 'Sair', 'aria-label': 'Sair', onclick: sair }, icone('sair')),
         ),
       ),
@@ -140,7 +157,7 @@ function montarLayout() {
           'header',
           { class: 'topo' },
           h('a', { href: '#/', class: 'topo-marca' }, monograma(), h('span', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos')),
-          h('button', { type: 'button', class: 'botao-icone', title: 'Sair', 'aria-label': 'Sair', onclick: sair }, icone('sair')),
+          h('a', { href: '#/config/conta', class: 'avatar topo-avatar', title: 'Minha conta', 'aria-label': 'Minha conta' }, iniciais(usuario?.nome)),
         ),
         h('main', { id: 'conteudo', class: 'conteudo' }),
       ),
@@ -151,7 +168,7 @@ function montarLayout() {
         link(MENU[1]),
         h('a', { href: '#/orcamentos/novo', class: 'botao-central', 'aria-label': 'Novo orçamento' }, h('span', {}, icone('mais')), h('span', {}, 'Novo')),
         link(MENU[2]),
-        link(MENU[3], 'Ajustes'),
+        link(MENU[3]),
       ),
     ),
   );
@@ -171,7 +188,7 @@ function marcarMenu(caminho) {
   }
 }
 
-async function sair() {
+export async function sair() {
   if (verificarSaida && !(await verificarSaida())) return;
   verificarSaida = null;
   await api.post('/auth/sair').catch(() => {});

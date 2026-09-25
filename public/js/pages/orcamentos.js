@@ -3,7 +3,14 @@ import { api } from '../api.js';
 import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, campo } from '../ui.js';
 import { cabecalhoPagina, listaOrcamentos } from '../comum.js';
 
-const FILTROS_STATUS = [['', 'Todos'], ['abertos', 'Em aberto'], ...Object.entries(STATUS)];
+// Filtros principais; as situações uma a uma ficam em "Mais filtros".
+const FILTROS_STATUS = [
+  ['', 'Todos'],
+  ['abertos', 'Em aberto'],
+  ['aprovado', 'Aprovados'],
+  ['perdidos', 'Perdidos'],
+  ['rascunho', 'Rascunhos'],
+];
 const POR_PAGINA = 30;
 
 export async function paginaOrcamentos(query) {
@@ -41,7 +48,7 @@ export async function paginaOrcamentos(query) {
     }
     const r = await api.get(`/orcamentos?${montarBusca()}`);
     contador.textContent = r.total === 1 ? '1 orçamento' : `${r.total} orçamentos`;
-    const lista = listaOrcamentos(r.orcamentos);
+    const lista = listaOrcamentos(r.orcamentos, { aoMudar: () => carregar() });
     if (!acrescentar) substituir(resultado);
     resultado.querySelector('.carregar-mais')?.remove();
     if (!r.total) {
@@ -81,7 +88,23 @@ export async function paginaOrcamentos(query) {
     }),
   });
 
-  const chips = h('div', { class: 'chips chips-rolagem', role: 'group', 'aria-label': 'Filtrar por status' });
+  const seletorSituacao = h(
+    'select',
+    {
+      onchange: (e) => {
+        filtros.status = e.target.value;
+        desenharChips();
+        carregar();
+      },
+    },
+    h('option', { value: '' }, 'Todas'),
+    h('option', { value: 'abertos' }, 'Em aberto (rascunho, enviado, em negociação)'),
+    h('option', { value: 'perdidos' }, 'Perdidos (recusado, cancelado, expirado)'),
+    Object.entries(STATUS).map(([v, t]) => h('option', { value: v }, t)),
+  );
+  seletorSituacao.value = filtros.status;
+
+  const chips = h('div', { class: 'chips chips-rolagem', role: 'group', 'aria-label': 'Filtrar por situação' });
   const desenharChips = () =>
     substituir(
       chips,
@@ -94,6 +117,7 @@ export async function paginaOrcamentos(query) {
             'aria-pressed': String(filtros.status === valor),
             onclick: () => {
               filtros.status = valor;
+              seletorSituacao.value = valor;
               desenharChips();
               carregar();
             },
@@ -121,10 +145,11 @@ export async function paginaOrcamentos(query) {
   const maisFiltros = h(
     'details',
     { class: 'mais-filtros' },
-    h('summary', {}, 'Mais filtros (data e valor)'),
+    h('summary', {}, 'Mais filtros (situação, data e valor)'),
     h(
       'div',
       { class: 'grade-formulario' },
+      campo('Situação', seletorSituacao, { classe: 'campo-inteiro' }),
       campoFiltro('de', 'Data inicial', { type: 'date' }),
       campoFiltro('ate', 'Data final', { type: 'date' }),
       campoFiltro('min', 'Valor mínimo (R$)', { type: 'text', inputmode: 'decimal', placeholder: '0,00' }),
@@ -137,10 +162,7 @@ export async function paginaOrcamentos(query) {
   return h(
     'div',
     { class: 'pagina' },
-    cabecalhoPagina('Orçamentos', {
-      subtitulo: 'Todos os orçamentos, do mais novo para o mais antigo',
-      acoes: h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario' }, icone('mais'), 'Novo orçamento'),
-    }),
+    cabecalhoPagina('Orçamentos', { subtitulo: 'Todos os orçamentos, do mais novo para o mais antigo' }),
     h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),
     chips,
     maisFiltros,

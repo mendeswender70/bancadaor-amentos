@@ -2,27 +2,31 @@ import { METODOS, dinheiroParaCampo, formatarDinheiro, formatarPercentual, lerDi
 import { api, cache } from '../api.js';
 import { h, icone, campo, segmentado, abrirModal, confirmar, aviso, avisoErro, substituir, vazio } from '../ui.js';
 import { cabecalhoPagina } from '../comum.js';
-import { atualizarMarca, irPara } from '../main.js';
+import { atualizarMarca, irPara, sair } from '../main.js';
 
 const ABAS = [
-  ['empresa', 'Empresa'],
-  ['tipos', 'Tipos de móveis'],
-  ['precos', 'Preços'],
-  ['pagamento', 'Pagamento'],
-  ['conta', 'Minha conta'],
+  ['empresa', 'Empresa', 'empresa'],
+  ['moveis', 'Móveis e preços', 'preco'],
+  ['pagamento', 'Pagamento', 'pagamento'],
+  ['conta', 'Minha conta', 'usuario'],
 ];
+// Endereços antigos continuam funcionando.
+const APELIDOS = { tipos: 'moveis', precos: 'moveis' };
 
 export async function paginaConfiguracoes(aba = 'empresa') {
+  aba = APELIDOS[aba] || aba;
   if (!ABAS.some(([a]) => a === aba)) aba = 'empresa';
-  const montar = { empresa: abaEmpresa, tipos: abaTipos, precos: abaPrecos, pagamento: abaPagamento, conta: abaConta }[aba];
+  const montar = { empresa: abaEmpresa, moveis: abaMoveis, pagamento: abaPagamento, conta: abaConta }[aba];
   return h(
     'div',
     { class: 'pagina' },
-    cabecalhoPagina('Configurações', { subtitulo: 'Empresa, preços, tipos de móveis e condições de pagamento' }),
+    cabecalhoPagina('Ajustes', { subtitulo: 'Empresa, móveis e preços, condições de pagamento e sua conta' }),
     h(
       'nav',
-      { class: 'abas', 'aria-label': 'Seções das configurações' },
-      ABAS.map(([a, texto]) => h('a', { href: `#/config/${a}`, class: a === aba ? 'ativo' : '', 'aria-current': a === aba ? 'page' : null }, texto)),
+      { class: 'abas', 'aria-label': 'Seções dos ajustes' },
+      ABAS.map(([a, texto, ic]) =>
+        h('a', { href: `#/config/${a}`, class: a === aba ? 'ativo' : '', 'aria-current': a === aba ? 'page' : null }, icone(ic, 'icone icone-mini'), texto),
+      ),
     ),
     await montar(),
   );
@@ -144,53 +148,96 @@ async function abaEmpresa() {
         texto('prazo_padrao', 'Prazo de entrega padrão', { maxlength: '200', placeholder: 'Ex.: 30 dias úteis' }, { classe: 'campo-metade' }),
         campo('Condição de pagamento padrão', entradas.condicao_pagamento_padrao_id, { classe: 'campo-inteiro' }),
         texto('texto_padrao', 'Texto padrão do orçamento (observações)', { rows: '5', maxlength: '5000' }, { classe: 'campo-inteiro' }),
-        texto('mensagem_whatsapp', 'Mensagem do WhatsApp', { rows: '3', maxlength: '1000' }, { classe: 'campo-inteiro', dica: 'Use {cliente} para inserir o primeiro nome do cliente.' }),
+        texto('mensagem_whatsapp', 'Mensagem do WhatsApp', { rows: '3', maxlength: '1000' }, { classe: 'campo-inteiro', dica: 'Use {cliente} para o primeiro nome do cliente e {link} para o link da proposta (se não usar, o link vai no final).' }),
       ),
     ),
     h('div', { class: 'acoes-formulario' }, botao),
   );
 }
 
-// ------------------------------------------------------------ Tipos de móveis
+// ----------------------------------------------------------- Móveis e preços
 
-async function abaTipos() {
+async function abaMoveis() {
   const tipos = await api.get('/tipos-moveis');
-  const recarregar = () => irPara(`#/config/tipos?${Date.now()}`);
+  const recarregar = () => irPara(`#/config/moveis?${Date.now()}`);
+  const entradas = new Map();
+  const botaoSalvar = h('button', { type: 'submit', class: 'botao botao-primario', disabled: true }, icone('salvar'), 'Salvar preços');
+  const alterados = () => [...entradas].filter(([t, el]) => lerDinheiro(el.value) !== t.preco_padrao_cents);
 
   const editar = async (tipo) => {
-    const salvo = await abrirModal(tipo ? 'Editar tipo de móvel' : 'Novo tipo de móvel', (fechar) => formularioTipo(tipo, fechar), { largo: true });
+    if (alterados().length && !(await confirmar('Há preços alterados que ainda não foram salvos. Continuar sem salvar?', { sim: 'Continuar' }))) return;
+    const salvo = await abrirModal(tipo ? 'Editar móvel' : 'Novo tipo de móvel', (fechar) => formularioTipo(tipo, fechar), { largo: true });
     if (salvo) recarregar();
   };
 
+  const linha = (t) => {
+    const el = h('input', {
+      type: 'text',
+      inputmode: 'decimal',
+      class: 'entrada-preco',
+      value: dinheiroParaCampo(t.preco_padrao_cents),
+      'aria-label': `Preço de ${t.nome} (R$${METODOS[t.metodo_calculo].sufixo})`,
+    });
+    el.addEventListener('input', () => {
+      el.classList.toggle('invalido', lerDinheiro(el.value) === null);
+      botaoSalvar.disabled = !alterados().length;
+    });
+    el.addEventListener('blur', () => {
+      const v = lerDinheiro(el.value);
+      if (v !== null) el.value = dinheiroParaCampo(v);
+    });
+    entradas.set(t, el);
+    return h(
+      'div',
+      { class: `linha-movel${t.ativo ? '' : ' inativo'}` },
+      h(
+        'button',
+        { type: 'button', class: 'linha-movel-nome', onclick: () => editar(t), title: 'Editar nome, cálculo e situação' },
+        h('strong', {}, t.nome, t.ativo ? '' : ' (inativo)'),
+        h('span', { class: 'suave' }, `${METODOS[t.metodo_calculo].nome}${t.nome_cliente && t.nome_cliente !== t.nome ? ` · no orçamento: “${t.nome_cliente}”` : ''}`),
+      ),
+      h('label', { class: 'preco-com-unidade' }, h('span', {}, 'R$'), el, h('span', {}, METODOS[t.metodo_calculo].sufixo)),
+      h('button', { type: 'button', class: 'botao-icone', 'aria-label': `Editar ${t.nome}`, title: 'Editar', onclick: () => editar(t) }, icone('editar')),
+    );
+  };
+
   return h(
-    'section',
-    { class: 'cartao' },
+    'form',
+    {
+      class: 'cartao',
+      onsubmit: async (e) => {
+        e.preventDefault();
+        const precos = [];
+        for (const [t, el] of entradas) {
+          const v = lerDinheiro(el.value);
+          if (v === null) return aviso(`Confira o preço de ${t.nome}.`, 'erro');
+          precos.push({ id: t.id, preco_padrao_cents: v });
+        }
+        botaoSalvar.disabled = true;
+        try {
+          const atualizados = await api.put('/precos', { precos });
+          for (const [t] of entradas) t.preco_padrao_cents = atualizados.find((x) => x.id === t.id)?.preco_padrao_cents ?? t.preco_padrao_cents;
+          aviso('Preços salvos. Os próximos orçamentos já usam os novos valores.');
+        } catch (erro) {
+          avisoErro(erro);
+          botaoSalvar.disabled = false;
+        }
+      },
+    },
     h(
       'div',
       { class: 'cartao-titulo' },
-      h('h2', {}, 'Tipos de móveis'),
-      h('button', { type: 'button', class: 'botao botao-primario', onclick: () => editar(null) }, icone('mais'), 'Novo tipo'),
+      h('h2', {}, 'Móveis e preços'),
+      h('button', { type: 'button', class: 'botao botao-secundario', onclick: () => editar(null) }, icone('mais'), 'Novo tipo'),
     ),
-    h('p', { class: 'suave' }, 'Cadastre os móveis que você vende com frequência. Ao adicionar um móvel no orçamento, o método de cálculo e o preço são preenchidos automaticamente.'),
-    tipos.length
-      ? h(
-          'div',
-          { class: 'lista' },
-          tipos.map((t) =>
-            h(
-              'button',
-              { type: 'button', class: `linha-orcamento${t.ativo ? '' : ' inativo'}`, onclick: () => editar(t) },
-              h(
-                'div',
-                { class: 'linha-principal' },
-                h('strong', {}, t.nome, t.ativo ? '' : ' (inativo)'),
-                h('span', { class: 'suave' }, `${METODOS[t.metodo_calculo].nome}${t.nome_cliente && t.nome_cliente !== t.nome ? ` · no orçamento: “${t.nome_cliente}”` : ''}`),
-              ),
-              h('div', { class: 'linha-valor' }, h('strong', {}, `${formatarDinheiro(t.preco_padrao_cents)}${METODOS[t.metodo_calculo].sufixo}`)),
-            ),
-          ),
-        )
-      : vazio('Nenhum tipo cadastrado.'),
+    h(
+      'p',
+      { class: 'aviso-caixa' },
+      icone('cadeado', 'icone icone-mini'),
+      'Preços internos: o cliente nunca vê. Mudar um preço vale para os próximos orçamentos — os já feitos mantêm o valor da época.',
+    ),
+    tipos.length ? h('div', { class: 'lista-moveis' }, tipos.map(linha)) : vazio('Nenhum tipo cadastrado.'),
+    tipos.length ? h('div', { class: 'acoes-formulario acoes-fixas' }, botaoSalvar) : null,
   );
 }
 
@@ -259,72 +306,21 @@ function formularioTipo(tipo, fechar) {
   );
 }
 
-// -------------------------------------------------------------------- Preços
+// -------------------------------------------------------- Condições de pagamento
 
-async function abaPrecos() {
-  const tipos = (await api.get('/tipos-moveis')).filter((t) => t.ativo);
-  const entradas = new Map();
-  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Salvar preços');
+/** Seleção do parcelamento do restante (1 = de uma vez). */
+export function seletorParcelas(valor) {
+  const atual = Math.max(1, Number(valor) || 1);
+  const opcoes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18, 24];
+  if (!opcoes.includes(atual)) opcoes.push(atual);
   return h(
-    'form',
-    {
-      class: 'cartao',
-      onsubmit: async (e) => {
-        e.preventDefault();
-        const precos = [];
-        for (const [id, el] of entradas) {
-          const v = lerDinheiro(el.value);
-          if (v === null) return aviso('Confira os preços: há um valor inválido.', 'erro');
-          precos.push({ id, preco_padrao_cents: v });
-        }
-        botao.disabled = true;
-        try {
-          await api.put('/precos', { precos });
-          aviso('Preços salvos. Novos orçamentos já usarão estes valores.');
-        } catch (erro) {
-          avisoErro(erro);
-        } finally {
-          botao.disabled = false;
-        }
-      },
-    },
-    h('h2', {}, 'Preços'),
-    h(
-      'p',
-      { class: 'aviso-caixa' },
-      icone('cadeado', 'icone icone-mini'),
-      'Preços internos. Quando um preço muda, somente os novos orçamentos usam o novo valor — os orçamentos já feitos continuam com o preço da época.',
-    ),
-    tipos.length
-      ? h(
-          'div',
-          { class: 'tabela-responsiva' },
-          h(
-            'table',
-            { class: 'tabela tabela-precos' },
-            h('thead', {}, h('tr', {}, h('th', {}, 'Tipo de móvel'), h('th', {}, 'Unidade'), h('th', {}, 'Preço (R$)'))),
-            h(
-              'tbody',
-              {},
-              tipos.map((t) => {
-                const el = h('input', { type: 'text', inputmode: 'decimal', value: dinheiroParaCampo(t.preco_padrao_cents), 'aria-label': `Preço de ${t.nome}` });
-                el.addEventListener('blur', () => {
-                  const v = lerDinheiro(el.value);
-                  el.classList.toggle('invalido', v === null);
-                  if (v !== null) el.value = dinheiroParaCampo(v);
-                });
-                entradas.set(t.id, el);
-                return h('tr', {}, h('td', {}, t.nome), h('td', {}, METODOS[t.metodo_calculo].unidade), h('td', {}, el));
-              }),
-            ),
-          ),
-        )
-      : vazio('Cadastre tipos de móveis primeiro.', h('a', { href: '#/config/tipos', class: 'botao' }, 'Ir para Tipos de móveis')),
-    tipos.length ? h('div', { class: 'acoes-formulario' }, botao) : null,
+    'select',
+    {},
+    opcoes
+      .sort((a, b) => a - b)
+      .map((n) => h('option', { value: String(n), selected: n === atual }, n === 1 ? 'De uma vez (na entrega)' : `Em ${n}x`)),
   );
 }
-
-// -------------------------------------------------------- Condições de pagamento
 
 function descreverCondicao(c) {
   const partes = [];
@@ -377,7 +373,7 @@ function formularioCondicao(c, fechar) {
     placeholder: 'Sem entrada',
     value: !dados.entrada_valor ? '' : unidade === 'percentual' ? formatarPercentual(dados.entrada_valor) : dinheiroParaCampo(dados.entrada_valor),
   });
-  const parcelas = h('input', { type: 'number', min: '0', max: '120', inputmode: 'numeric', value: String(dados.parcelas || '') });
+  const parcelas = seletorParcelas(dados.parcelas);
   const ativo = h('input', { type: 'checkbox', checked: Boolean(dados.ativo) });
 
   const excluir = async () => {
@@ -426,7 +422,7 @@ function formularioCondicao(c, fechar) {
         h('label', { for: 'entrada-condicao' }, 'Entrada sugerida'),
         h('div', { class: 'entrada-com-unidade' }, segmentado([['valor', 'R$'], ['percentual', '%']], unidade, (u) => { unidade = u; }, { rotulo: 'Tipo de entrada' }), entrada),
       ),
-      campo('Parcelas do restante', parcelas, { classe: 'campo-metade', dica: '0 ou 1 = restante em uma vez' }),
+      campo('Restante', parcelas, { classe: 'campo-metade' }),
     ),
     h('label', { class: 'caixa-marcar' }, ativo, ' Ativa'),
     h(
@@ -491,6 +487,13 @@ async function abaConta() {
       campo('Nova senha', nova, { dica: 'Pelo menos 6 caracteres.' }),
       campo('Confirme a nova senha', confirmacao),
       h('div', { class: 'acoes-formulario' }, h('button', { type: 'submit', class: 'botao botao-primario' }, 'Alterar senha')),
+    ),
+    h(
+      'section',
+      { class: 'cartao cartao-sair' },
+      h('h2', {}, 'Sair da conta'),
+      h('p', { class: 'suave' }, 'Para entrar de novo, use seu e-mail e senha.'),
+      h('div', { class: 'acoes-formulario' }, h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: sair }, icone('sair'), 'Sair')),
     ),
   );
 }

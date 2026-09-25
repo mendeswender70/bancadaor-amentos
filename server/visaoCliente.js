@@ -69,3 +69,23 @@ export function visaoCliente(orc, empresa) {
     observacoes: orc.observacoes,
   };
 }
+
+/**
+ * O que a página pública da proposta recebe: a mesma visão do PDF, sem os
+ * dados de contato do cliente (o link pode ser repassado adiante), mais a
+ * situação da proposta para mostrar o botão de aprovar.
+ */
+export function propostaPublica(orc, empresa, { podeAprovar, temLogo }) {
+  const visao = visaoCliente(orc, empresa);
+  return {
+    ...visao,
+    cliente: { nome: visao.cliente.nome, cidade: visao.cliente.cidade, estado: visao.cliente.estado },
+    tem_logo: Boolean(temLogo),
+    situacao: {
+      status: orc.status,
+      aprovado_em: orc.status === 'aprovado' ? orc.aprovado_em : null,
+      aprovado_por: orc.status === 'aprovado' ? orc.aprovado_por : '',
+      pode_aprovar: podeAprovar,
+    },
+  };
+}

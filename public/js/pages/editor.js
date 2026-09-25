@@ -1,5 +1,6 @@
 import {
   AMBIENTES_SUGERIDOS,
+  ETAPAS,
   METODOS,
   STATUS,
   calcularItem,
@@ -19,6 +20,7 @@ import {
   lerPercentual,
   somarDias,
   subtotalAmbiente,
+  textoPagamento,
 } from '/shared/calc.js';
 import { api, baixarBlob, cache } from '../api.js';
 import {
@@ -33,13 +35,14 @@ import {
   substituir,
   vazioIlustrado,
   menuSuspenso,
+  haQuanto,
 } from '../ui.js';
 import { avatar, selo, seletorCliente, numeroWhatsApp } from '../comum.js';
-import { aoSairDaPagina, irPara } from '../main.js';
+import { abrirEnvio, linkDaProposta } from '../envio.js';
+import { aoSairDaPagina, irPara, substituirEndereco } from '../main.js';
+import { seletorParcelas } from './config.js';
 
 const SERVICOS_RAPIDOS = ['Frete', 'Montagem', 'Instalação', 'Vidro', 'Espelho', 'Iluminação', 'Serviço adicional', 'Outros'];
-const MENSAGEM_PADRAO =
-  'Olá, {cliente}! Segue o orçamento dos móveis planejados conforme conversamos. Qualquer dúvida estou à disposição.';
 const ICONE_METODO = { linear: 'regua', quadrado: 'area', unidade: 'caixa' };
 
 const itemParaPayload = (i) => ({
@@ -117,7 +120,7 @@ function linhaResumo(rotulo, valor, classe = '') {
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 
 export async function paginaEditor({ id, clienteId }) {
-  const [tipos, condicoes, empresa] = await Promise.all([
+  const [tipos, condicoes] = await Promise.all([
     api.get('/tipos-moveis'),
     api.get('/condicoes-pagamento'),
     cache.carregarEmpresa(),
@@ -132,34 +135,151 @@ export async function paginaEditor({ id, clienteId }) {
   }
   orc.ambientes ??= [];
 
+  // ------------------------------------------------------ Salvamento automático
+  // `salvo` guarda o que o servidor já tem; qualquer diferença é salva sozinha
+  // pouco depois da última alteração.
   let salvo = id ? JSON.stringify(montarPayload(orc)) : null;
+  let salvoEm = id ? new Date() : null;
+  let estado = id ? 'salvo' : 'novo'; // novo | pendente | salvando | salvo | incompleto | erro
+  let motivoIncompleto = '';
+  let emAndamento = null;
+  let refazer = false;
+  let timer = 0;
+
   const alterado = () => salvo !== JSON.stringify(montarPayload(orc));
-  const verificar = async () =>
-    !alterado() ||
-    confirmar('Existem alterações não salvas. Deseja sair sem salvar?', { titulo: 'Sair sem salvar?', sim: 'Sair sem salvar', perigo: true });
+
+  function problemaParaSalvar() {
+    if (!orc.ambientes.some((a) => a.itens.length) && !orc.servicos.length) return 'Adicione um móvel para salvar';
+    const semDescricao = orc.servicos.findIndex((s) => !s.descricao.trim());
+    if (semDescricao >= 0) return `Dê um nome ao serviço ${semDescricao + 1}`;
+    return '';
+  }
+
+  function agendar() {
+    clearTimeout(timer);
+    timer = setTimeout(() => salvar({ silencioso: true }), 1200);
+  }
+
+  async function salvar({ silencioso = false } = {}) {
+    clearTimeout(timer);
+    if (emAndamento) {
+      refazer = true;
+      return emAndamento;
+    }
+    const problema = problemaParaSalvar();
+    if (problema) {
+      motivoIncompleto = problema;
+      estado = 'incompleto';
+      mostrarEstado();
+      if (!silencioso) aviso(`${problema}.`, 'erro');
+      return false;
+    }
+    if (orc.id && !alterado()) {
+      estado = 'salvo';
+      mostrarEstado();
+      return true;
+    }
+    estado = 'salvando';
+    mostrarEstado();
+    const payload = montarPayload(orc);
+    const eraNovo = !orc.id;
+    emAndamento = (async () => {
+      try {
+        const resposta = orc.id ? await api.put(`/orcamentos/${orc.id}`, payload) : await api.post('/orcamentos', payload);
+        // Não troca `orc` pela resposta: o usuário pode ter continuado digitando.
+        for (const campoServidor of ['id', 'numero', 'criado_em', 'data_validade', 'status', 'duplicado_de_numero', 'total_cents']) {
+          orc[campoServidor] = resposta[campoServidor];
+        }
+        salvo = JSON.stringify(payload);
+        salvoEm = new Date();
+        estado = 'salvo';
+        if (eraNovo) {
+          substituirEndereco(`#/orcamentos/${orc.id}`);
+          aviso(`Orçamento nº ${formatarNumero(orc.numero)} criado e salvo.`);
+        }
+        atualizarCabecalho();
+        carregarHistorico();
+        return true;
+      } catch (erro) {
+        estado = 'erro';
+        if (!silencioso || erro.status !== 0) avisoErro(erro);
+        return false;
+      } finally {
+        emAndamento = null;
+        mostrarEstado();
+      }
+    })();
+    const ok = await emAndamento;
+    if (refazer) {
+      refazer = false;
+      if (alterado()) return salvar({ silencioso: true });
+    } else if (ok && alterado()) {
+      agendar();
+    }
+    return ok;
+  }
+
+  async function garantirSalvo() {
+    if (orc.id && !alterado() && !emAndamento) return true;
+    return salvar();
+  }
+
+  const verificar = async () => {
+    if (!alterado()) return true;
+    if (await salvar({ silencioso: true })) return true;
+    return confirmar(`${motivoIncompleto || 'Não foi possível salvar as últimas alterações'}. Sair mesmo assim e descartar?`, {
+      titulo: 'Sair sem salvar?',
+      sim: 'Sair sem salvar',
+      perigo: true,
+    });
+  };
   verificar.sincrono = () => !alterado();
   aoSairDaPagina(verificar);
+
+  const atalhoTeclado = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      salvar();
+    }
+  };
 
   // ------------------------------------------------------------ Elementos fixos
   const tituloEl = h('h1', {});
   const subtituloEl = h('p', {});
-  const seloEl = h('span', {});
+  const etapasEl = h('div', { class: 'etapas-area' });
   const blocoCliente = h('div', { class: 'bloco-cliente' });
   const validadeTexto = h('small', { class: 'dica' });
   const listaAmbientes = h('div', { class: 'lista-ambientes' });
   const listaServicos = h('div', { class: 'lista-servicos' });
   const resumo = h('div', { class: 'resumo' });
   const estadoSalvo = h('span', { class: 'estado-salvo' });
+  const estadoBarra = h('span', { class: 'estado-salvo' });
   const acoesLateral = h('div', { class: 'acoes-orcamento' });
   const descontoCalculado = h('small', { class: 'dica' });
   const acrescimoCalculado = h('small', { class: 'dica' });
   const previaPagamento = h('div', { class: 'previa-pagamento' });
   const historicoEl = h('div', {});
   const totalBarra = h('strong', { class: 'barra-total-valor' });
-  const estadoBarra = h('span', { class: 'estado-salvo' });
   const menuBarra = h('div', {});
-  const botaoSalvar = h('button', { type: 'button', class: 'botao botao-primario botao-grande', onclick: () => salvar() }, icone('salvar'), 'Salvar');
-  const botaoSalvarLateral = h('button', { type: 'button', class: 'botao botao-primario botao-grande', onclick: () => salvar() }, icone('salvar'), 'Salvar orçamento');
+  const campoNomeAcrescimo = h('div', {});
+  const contadorHistorico = h('span', { class: 'contador-aba' });
+
+  function mostrarEstado() {
+    const textos = {
+      novo: 'Ainda não salvo',
+      pendente: 'Salvando em instantes…',
+      salvando: 'Salvando…',
+      salvo: salvoEm ? `Salvo às ${salvoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Salvo',
+      incompleto: motivoIncompleto,
+      erro: 'Não foi salvo — tentar de novo',
+    };
+    for (const el of [estadoSalvo, estadoBarra]) {
+      el.textContent = textos[estado];
+      el.className = `estado-salvo estado-${estado}`;
+      el.onclick = estado === 'erro' ? () => salvar() : null;
+      el.setAttribute('role', 'status');
+    }
+  }
 
   // --------------------------------------------------------------- Atualizações
   function atualizarCabecalho() {
@@ -168,8 +288,8 @@ export async function paginaEditor({ id, clienteId }) {
       ? [`Criado em ${formatarData(orc.criado_em)}`, orc.duplicado_de_numero ? `cópia do nº ${formatarNumero(orc.duplicado_de_numero)}` : '']
           .filter(Boolean)
           .join(' · ')
-      : 'O número é gerado quando você salvar';
-    substituir(seloEl, selo(orc.status));
+      : 'O número é gerado quando o primeiro móvel for adicionado';
+    desenharEtapas();
     const c = orc.cliente || {};
     substituir(
       blocoCliente,
@@ -187,18 +307,103 @@ export async function paginaEditor({ id, clienteId }) {
       h('button', { type: 'button', class: 'botao botao-pequeno', onclick: trocarCliente }, 'Trocar'),
     );
     const acoes = [
-      ['pdf', 'Gerar PDF', abrirPdf],
       ['whatsapp', 'Enviar ao cliente', enviarAoCliente],
+      ['olho', 'Ver como o cliente vê', verComoCliente],
+      ['pdf', 'Baixar PDF', abrirPdf],
       ['copiar', 'Duplicar orçamento', duplicar, { desativado: !orc.id }],
     ];
     substituir(
       acoesLateral,
-      botaoSalvarLateral,
-      h('button', { type: 'button', class: 'botao botao-whatsapp', onclick: enviarAoCliente }, icone('whatsapp'), 'Enviar ao cliente'),
-      h('button', { type: 'button', class: 'botao', onclick: abrirPdf }, icone('pdf'), 'Gerar PDF'),
-      h('button', { type: 'button', class: 'botao', onclick: duplicar, disabled: !orc.id }, icone('copiar'), 'Duplicar'),
+      h('button', { type: 'button', class: 'botao botao-whatsapp botao-grande', onclick: enviarAoCliente }, icone('whatsapp'), 'Enviar ao cliente'),
+      h('button', { type: 'button', class: 'botao', onclick: verComoCliente }, icone('olho'), 'Ver como o cliente vê'),
+      h(
+        'div',
+        { class: 'acoes-dupla' },
+        h('button', { type: 'button', class: 'botao', onclick: abrirPdf }, icone('pdf'), 'Baixar PDF'),
+        h('button', { type: 'button', class: 'botao', onclick: duplicar, disabled: !orc.id }, icone('copiar'), 'Duplicar'),
+      ),
     );
     substituir(menuBarra, menuSuspenso(acoes, { rotulo: 'Ações do orçamento' }));
+  }
+
+  // Situação do orçamento: caminho normal em etapas + as saídas (recusado…).
+  function desenharEtapas() {
+    const atual = orc.status;
+    const indiceAtual = ETAPAS.indexOf(atual);
+    const fora = indiceAtual < 0;
+    const passo = (status, i) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: `etapa${status === atual ? ' atual' : ''}${!fora && i < indiceAtual ? ' feita' : ''}`,
+          'aria-pressed': String(status === atual),
+          disabled: !orc.id && status !== 'rascunho',
+          title: orc.id ? `Marcar como ${STATUS[status]}` : 'Salve o orçamento primeiro',
+          onclick: () => mudarStatus(status),
+        },
+        h('span', { class: 'etapa-marca' }, !fora && i < indiceAtual ? icone('check', 'icone icone-mini') : String(i + 1)),
+        h('span', {}, STATUS[status]),
+      );
+    const detalhes = [];
+    if (orc.aprovado_pelo_link && atual === 'aprovado') {
+      detalhes.push(
+        h('span', { class: 'etiqueta-linha sucesso' }, icone('check', 'icone icone-mini'), `Aprovado pelo cliente${orc.aprovado_por ? ` (${orc.aprovado_por})` : ''} ${haQuanto(orc.aprovado_em)}`),
+      );
+    } else if (orc.visualizacoes) {
+      detalhes.push(
+        h(
+          'span',
+          { class: 'etiqueta-linha info' },
+          icone('olho', 'icone icone-mini'),
+          `Cliente viu a proposta ${orc.visualizacoes === 1 ? '1 vez' : `${orc.visualizacoes} vezes`} · última ${haQuanto(orc.ultima_visualizacao_em)}`,
+        ),
+      );
+    }
+    substituir(
+      etapasEl,
+      h(
+        'div',
+        { class: `etapas${fora ? ' fora' : ''}`, role: 'group', 'aria-label': 'Situação do orçamento' },
+        ETAPAS.map(passo),
+        h(
+          'div',
+          { class: 'etapa-outras' },
+          fora ? selo(atual) : null,
+          menuSuspenso(
+            Object.keys(STATUS)
+              .filter((s) => !ETAPAS.includes(s) && s !== 'expirado')
+              .map((s) => [s === 'recusado' ? 'alerta' : 'lixeira', `Marcar como ${STATUS[s]}`, () => mudarStatus(s), { desativado: !orc.id || s === atual }]),
+            { rotulo: 'Outras situações' },
+          ),
+        ),
+      ),
+      detalhes.length ? h('div', { class: 'etapas-detalhes' }, detalhes) : null,
+    );
+  }
+
+  async function mudarStatus(status) {
+    if (status === orc.status) return;
+    if (!orc.id && !(await garantirSalvo())) return;
+    if (['recusado', 'cancelado'].includes(status) && !(await confirmar(`Marcar o orçamento como “${STATUS[status]}”?`, { sim: `Marcar como ${STATUS[status]}` }))) return;
+    try {
+      const r = await api.patch(`/orcamentos/${orc.id}/status`, { status });
+      const pendente = alterado();
+      Object.assign(orc, {
+        status: r.status,
+        aprovado_em: r.aprovado_em,
+        aprovado_por: r.aprovado_por,
+        aprovado_pelo_link: r.aprovado_pelo_link,
+      });
+      // O servidor já tem a nova situação; só o resto (se houver) fica pendente.
+      if (salvo) salvo = JSON.stringify({ ...JSON.parse(salvo), status: r.status });
+      if (!pendente) salvo = JSON.stringify(montarPayload(orc));
+      desenharEtapas();
+      carregarHistorico();
+      aviso(`Situação: ${STATUS[r.status]}.`);
+    } catch (erro) {
+      avisoErro(erro);
+    }
   }
 
   function atualizarValores() {
@@ -206,10 +411,11 @@ export async function paginaEditor({ id, clienteId }) {
     validadeTexto.textContent = `Válido até ${formatarData(somarDias(orc.data, orc.validade_dias))}`;
     descontoCalculado.textContent = orc.desconto_tipo === 'percentual' && t.desconto_cents ? `= ${formatarDinheiro(t.desconto_cents)}` : '';
     acrescimoCalculado.textContent = orc.acrescimo_tipo === 'percentual' && t.acrescimo_cents ? `= ${formatarDinheiro(t.acrescimo_cents)}` : '';
+    campoNomeAcrescimo.hidden = orc.acrescimo_tipo === 'nenhum';
     substituir(
       resumo,
       orc.ambientes.length
-        ? orc.ambientes.map((a) => linhaResumo(a.nome, formatarDinheiro(subtotalAmbiente(a)), 'resumo-ambiente'))
+        ? orc.ambientes.map((a) => linhaResumo(a.nome, formatarDinheiro(subtotalAmbiente(a)), `resumo-ambiente${a.itens.length ? '' : ' resumo-vazio'}`))
         : linhaResumo('Móveis', formatarDinheiro(0)),
       t.subtotal_servicos_cents ? linhaResumo('Serviços adicionais', formatarDinheiro(t.subtotal_servicos_cents), 'resumo-ambiente') : null,
       linhaResumo('Subtotal', formatarDinheiro(t.subtotal_cents), 'resumo-subtotal'),
@@ -222,23 +428,74 @@ export async function paginaEditor({ id, clienteId }) {
       entrada_valor: orc.pagamento_entrada_valor,
       parcelas: orc.pagamento_parcelas,
     });
-    substituir(previaPagamento, linhas.map((l) => h('div', {}, l)));
+    substituir(previaPagamento, linhas.length ? linhas.map((l) => h('div', {}, l)) : h('div', {}, `Total de ${formatarDinheiro(t.total_cents)} de uma vez`));
     totalBarra.textContent = formatarDinheiro(t.total_cents);
     for (const el of listaServicos.querySelectorAll('[data-total-servico]')) {
       const s = orc.servicos[Number(el.dataset.totalServico)];
       if (s) el.textContent = formatarDinheiro(calcularServico(s).total_cents);
     }
-    const mudou = alterado();
-    for (const el of [estadoSalvo, estadoBarra]) {
-      el.textContent = !orc.id ? 'Ainda não salvo' : mudou ? 'Alterações não salvas' : 'Tudo salvo';
-      el.classList.toggle('pendente', !orc.id || mudou);
+    atualizarResumosSecoes(t);
+    if (alterado()) {
+      if (!['salvando'].includes(estado)) {
+        estado = problemaParaSalvar() ? 'incompleto' : 'pendente';
+        motivoIncompleto = problemaParaSalvar();
+      }
+      agendar();
     }
+    mostrarEstado();
   }
 
   const redesenhar = () => {
     desenharAmbientes();
     atualizarValores();
   };
+
+  // ------------------------------------------------------ Seções recolhíveis
+  const resumoSecao = {};
+  function secao(numero, chave, nomeIcone, textoTitulo, corpo, { aberta = true, extra } = {}) {
+    const conteudo = h('div', { class: 'secao-corpo', id: `corpo-${chave}` }, corpo);
+    resumoSecao[chave] = h('span', { class: 'secao-resumo' });
+    const el = h('section', { class: `cartao secao-editor${aberta ? ' aberta' : ''}`, id: `secao-${chave}` });
+    const botao = h(
+      'button',
+      {
+        type: 'button',
+        class: 'secao-cabecalho',
+        'aria-expanded': String(aberta),
+        'aria-controls': conteudo.id,
+        onclick: () => abrirSecao(el, !el.classList.contains('aberta')),
+      },
+      h('span', { class: 'secao-numero' }, String(numero)),
+      h('span', { class: 'secao-titulos' }, h('h2', {}, textoTitulo), resumoSecao[chave]),
+      icone('baixo', 'icone secao-seta'),
+    );
+    conteudo.hidden = !aberta;
+    el.append(h('div', { class: 'secao-topo' }, botao, extra || null), conteudo);
+    el.dataset.icone = nomeIcone;
+    return el;
+  }
+
+  function abrirSecao(el, abrir = true) {
+    el.classList.toggle('aberta', abrir);
+    el.querySelector('.secao-cabecalho').setAttribute('aria-expanded', String(abrir));
+    el.querySelector('.secao-corpo').hidden = !abrir;
+  }
+
+  function atualizarResumosSecoes(t) {
+    if (!resumoSecao.cliente) return;
+    resumoSecao.cliente.textContent = `${orc.cliente?.nome || ''} · válido até ${formatarData(somarDias(orc.data, orc.validade_dias))}`;
+    const nItens = orc.ambientes.reduce((s, a) => s + a.itens.length, 0);
+    resumoSecao.ambientes.textContent = orc.ambientes.length
+      ? `${plural(orc.ambientes.length, 'ambiente', 'ambientes')} · ${plural(nItens, 'móvel', 'móveis')}`
+      : 'Nenhum ambiente ainda';
+    const extras = [
+      orc.servicos.length ? plural(orc.servicos.length, 'serviço', 'serviços') : '',
+      t.desconto_cents ? `desconto de ${formatarDinheiro(t.desconto_cents)}` : '',
+      t.acrescimo_cents ? `acréscimo de ${formatarDinheiro(t.acrescimo_cents)}` : '',
+    ].filter(Boolean);
+    resumoSecao.extras.textContent = extras.join(' · ') || 'Nenhum serviço, desconto ou acréscimo';
+    resumoSecao.condicoes.textContent = [orc.pagamento_descricao, orc.prazo_entrega].filter(Boolean).join(' · ') || 'Pagamento e prazo não informados';
+  }
 
   // --------------------------------------------------------------- Ambientes
   function desenharAmbientes() {
@@ -271,7 +528,7 @@ export async function paginaEditor({ id, clienteId }) {
     const n = ambiente.itens.length;
     return h(
       'section',
-      { class: 'ambiente', 'aria-label': ambiente.nome },
+      { class: `ambiente${n ? '' : ' ambiente-sem-itens'}`, 'aria-label': ambiente.nome },
       h(
         'div',
         { class: 'ambiente-topo' },
@@ -325,7 +582,7 @@ export async function paginaEditor({ id, clienteId }) {
             { class: 'item-detalhes' },
             h('span', {}, [item.tipo_nome && item.tipo_nome !== item.descricao ? item.tipo_nome : null, descreverMedida(item)].filter(Boolean).join(' · ')),
             h('span', { class: 'item-calculo', title: 'Cálculo interno — não aparece para o cliente' }, icone('cadeado', 'icone icone-mini'), descreverCalculo(item)),
-            personalizado ? h('span', { class: 'etiqueta' }, `preço personalizado · padrão ${formatarDinheiro(item.preco_padrao_cents)}`) : null,
+            personalizado ? h('span', { class: 'etiqueta item-calculo' }, `preço personalizado · padrão ${formatarDinheiro(item.preco_padrao_cents)}`) : null,
             item.observacoes ? h('span', { class: 'item-obs' }, item.observacoes) : null,
           ),
         ),
@@ -514,25 +771,25 @@ export async function paginaEditor({ id, clienteId }) {
   }
 
   // --------------------------------------------------------------- Pagamento
-  const secaoPagamento = h('div', { class: 'grade-formulario' });
+  // Condições cadastradas viram botões; "Personalizar" mostra entrada e parcelas.
+  const secaoPagamento = h('div', { class: 'formulario' });
+  const pagamentoAtual = () => ({
+    entrada_tipo: orc.pagamento_entrada_tipo,
+    entrada_valor: orc.pagamento_entrada_valor,
+    parcelas: Math.max(1, orc.pagamento_parcelas || 0),
+  });
+  const mesmaCondicao = (c) =>
+    c.entrada_tipo === orc.pagamento_entrada_tipo &&
+    (c.entrada_tipo === 'nenhum' || c.entrada_valor === orc.pagamento_entrada_valor) &&
+    Math.max(1, c.parcelas || 0) === Math.max(1, orc.pagamento_parcelas || 0);
+  let personalizando = false;
+
   function desenharPagamento() {
-    const seletor = h(
-      'select',
-      {
-        onchange: (e) => {
-          const c = condicoes.find((x) => String(x.id) === e.target.value);
-          if (!c) return;
-          orc.pagamento_descricao = c.descricao;
-          orc.pagamento_entrada_tipo = c.entrada_tipo;
-          orc.pagamento_entrada_valor = c.entrada_valor;
-          orc.pagamento_parcelas = c.parcelas;
-          desenharPagamento();
-          atualizarValores();
-        },
-      },
-      h('option', { value: '' }, 'Escolher uma condição cadastrada…'),
-      condicoes.filter((c) => c.ativo).map((c) => h('option', { value: String(c.id) }, c.descricao)),
-    );
+    const ativas = condicoes.filter((c) => c.ativo);
+    const escolhida = ativas.find((c) => mesmaCondicao(c) && c.descricao === orc.pagamento_descricao);
+    if (!escolhida) personalizando = true;
+    const textoAutomatico = () => !orc.pagamento_descricao || orc.pagamento_descricao === textoPagamento(pagamentoAtual()) || ativas.some((c) => c.descricao === orc.pagamento_descricao);
+
     const descricao = h('input', {
       type: 'text',
       value: orc.pagamento_descricao,
@@ -544,78 +801,114 @@ export async function paginaEditor({ id, clienteId }) {
       },
     });
 
+    // Ao mudar entrada/parcelas, o texto acompanha se ainda era o automático
+    // (a conferência é feita antes da mudança).
+    const lembrarAntes = () => textoAutomatico();
+
     let unidade = orc.pagamento_entrada_tipo === 'percentual' ? 'percentual' : 'valor';
-    const entrada = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', placeholder: 'Sem entrada' });
-    const escrever = () => {
-      const v = orc.pagamento_entrada_valor;
-      entrada.value = orc.pagamento_entrada_tipo === 'nenhum' || !v ? '' : unidade === 'percentual' ? formatarPercentual(v) : dinheiroParaCampo(v);
-    };
-    const aplicar = () => {
+    const entrada = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', placeholder: 'Sem entrada', id: 'entrada-pagamento' });
+    entrada.value =
+      orc.pagamento_entrada_tipo === 'nenhum' || !orc.pagamento_entrada_valor
+        ? ''
+        : unidade === 'percentual'
+          ? formatarPercentual(orc.pagamento_entrada_valor)
+          : dinheiroParaCampo(orc.pagamento_entrada_valor);
+    const aplicarEntrada = () => {
+      const auto = lembrarAntes();
       const v = unidade === 'percentual' ? lerPercentual(entrada.value) : lerDinheiro(entrada.value);
       entrada.classList.toggle('invalido', entrada.value.trim() !== '' && v === null);
       orc.pagamento_entrada_tipo = v ? unidade : 'nenhum';
       orc.pagamento_entrada_valor = v || 0;
+      if (auto) {
+        orc.pagamento_descricao = textoPagamento(pagamentoAtual());
+        descricao.value = orc.pagamento_descricao;
+      }
       atualizarValores();
+      marcarBotoes();
     };
-    entrada.addEventListener('input', aplicar);
-    escrever();
-    entrada.id = 'entrada-pagamento';
-    const parcelas = entradaNumero(orc.pagamento_parcelas || '', (v) => { orc.pagamento_parcelas = v; atualizarValores(); }, { min: 0, max: 120, placeholder: '0' });
+    entrada.addEventListener('input', aplicarEntrada);
+    const parcelas = seletorParcelas(orc.pagamento_parcelas);
+    parcelas.id = 'parcelas-pagamento';
+    parcelas.addEventListener('change', () => {
+      const auto = lembrarAntes();
+      orc.pagamento_parcelas = Number(parcelas.value);
+      if (auto) {
+        orc.pagamento_descricao = textoPagamento(pagamentoAtual());
+        descricao.value = orc.pagamento_descricao;
+      }
+      atualizarValores();
+      marcarBotoes();
+    });
 
-    substituir(
-      secaoPagamento,
-      campo('Condição de pagamento', seletor, { classe: 'campo-inteiro' }),
-      campo('Texto que aparece para o cliente', descricao, { classe: 'campo-inteiro' }),
+    const botoes = ativas.map((c) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'chip',
+          'data-condicao': String(c.id),
+          onclick: () => {
+            orc.pagamento_descricao = c.descricao;
+            orc.pagamento_entrada_tipo = c.entrada_tipo;
+            orc.pagamento_entrada_valor = c.entrada_valor;
+            orc.pagamento_parcelas = c.parcelas;
+            personalizando = false;
+            desenharPagamento();
+            atualizarValores();
+          },
+        },
+        c.descricao,
+      ),
+    );
+    const botaoPersonalizar = h(
+      'button',
+      {
+        type: 'button',
+        class: 'chip',
+        onclick: () => {
+          personalizando = true;
+          ajustes.hidden = false;
+          marcarBotoes();
+          entrada.focus();
+        },
+      },
+      icone('editar', 'icone icone-mini'),
+      'Personalizar',
+    );
+    const ajustes = h(
+      'div',
+      { class: 'grade-formulario ajustes-pagamento' },
       h(
         'div',
         { class: 'campo campo-metade' },
         h('label', { for: entrada.id }, 'Entrada'),
-        h('div', { class: 'entrada-com-unidade' }, segmentado([['valor', 'R$'], ['percentual', '%']], unidade, (u) => { unidade = u; aplicar(); }, { rotulo: 'Tipo de entrada' }), entrada),
+        h('div', { class: 'entrada-com-unidade' }, segmentado([['valor', 'R$'], ['percentual', '%']], unidade, (u) => { unidade = u; aplicarEntrada(); }, { rotulo: 'Tipo de entrada' }), entrada),
       ),
-      campo('Parcelas do restante', parcelas, { classe: 'campo-metade', dica: '0 ou 1 = restante em uma vez' }),
-      h('div', { class: 'campo-inteiro' }, previaPagamento),
+      campo('Restante', parcelas, { classe: 'campo-metade' }),
+    );
+    ajustes.hidden = !personalizando;
+    function marcarBotoes() {
+      const atual = ativas.find((c) => mesmaCondicao(c) && c.descricao === orc.pagamento_descricao);
+      for (const b of botoes) {
+        const ativo = !personalizando && atual && b.dataset.condicao === String(atual.id);
+        b.classList.toggle('ativo', Boolean(ativo));
+        b.setAttribute('aria-pressed', String(Boolean(ativo)));
+      }
+      botaoPersonalizar.classList.toggle('ativo', personalizando);
+      botaoPersonalizar.setAttribute('aria-pressed', String(personalizando));
+    }
+    marcarBotoes();
+
+    substituir(
+      secaoPagamento,
+      h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Condição de pagamento'), h('div', { class: 'chips' }, botoes, botaoPersonalizar)),
+      ajustes,
+      previaPagamento,
+      campo('Texto que aparece para o cliente', descricao, { dica: 'Preenchido sozinho pela condição escolhida; pode editar.' }),
     );
   }
 
   // ------------------------------------------------------------------ Ações
-  async function salvar({ silencioso = false } = {}) {
-    if (!orc.ambientes.some((a) => a.itens.length) && !orc.servicos.length) {
-      aviso('Adicione pelo menos um móvel antes de salvar.', 'erro');
-      return false;
-    }
-    const semDescricao = orc.servicos.findIndex((s) => !s.descricao.trim());
-    if (semDescricao >= 0) {
-      aviso(`Informe a descrição do serviço ${semDescricao + 1}.`, 'erro');
-      return false;
-    }
-    botaoSalvar.disabled = true;
-    botaoSalvarLateral.disabled = true;
-    try {
-      const payload = montarPayload(orc);
-      const resposta = orc.id ? await api.put(`/orcamentos/${orc.id}`, payload) : await api.post('/orcamentos', payload);
-      const eraNovo = !orc.id;
-      orc = resposta;
-      salvo = JSON.stringify(montarPayload(orc));
-      if (eraNovo) history.replaceState(null, '', `#/orcamentos/${orc.id}`);
-      atualizarCabecalho();
-      redesenhar();
-      carregarHistorico();
-      if (!silencioso) aviso(eraNovo ? `Orçamento nº ${formatarNumero(orc.numero)} criado.` : 'Orçamento salvo.');
-      return true;
-    } catch (erro) {
-      avisoErro(erro);
-      return false;
-    } finally {
-      botaoSalvar.disabled = false;
-      botaoSalvarLateral.disabled = false;
-    }
-  }
-
-  async function garantirSalvo() {
-    if (orc.id && !alterado()) return true;
-    return salvar({ silencioso: true });
-  }
-
   // Gera o PDF no servidor e devolve como arquivo pronto para baixar/compartilhar.
   async function prepararPdf() {
     if (!(await garantirSalvo())) return null;
@@ -700,16 +993,33 @@ export async function paginaEditor({ id, clienteId }) {
     );
   }
 
-  async function duplicar() {
-    if (!orc.id) return;
-    if (alterado()) {
-      if (!(await confirmar('Salvar as alterações antes de duplicar?', { sim: 'Salvar e duplicar' }))) return;
-      if (!(await salvar({ silencioso: true }))) return;
+  // Abre a página que o cliente recebe (a visita da empresa não conta como do cliente).
+  async function verComoCliente() {
+    const janela = window.open('', '_blank');
+    if (!(await garantirSalvo())) {
+      janela?.close();
+      return;
     }
     try {
+      const link = await linkDaProposta(orc.id);
+      if (janela) {
+        janela.opener = null;
+        janela.location.href = link;
+      } else {
+        location.href = link;
+      }
+    } catch (erro) {
+      janela?.close();
+      avisoErro(erro);
+    }
+  }
+
+  async function duplicar() {
+    if (!orc.id) return;
+    if (!(await garantirSalvo())) return;
+    try {
       const copia = await api.post(`/orcamentos/${orc.id}/duplicar`);
-      salvo = JSON.stringify(montarPayload(orc));
-      aviso(`Cópia criada: orçamento nº ${formatarNumero(copia.numero)}. Altere o que precisar e salve.`);
+      aviso(`Cópia criada: orçamento nº ${formatarNumero(copia.numero)}. Altere o que precisar.`);
       irPara(`#/orcamentos/${copia.id}`);
     } catch (erro) {
       avisoErro(erro);
@@ -725,93 +1035,35 @@ export async function paginaEditor({ id, clienteId }) {
     atualizarValores();
   }
 
+  /** Coisas para conferir antes de mandar ao cliente. */
+  function avisosDeEnvio() {
+    const avisos = [];
+    const vazios = orc.ambientes.filter((a) => !a.itens.length).map((a) => `“${a.nome}”`);
+    if (vazios.length) avisos.push(`${vazios.length === 1 ? 'O ambiente' : 'Os ambientes'} ${vazios.join(', ')} ${vazios.length === 1 ? 'está' : 'estão'} sem móveis.`);
+    if (!numeroWhatsApp(orc.cliente?.whatsapp || orc.cliente?.telefone)) avisos.push('O cliente está sem WhatsApp ou telefone cadastrado.');
+    const semValor = orc.servicos.filter((s) => !s.valor_cents).map((s) => `“${s.descricao}”`);
+    if (semValor.length) avisos.push(`Serviço sem valor: ${semValor.join(', ')}.`);
+    if (!calcularTotais(orc).total_cents) avisos.push('O total do orçamento está zerado.');
+    if (somarDias(orc.data, orc.validade_dias) < new Date().toISOString().slice(0, 10)) avisos.push('A validade do orçamento já passou — ajuste a data ou os dias de validade.');
+    if (!orc.pagamento_descricao) avisos.push('A condição de pagamento não foi informada.');
+    return avisos;
+  }
+
   async function enviarAoCliente() {
     if (!(await garantirSalvo())) return;
-    const pdf = await prepararPdf();
-    if (!pdf) return;
-    const primeiroNome = (orc.cliente?.nome || '').trim().split(/\s+/)[0] || '';
-    const mensagem = (empresa.mensagem_whatsapp || MENSAGEM_PADRAO).replaceAll('{cliente}', primeiroNome);
-    const numero = numeroWhatsApp(orc.cliente?.whatsapp || orc.cliente?.telefone);
-    const podeCompartilhar = Boolean(navigator.canShare?.({ files: [pdf] }));
-
-    const enviado = await abrirModal('Enviar ao cliente', (fechar) => {
-      const texto = h('textarea', { rows: '4', value: mensagem });
-      const marcar = h('input', { type: 'checkbox', checked: ['rascunho', 'expirado'].includes(orc.status) });
-      const baixar = () => baixarArquivo(pdf);
-      const concluir = () => fechar(marcar.checked);
-      return h(
-        'div',
-        { class: 'envio' },
-        h(
-          'p',
-          { class: 'aviso-caixa' },
-          icone('cadeado', 'icone icone-mini'),
-          'O PDF mostra apenas os ambientes, a descrição e o valor de cada móvel — sem preço por metro ou cálculos internos.',
-        ),
-        campo('Mensagem', texto),
-        h(
-          'div',
-          { class: 'envio-passos' },
-          podeCompartilhar
-            ? h(
-                'button',
-                {
-                  type: 'button',
-                  class: 'botao botao-primario botao-grande botao-bloco',
-                  onclick: async () => {
-                    try {
-                      await navigator.share({ files: [pdf], text: texto.value, title: `Orçamento nº ${formatarNumero(orc.numero)}` });
-                      concluir();
-                    } catch (erro) {
-                      if (erro.name !== 'AbortError') avisoErro(erro);
-                    }
-                  },
-                },
-                icone('compartilhar'),
-                'Compartilhar PDF (WhatsApp, e-mail…)',
-              )
-            : null,
-          h(
-            'button',
-            {
-              type: 'button',
-              class: 'botao botao-whatsapp botao-grande botao-bloco',
-              onclick: () => {
-                if (!podeCompartilhar) baixar();
-                window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto.value)}`, '_blank', 'noopener');
-                concluir();
-              },
-            },
-            icone('whatsapp'),
-            numero ? 'Abrir WhatsApp do cliente' : 'Abrir WhatsApp com a mensagem',
-          ),
-          !podeCompartilhar ? h('small', { class: 'dica' }, 'O PDF será baixado para você anexar na conversa.') : null,
-          h('button', { type: 'button', class: 'botao botao-bloco', onclick: baixar }, icone('pdf'), 'Só baixar o PDF'),
-        ),
-        h('label', { class: 'caixa-marcar' }, marcar, ' Marcar orçamento como “Enviado”'),
-      );
-    });
-    if (enviado && orc.status !== 'enviado') {
-      try {
-        orc = await api.patch(`/orcamentos/${orc.id}/status`, { status: 'enviado' });
-        salvo = JSON.stringify(montarPayload(orc));
-        atualizarCabecalho();
-        seletorStatus.value = orc.status;
-        redesenhar();
-        carregarHistorico();
-      } catch (erro) {
-        avisoErro(erro);
-      }
-    }
+    const marcar = await abrirEnvio(orc, { avisos: avisosDeEnvio(), prepararPdf });
+    if (marcar && orc.status !== 'enviado') await mudarStatus('enviado');
   }
 
   async function carregarHistorico() {
     if (!orc.id) {
       substituir(historicoEl, h('p', { class: 'suave' }, 'O histórico começa quando o orçamento for salvo.'));
+      contadorHistorico.textContent = '';
       return;
     }
     try {
       const eventos = await api.get(`/orcamentos/${orc.id}/historico`);
+      contadorHistorico.textContent = String(eventos.length);
       substituir(
         historicoEl,
         h(
@@ -826,7 +1078,7 @@ export async function paginaEditor({ id, clienteId }) {
                 {},
                 h('span', { class: 'historico-evento' }, e.evento),
                 h('strong', {}, formatarDinheiro(e.total_cents)),
-                h('span', { class: 'historico-data' }, formatarDataHora(e.data_hora)),
+                h('span', { class: 'historico-data' }, [formatarDataHora(e.data_hora), e.usuario_nome || (e.evento.includes('cliente') ? 'cliente' : 'sistema')].join(' · ')),
               ),
             ),
         ),
@@ -837,18 +1089,6 @@ export async function paginaEditor({ id, clienteId }) {
   }
 
   // --------------------------------------------------------------- Montagem
-  const seletorStatus = h(
-    'select',
-    {
-      onchange: (e) => {
-        orc.status = e.target.value;
-        substituir(seloEl, selo(orc.status));
-        atualizarValores();
-      },
-    },
-    Object.entries(STATUS).map(([v, t]) => h('option', { value: v, selected: v === orc.status }, t)),
-  );
-
   const dataEl = h('input', {
     type: 'date',
     value: orc.data,
@@ -870,121 +1110,178 @@ export async function paginaEditor({ id, clienteId }) {
       },
     });
 
+  // Mostrar/ocultar os cálculos internos (lembrado neste aparelho).
+  let comCalculos = false;
+  try {
+    comCalculos = localStorage.getItem('esquadro.calculos') === '1';
+  } catch {
+    comCalculos = false;
+  }
+  const botaoCalculos = h('button', {
+    type: 'button',
+    class: 'alternar',
+    role: 'switch',
+    'aria-checked': String(comCalculos),
+    onclick: () => {
+      comCalculos = !comCalculos;
+      botaoCalculos.setAttribute('aria-checked', String(comCalculos));
+      secaoAmbientes.classList.toggle('com-calculos', comCalculos);
+      try {
+        localStorage.setItem('esquadro.calculos', comCalculos ? '1' : '0');
+      } catch {
+        // sem armazenamento: vale só nesta tela
+      }
+    },
+  }, h('span', { class: 'alternar-trilho' }), icone('cadeado', 'icone icone-mini'), h('span', { class: 'so-computador' }, 'Mostrar cálculos'), h('span', { class: 'so-celular' }, 'Cálculos'));
+
+  substituir(campoNomeAcrescimo, campo('Nome do acréscimo', texto('acrescimo_descricao', { placeholder: 'Ex.: Taxa de projeto', maxlength: '100' })));
+
+  const celular = window.matchMedia('(max-width: 699px)').matches;
+  const fechadaNoCelular = Boolean(id) && celular;
+
+  const secaoCliente = secao(
+    1,
+    'cliente',
+    'clientes',
+    'Cliente e datas',
+    [
+      blocoCliente,
+      h(
+        'div',
+        { class: 'grade-formulario' },
+        campo('Data', dataEl, { classe: 'campo-metade' }),
+        h(
+          'div',
+          { class: 'campo campo-metade' },
+          h('label', { for: 'validade-dias' }, 'Validade (dias)'),
+          entradaNumero(orc.validade_dias, (v) => { orc.validade_dias = v; atualizarValores(); }, { min: 0, max: 3650, id: 'validade-dias' }),
+          validadeTexto,
+        ),
+      ),
+    ],
+    { aberta: !fechadaNoCelular },
+  );
+
+  const secaoAmbientes = h(
+    'section',
+    { class: `secao-ambientes${comCalculos ? ' com-calculos' : ''}`, id: 'secao-ambientes' },
+    h(
+      'div',
+      { class: 'secao-topo secao-topo-solta' },
+      h('div', { class: 'secao-cabecalho' }, h('span', { class: 'secao-numero' }, '2'), h('span', { class: 'secao-titulos' }, h('h2', {}, 'Ambientes e móveis'), h('span', { class: 'secao-resumo' }))),
+      botaoCalculos,
+    ),
+    listaAmbientes,
+    h('button', { type: 'button', class: 'botao botao-secundario botao-grande botao-bloco', onclick: () => criarAmbiente() }, icone('mais'), 'Adicionar ambiente'),
+  );
+  resumoSecao.ambientes = secaoAmbientes.querySelector('.secao-resumo');
+
+  const secaoExtras = secao(
+    3,
+    'extras',
+    'servico',
+    'Serviços, desconto e acréscimo',
+    [
+      h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Serviços adicionais'), h('div', { class: 'chips' }, SERVICOS_RAPIDOS.map((s) => h('button', { type: 'button', class: 'chip', onclick: () => adicionarServico(s) }, `+ ${s}`)))),
+      listaServicos,
+      h(
+        'div',
+        { class: 'grade-formulario ajustes' },
+        h('div', { class: 'campo-metade' }, blocoAjuste('desconto', 'Desconto', descontoCalculado)),
+        h('div', { class: 'campo-metade formulario' }, blocoAjuste('acrescimo', 'Acréscimo', acrescimoCalculado), campoNomeAcrescimo),
+      ),
+    ],
+    { aberta: !fechadaNoCelular && (!id || Boolean(orc.servicos.length || orc.desconto_tipo !== 'nenhum' || orc.acrescimo_tipo !== 'nenhum')) },
+  );
+
+  const secaoCondicoes = secao(
+    4,
+    'condicoes',
+    'pagamento',
+    'Pagamento, prazo e observações',
+    h(
+      'div',
+      { class: 'formulario' },
+      secaoPagamento,
+      h(
+        'div',
+        { class: 'grade-formulario' },
+        campo('Prazo de entrega', texto('prazo_entrega', { placeholder: 'Ex.: 30 dias úteis', maxlength: '200' }), { classe: 'campo-inteiro' }),
+        campo('Observações (aparecem para o cliente)', texto('observacoes', { rows: '5', maxlength: '5000' }), { classe: 'campo-inteiro' }),
+        campo('Observações internas (só você vê)', texto('observacoes_internas', { rows: '3', maxlength: '5000' }), { classe: 'campo-inteiro campo-interno' }),
+      ),
+    ),
+    { aberta: !fechadaNoCelular },
+  );
+
+  // Índice das seções (atalho para rolar até cada uma)
+  const indice = h(
+    'nav',
+    { class: 'indice-secoes', 'aria-label': 'Partes do orçamento' },
+    [
+      [secaoCliente, '1', 'Cliente'],
+      [secaoAmbientes, '2', 'Ambientes'],
+      [secaoExtras, '3', 'Serviços e descontos'],
+      [secaoCondicoes, '4', 'Pagamento'],
+    ].map(([el, n, rotulo]) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            mostrarAba('orcamento');
+            if (el.classList.contains('secao-editor')) abrirSecao(el, true);
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          },
+        },
+        h('span', {}, n),
+        rotulo,
+      ),
+    ),
+  );
+
+  // Abas: o orçamento e o histórico
+  const painelOrcamento = h('div', { class: 'editor-principal' }, indice, secaoCliente, secaoAmbientes, secaoExtras, secaoCondicoes);
+  const painelHistorico = h(
+    'div',
+    { class: 'editor-principal', hidden: true },
+    h('section', { class: 'cartao' }, h('div', { class: 'cartao-titulo' }, h('h2', {}, icone('historico'), 'Histórico de alterações')), historicoEl),
+  );
+  const abaOrcamento = h('button', { type: 'button', role: 'tab', class: 'ativo', 'aria-selected': 'true', onclick: () => mostrarAba('orcamento') }, 'Orçamento');
+  const abaHistorico = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => mostrarAba('historico') }, 'Histórico', contadorHistorico);
+  function mostrarAba(qual) {
+    const orcamento = qual === 'orcamento';
+    painelOrcamento.hidden = !orcamento;
+    painelHistorico.hidden = orcamento;
+    abaOrcamento.classList.toggle('ativo', orcamento);
+    abaHistorico.classList.toggle('ativo', !orcamento);
+    abaOrcamento.setAttribute('aria-selected', String(orcamento));
+    abaHistorico.setAttribute('aria-selected', String(!orcamento));
+    if (!orcamento) carregarHistorico();
+  }
+
   atualizarCabecalho();
   desenharServicos();
   desenharPagamento();
   redesenhar();
   carregarHistorico();
+  mostrarEstado();
 
-  const titulo = (nomeIcone, textoTitulo, extra) =>
-    h('div', { class: 'cartao-titulo' }, h('h2', {}, icone(nomeIcone), textoTitulo), extra || null);
-
-  return h(
+  const pagina = h(
     'div',
     { class: 'pagina pagina-editor' },
     h(
       'div',
-      { class: 'cabecalho-pagina' },
+      { class: 'cabecalho-pagina cabecalho-editor' },
       h('a', { href: '#/orcamentos', class: 'voltar', 'aria-label': 'Voltar' }, icone('voltar')),
       h('div', { class: 'titulos' }, tituloEl, subtituloEl),
-      seloEl,
     ),
+    etapasEl,
+    h('div', { class: 'abas-editor', role: 'tablist', 'aria-label': 'Orçamento e histórico' }, abaOrcamento, abaHistorico),
     h(
       'div',
       { class: 'editor' },
-      h(
-        'div',
-        { class: 'editor-principal' },
-        h(
-          'section',
-          { class: 'cartao' },
-          titulo('clientes', 'Cliente e datas'),
-          blocoCliente,
-          h(
-            'div',
-            { class: 'grade-formulario' },
-            campo('Data', dataEl, { classe: 'campo-terco' }),
-            h(
-              'div',
-              { class: 'campo campo-terco' },
-              h('label', { for: 'validade-dias' }, 'Validade (dias)'),
-              entradaNumero(orc.validade_dias, (v) => { orc.validade_dias = v; atualizarValores(); }, { min: 0, max: 3650, id: 'validade-dias' }),
-              validadeTexto,
-            ),
-            campo('Status', seletorStatus, { classe: 'campo-terco' }),
-          ),
-        ),
-
-        h(
-          'section',
-          { class: 'secao-ambientes' },
-          h(
-            'div',
-            { class: 'cartao-titulo' },
-            h('h2', {}, icone('ambiente'), 'Ambientes e móveis'),
-            h('span', { class: 'aviso-interno' }, icone('cadeado', 'icone icone-mini'), 'Cálculos internos — o cliente vê só descrição e valor'),
-          ),
-          listaAmbientes,
-          h(
-            'button',
-            { type: 'button', class: 'botao botao-secundario botao-grande botao-bloco', onclick: () => criarAmbiente() },
-            icone('mais'),
-            'Adicionar ambiente',
-          ),
-        ),
-
-        h(
-          'section',
-          { class: 'cartao' },
-          titulo('servico', 'Serviços adicionais'),
-          h(
-            'div',
-            { class: 'chips' },
-            SERVICOS_RAPIDOS.map((s) => h('button', { type: 'button', class: 'chip', onclick: () => adicionarServico(s) }, `+ ${s}`)),
-          ),
-          listaServicos,
-        ),
-
-        h(
-          'section',
-          { class: 'cartao' },
-          titulo('preco', 'Desconto e acréscimo'),
-          h(
-            'div',
-            { class: 'grade-formulario' },
-            h('div', { class: 'campo-metade' }, blocoAjuste('desconto', 'Desconto', descontoCalculado)),
-            h(
-              'div',
-              { class: 'campo-metade formulario' },
-              blocoAjuste('acrescimo', 'Acréscimo', acrescimoCalculado),
-              campo('Nome do acréscimo', texto('acrescimo_descricao', { placeholder: 'Acréscimo', maxlength: '100' })),
-            ),
-          ),
-        ),
-
-        h(
-          'section',
-          { class: 'cartao' },
-          titulo('pagamento', 'Pagamento, prazo e observações'),
-          h(
-            'div',
-            { class: 'formulario' },
-            secaoPagamento,
-            h(
-              'div',
-              { class: 'grade-formulario' },
-              campo('Prazo de entrega', texto('prazo_entrega', { placeholder: 'Ex.: 30 dias úteis', maxlength: '200' }), { classe: 'campo-inteiro' }),
-              campo('Observações (aparecem no PDF)', texto('observacoes', { rows: '5', maxlength: '5000' }), { classe: 'campo-inteiro' }),
-              campo('Observações internas (não aparecem para o cliente)', texto('observacoes_internas', { rows: '3', maxlength: '5000' }), {
-                classe: 'campo-inteiro campo-interno',
-              }),
-            ),
-          ),
-        ),
-
-        h('section', { class: 'cartao' }, titulo('historico', 'Histórico de alterações'), historicoEl),
-      ),
-
+      h('div', {}, painelOrcamento, painelHistorico),
       h(
         'aside',
         { class: 'editor-lateral' },
@@ -997,9 +1294,26 @@ export async function paginaEditor({ id, clienteId }) {
       'div',
       { class: 'barra-salvar' },
       h('div', { class: 'barra-total' }, h('span', {}, 'Total do orçamento'), totalBarra, estadoBarra),
-      h('div', { class: 'cabecalho-acoes' }, menuBarra, botaoSalvar),
+      h(
+        'div',
+        { class: 'cabecalho-acoes' },
+        menuBarra,
+        h('button', { type: 'button', class: 'botao botao-whatsapp botao-grande', onclick: enviarAoCliente }, icone('whatsapp'), 'Enviar'),
+      ),
     ),
   );
+  document.addEventListener('keydown', atalhoTeclado);
+  // Some junto com a página: remove o atalho quando o editor sai da tela.
+  const observador = new MutationObserver(() => {
+    if (!pagina.isConnected && pagina.dataset.montado) {
+      document.removeEventListener('keydown', atalhoTeclado);
+      clearTimeout(timer);
+      observador.disconnect();
+    }
+    if (pagina.isConnected) pagina.dataset.montado = '1';
+  });
+  observador.observe(document.getElementById('conteudo') || document.body, { childList: true });
+  return pagina;
 }
 
 /** Mesmo nome que o servidor usa: Orcamento-00001-joao-da-silva.pdf */

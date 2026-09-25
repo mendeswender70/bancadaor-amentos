@@ -230,6 +230,22 @@ export const MIGRACOES = [
         'Olá, {cliente}! Segue o orçamento dos móveis planejados conforme conversamos. Qualquer dúvida estou à disposição.'
       )`,
   ],
+  // v2: link da proposta para o cliente (com aprovação), acompanhamento do
+  // envio e histórico que agrupa as edições do salvamento automático.
+  [
+    `ALTER TABLE orcamentos ADD COLUMN token_publico text UNIQUE`,
+    `ALTER TABLE orcamentos ADD COLUMN enviado_em timestamptz`,
+    `ALTER TABLE orcamentos ADD COLUMN visualizado_em timestamptz`,
+    `ALTER TABLE orcamentos ADD COLUMN ultima_visualizacao_em timestamptz`,
+    `ALTER TABLE orcamentos ADD COLUMN visualizacoes integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE orcamentos ADD COLUMN aprovado_em timestamptz`,
+    `ALTER TABLE orcamentos ADD COLUMN aprovado_por text NOT NULL DEFAULT ''`,
+    `ALTER TABLE orcamentos ADD COLUMN aprovado_pelo_link integer NOT NULL DEFAULT 0`,
+    `UPDATE orcamentos SET enviado_em = atualizado_em WHERE status IN ('enviado', 'negociacao')`,
+    `UPDATE orcamentos SET aprovado_em = atualizado_em WHERE status = 'aprovado'`,
+    `ALTER TABLE orcamento_historico ADD COLUMN tipo text NOT NULL DEFAULT 'evento'`,
+    `CREATE INDEX orcamentos_status ON orcamentos(status)`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------

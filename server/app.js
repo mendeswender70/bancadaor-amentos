@@ -16,18 +16,23 @@ import {
 import { abrirBanco, semAcento, somenteDigitos } from './db.js';
 import {
   alterarStatus,
+  aprovarPeloLink,
   atualizarOrcamento,
   carregarOrcamento,
   criarOrcamento,
   duplicarOrcamento,
   expirarVencidos,
+  garantirToken,
+  idPorToken,
   listarHistorico,
   listarOrcamentos,
+  podeAprovar,
+  registrarVisualizacao,
   resumoDashboard,
 } from './orcamentos.js';
 import { gerarPdf } from './pdf.js';
 import { ErroHttp, hoje, id, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
-import { visaoCliente } from './visaoCliente.js';
+import { propostaPublica, visaoCliente } from './visaoCliente.js';
 
 const pasta = (relativo) => fileURLToPath(new URL(relativo, import.meta.url));
 const padraoLike = (s) => `%${String(s).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -69,6 +74,12 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   });
 
   app.use(express.static(pasta('../public'), { index: 'index.html' }));
+
+  // Página da proposta para o cliente (o conteúdo vem de /api/publico).
+  app.get('/p/:token', (_req, res) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.sendFile(pasta('../public/proposta.html'));
+  });
 
   const api = express.Router();
   app.use('/api', api);
@@ -129,6 +140,59 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.post('/auth/sair', async (req, res) => {
     await encerrarSessao(db, req, res);
     res.json({ ok: true });
+  });
+
+  // ---------------------------------------------------- Proposta (pública)
+  // Quem tem o link vê a proposta e pode aprová-la. Nada de dados internos:
+  // tudo sai de propostaPublica(), montada a partir da visão do cliente.
+  const lerLogo = async () => {
+    const e = await db.get('SELECT logo, logo_mime FROM empresa WHERE id = 1');
+    return e?.logo ? { bytes: Buffer.from(e.logo), mime: e.logo_mime } : null;
+  };
+  const montarProposta = async (orcId) => {
+    const orc = await carregarOrcamento(db, orcId);
+    const empresa = await db.get('SELECT * FROM empresa WHERE id = 1');
+    const temLogo = Boolean(await db.get('SELECT 1 AS ok FROM empresa WHERE id = 1 AND logo IS NOT NULL'));
+    return { orc, empresa, publica: propostaPublica(orc, empresa, { podeAprovar: podeAprovar(orc, dataHoje()), temLogo }) };
+  };
+  const nomeArquivoPdf = (orc) => {
+    const nomeCliente = semAcento(orc.cliente?.nome ?? '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    return `Orcamento-${formatarNumero(orc.numero)}${nomeCliente ? `-${nomeCliente}` : ''}.pdf`;
+  };
+
+  api.get('/publico/propostas/:token', async (req, res) => {
+    const orcId = await idPorToken(db, req.params.token);
+    await expirarVencidos(db, dataHoje());
+    // A própria empresa conferindo o link não conta como visita do cliente.
+    if (!(await usuarioDaSessao(db, req))) await registrarVisualizacao(db, orcId);
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.json((await montarProposta(orcId)).publica);
+  });
+
+  api.get('/publico/propostas/:token/logo', async (req, res) => {
+    await idPorToken(db, req.params.token);
+    const logo = await lerLogo();
+    if (!logo) throw naoEncontrado('Nenhuma logo cadastrada.');
+    res.type(logo.mime).send(logo.bytes);
+  });
+
+  api.get('/publico/propostas/:token/pdf', async (req, res) => {
+    const { orc, empresa } = await montarProposta(await idPorToken(db, req.params.token));
+    const logo = await lerLogo();
+    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null);
+    res.type('application/pdf').setHeader('Content-Disposition', `attachment; filename="${nomeArquivoPdf(orc)}"`).send(pdf);
+  });
+
+  api.post('/publico/propostas/:token/aprovar', async (req, res) => {
+    const orcId = await idPorToken(db, req.params.token);
+    const nome = texto(req.body.nome, { max: 100, obrigatorio: true, campo: 'Nome' });
+    if (nome.length < 3) throw invalido('Digite seu nome completo para aprovar.');
+    if (req.body.aceite !== true) throw invalido('Confirme que leu e concorda com a proposta.');
+    await expirarVencidos(db, dataHoje());
+    await aprovarPeloLink(db, orcId, nome, dataHoje());
+    res.json((await montarProposta(orcId)).publica);
   });
 
   // Daqui para baixo, somente usuários autenticados.
@@ -200,7 +264,8 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     }
     const limite = Math.min(Math.max(Number(req.query.limite) || 100, 1), 500);
     const clientes = await db.all(
-      `SELECT c.*, COUNT(o.id) AS orcamentos, MAX(o.data) AS ultimo_orcamento
+      `SELECT c.*, COUNT(o.id) AS orcamentos, MAX(o.data) AS ultimo_orcamento,
+              COALESCE(SUM(CASE WHEN o.status = 'aprovado' THEN o.total_cents END), 0) AS aprovado_cents
        FROM clientes c LEFT JOIN orcamentos o ON o.cliente_id = c.id
        ${onde.length ? `WHERE ${onde.join(' AND ')}` : ''}
        GROUP BY c.id ORDER BY lower(c.nome) LIMIT ?`,
@@ -424,11 +489,6 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     res.json(await lerEmpresa());
   });
 
-  const lerLogo = async () => {
-    const e = await db.get('SELECT logo, logo_mime FROM empresa WHERE id = 1');
-    return e?.logo ? { bytes: Buffer.from(e.logo), mime: e.logo_mime } : null;
-  };
-
   api.get('/empresa/logo', async (_req, res) => {
     const logo = await lerLogo();
     if (!logo) throw naoEncontrado('Nenhuma logo cadastrada.');
@@ -523,14 +583,16 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     const empresa = await db.get('SELECT * FROM empresa WHERE id = 1');
     const logo = await lerLogo();
     const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null);
-    const nomeCliente = semAcento(orc.cliente?.nome ?? '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    const arquivo = `Orcamento-${formatarNumero(orc.numero)}${nomeCliente ? `-${nomeCliente}` : ''}.pdf`;
     res
       .type('application/pdf')
-      .setHeader('Content-Disposition', `${req.query.baixar ? 'attachment' : 'inline'}; filename="${arquivo}"`)
+      .setHeader('Content-Disposition', `${req.query.baixar ? 'attachment' : 'inline'}; filename="${nomeArquivoPdf(orc)}"`)
       .send(pdf);
+  });
+
+  // Endereço da proposta para mandar ao cliente (criado na primeira vez).
+  api.post('/orcamentos/:id/link', async (req, res) => {
+    const token = await garantirToken(db, id(req.params.id));
+    res.json({ token, caminho: `/p/${token}` });
   });
 
   api.use((_req, _res, next) => next(naoEncontrado('Endereço não encontrado.')));

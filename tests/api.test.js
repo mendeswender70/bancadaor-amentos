@@ -383,3 +383,140 @@ test('orçamento com móveis separados por ambiente', async () => {
   const pdf = await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/pdf`);
   assert.equal(pdf.status, 200);
 });
+
+// ------------------------------------------------ Link da proposta (público)
+
+const semLogin = (metodo, caminho, corpo, opcoes = {}) => chamar(metodo, caminho, corpo, { semCookie: true, ...opcoes });
+
+let token;
+test('link da proposta mostra ao cliente só o que ele pode ver', async () => {
+  let orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
+  orc.observacoes_internas = 'margem de 40%';
+  await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
+  await chamar('PATCH', `/orcamentos/${orcamentoAmbientesId}/status`, { status: 'enviado' });
+
+  let r = await chamar('POST', `/orcamentos/${orcamentoAmbientesId}/link`);
+  assert.equal(r.status, 200);
+  token = r.dados.token;
+  assert.match(token, /^[A-Za-z0-9_-]{32}$/);
+  assert.equal(r.dados.caminho, `/p/${token}`);
+  r = await chamar('POST', `/orcamentos/${orcamentoAmbientesId}/link`);
+  assert.equal(r.dados.token, token, 'o link não muda');
+  assert.equal((await semLogin('POST', `/orcamentos/${orcamentoAmbientesId}/link`)).status, 401);
+
+  r = await semLogin('GET', `/publico/propostas/${token}`);
+  assert.equal(r.status, 200);
+  const p = r.dados;
+  assert.equal(p.numero, '00003');
+  assert.deepEqual(p.cliente, { nome: 'João da Silva', cidade: '', estado: '' }, 'sem telefone do cliente no link');
+  assert.equal(p.situacao.status, 'enviado');
+  assert.equal(p.situacao.pode_aprovar, true);
+  assert.equal(p.tem_logo, true);
+  const chaves = [];
+  const coletar = (obj) => {
+    if (obj && typeof obj === 'object') for (const [k, v] of Object.entries(obj)) chaves.push(k), coletar(v);
+  };
+  coletar(p);
+  for (const proibido of ['preco', 'largura', 'altura', 'medida', 'metodo', 'interno', 'tipo_movel', 'token']) {
+    assert.ok(!chaves.some((k) => k.includes(proibido)), `a proposta pública contém o campo "${proibido}"`);
+  }
+  const json = JSON.stringify(p);
+  assert.ok(!json.includes('180000') && !json.includes('margem de 40%') && !json.includes('98888'));
+
+  assert.equal((await semLogin('GET', '/publico/propostas/abc')).status, 404);
+  assert.equal((await semLogin('GET', `/publico/propostas/${'x'.repeat(32)}`)).status, 404);
+  const logo = await semLogin('GET', `/publico/propostas/${token}/logo`);
+  assert.equal(logo.status, 200);
+  const pdf = await semLogin('GET', `/publico/propostas/${token}/pdf`);
+  assert.equal(pdf.dados.subarray(0, 5).toString(), '%PDF-');
+});
+
+test('visitas do cliente são contadas; as da própria empresa, não', async () => {
+  let orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
+  assert.equal(orc.visualizacoes, 1);
+  await chamar('GET', `/publico/propostas/${token}`); // logado: não conta
+  await semLogin('GET', `/publico/propostas/${token}`);
+  orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
+  assert.equal(orc.visualizacoes, 2);
+  const hist = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/historico`)).dados;
+  assert.equal(hist.filter((h) => h.evento === 'Cliente abriu a proposta pelo link').length, 1);
+  const painel = (await chamar('GET', '/dashboard')).dados;
+  assert.ok(painel.atencao.some((a) => a.id === orcamentoAmbientesId && a.motivo === 'visto'));
+});
+
+test('cliente aprova a proposta pelo link', async () => {
+  let r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva', aceite: true }, { semCabecalho: true });
+  assert.equal(r.status, 403, 'exige o cabeçalho anti-CSRF');
+  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva' });
+  assert.equal(r.status, 400);
+  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'Jo', aceite: true });
+  assert.equal(r.status, 400);
+  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva', aceite: true });
+  assert.equal(r.status, 200, JSON.stringify(r.dados));
+  assert.equal(r.dados.situacao.status, 'aprovado');
+  assert.equal(r.dados.situacao.aprovado_por, 'João da Silva');
+  assert.equal(r.dados.situacao.pode_aprovar, false);
+  // aprovar de novo não dá erro nem duplica o histórico
+  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva', aceite: true });
+  assert.equal(r.status, 200);
+
+  const orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
+  assert.equal(orc.status, 'aprovado');
+  assert.equal(orc.aprovado_pelo_link, 1);
+  assert.equal(orc.aprovado_por, 'João da Silva');
+  const hist = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/historico`)).dados;
+  assert.equal(hist.filter((h) => h.evento.startsWith('Aprovado pelo cliente')).length, 1);
+  const painel = (await chamar('GET', '/dashboard')).dados;
+  assert.ok(painel.atencao.some((a) => a.id === orcamentoAmbientesId && a.motivo === 'aprovado'));
+  const clientes = (await chamar('GET', '/clientes?q=joao')).dados;
+  assert.ok(clientes[0].aprovado_cents >= orc.total_cents);
+});
+
+test('proposta vencida ou recusada não pode ser aprovada', async () => {
+  const { token: t } = (await chamar('POST', `/orcamentos/${duplicadoId}/link`)).dados;
+  await chamar('PATCH', `/orcamentos/${duplicadoId}/status`, { status: 'recusado' });
+  let r = await semLogin('POST', `/publico/propostas/${t}/aprovar`, { nome: 'João da Silva', aceite: true });
+  assert.equal(r.status, 409);
+  await chamar('PATCH', `/orcamentos/${duplicadoId}/status`, { status: 'enviado' });
+  hojeFalso = '2026-12-01';
+  r = await semLogin('GET', `/publico/propostas/${t}`);
+  assert.equal(r.dados.situacao.status, 'expirado');
+  assert.equal(r.dados.situacao.pode_aprovar, false);
+  r = await semLogin('POST', `/publico/propostas/${t}/aprovar`, { nome: 'João da Silva', aceite: true });
+  assert.equal(r.status, 409);
+  assert.match(r.dados.erro, /validade/);
+  hojeFalso = '2026-09-24';
+});
+
+test('edições seguidas (salvamento automático) viram um só registro no histórico', async () => {
+  const antes = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/historico`)).dados.length;
+  const orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
+  orc.prazo_entrega = '45 dias úteis';
+  await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
+  orc.ambientes[0].itens[0].largura_mm = 3000;
+  await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
+  orc.ambientes[0].itens[0].largura_mm = 3100;
+  await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
+  const hist = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/historico`)).dados;
+  assert.equal(hist.length, antes + 1);
+  assert.equal(hist.at(-1).evento, 'Condições e observações alteradas; Móveis alterados');
+  assert.equal(hist.at(-1).total_cents, 180000 * 3.1 + 160000 + 768000);
+});
+
+test('lista de orçamentos: grupo "perdidos", ambientes e WhatsApp do cliente', async () => {
+  const r = await chamar('GET', '/orcamentos?status=perdidos');
+  assert.ok(r.dados.orcamentos.length >= 1);
+  assert.ok(r.dados.orcamentos.every((o) => ['recusado', 'cancelado', 'expirado'].includes(o.status)));
+  const todos = (await chamar('GET', '/orcamentos')).dados.orcamentos;
+  const comAmbientes = todos.find((o) => o.id === orcamentoAmbientesId);
+  assert.equal(comAmbientes.ambientes, 1);
+  assert.equal(comAmbientes.cliente_whatsapp, '(11) 98888-7777');
+});
+
+test('dashboard compara com o mês anterior e calcula a taxa de aprovação', async () => {
+  const d = (await chamar('GET', '/dashboard')).dados;
+  assert.equal(d.mes_anterior.quantidade, 0);
+  assert.ok(d.mes.validos >= 1);
+  assert.ok(d.conversao.enviados >= d.conversao.aprovados && d.conversao.aprovados >= 1);
+  assert.ok(d.recentes.length <= 6);
+});

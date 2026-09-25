@@ -1,7 +1,7 @@
-import { formatarData } from '/shared/calc.js';
+import { formatarData, formatarDinheiro } from '/shared/calc.js';
 import { api } from '../api.js';
 import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, confirmar, aviso, avisoErro } from '../ui.js';
-import { avatar, cabecalhoPagina, formularioCliente, listaOrcamentos, modalNovoCliente } from '../comum.js';
+import { avatar, cabecalhoPagina, formularioCliente, listaOrcamentos, modalNovoCliente, numeroWhatsApp } from '../comum.js';
 import { irPara } from '../main.js';
 
 export async function paginaClientes() {
@@ -31,26 +31,50 @@ export async function paginaClientes() {
         h(
           'div',
           { class: 'lista' },
-          clientes.map((c) =>
-            h(
-              'a',
-              { href: `#/clientes/${c.id}`, class: 'linha-orcamento' },
-              avatar(c.nome),
+          clientes.map((c) => {
+            const whats = numeroWhatsApp(c.whatsapp || c.telefone);
+            const primeiro = c.nome.trim().split(/\s+/)[0];
+            return h(
+              'div',
+              { class: 'linha-orcamento linha-com-acoes' },
               h(
-                'div',
-                { class: 'linha-principal' },
-                h('strong', {}, c.nome),
-                h('span', { class: 'suave' }, [c.whatsapp || c.telefone, c.cidade].filter(Boolean).join(' · ') || ' '),
+                'a',
+                { href: `#/clientes/${c.id}`, class: 'linha-link' },
+                avatar(c.nome, 'avatar-linha'),
+                h(
+                  'div',
+                  { class: 'linha-principal' },
+                  h('strong', {}, c.nome),
+                  h('span', { class: 'suave' }, [c.whatsapp || c.telefone, c.cidade].filter(Boolean).join(' · ') || 'Sem telefone'),
+                ),
+                h(
+                  'span',
+                  { class: 'etiquetas' },
+                  h('span', { class: 'etiqueta-linha' }, c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`),
+                  c.ultimo_orcamento ? h('span', { class: 'etiqueta-linha' }, `último em ${formatarData(c.ultimo_orcamento)}`) : null,
+                  c.aprovado_cents ? h('span', { class: 'etiqueta-linha sucesso' }, `${formatarDinheiro(c.aprovado_cents)} aprovados`) : null,
+                ),
               ),
               h(
                 'div',
-                { class: 'linha-valor' },
-                h('span', { class: 'suave' }, c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`),
-                c.ultimo_orcamento ? h('span', { class: 'suave pequeno' }, `último em ${formatarData(c.ultimo_orcamento)}`) : null,
+                { class: 'linha-acoes' },
+                whats
+                  ? h(
+                      'a',
+                      {
+                        class: 'botao-icone botao-icone-whatsapp',
+                        href: `https://wa.me/${whats}?text=${encodeURIComponent(`Olá, ${primeiro}!`)}`,
+                        target: '_blank',
+                        rel: 'noopener',
+                        title: 'Conversar no WhatsApp',
+                        'aria-label': `Conversar com ${c.nome} no WhatsApp`,
+                      },
+                      icone('whatsapp'),
+                    )
+                  : null,
               ),
-              icone('seta', 'icone linha-seta'),
-            ),
-          ),
+            );
+          }),
         ),
       );
     } catch (erro) {

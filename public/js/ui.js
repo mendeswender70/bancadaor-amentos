@@ -68,6 +68,11 @@ const ICONES = {
   pagamento: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
   baixar: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
   servico: '<path d="M14.5 5.5a4 4 0 0 0-5 5L4 16l4 4 5.5-5.5a4 4 0 0 0 5-5L16 12l-4-4z"/>',
+  olho: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  link: '<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
+  externo: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
+  calculo: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h8"/>',
+  usuario: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.2-6 8-6s7 2 8 6"/>',
 };
 
 export function icone(nome, classe = 'icone') {
@@ -234,6 +239,41 @@ export function marcaEsquadro(classe = '') {
   );
 }
 
+/** "hoje", "ontem", "há 3 dias" (a partir de uma data ISO). */
+export function haQuanto(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const inicio = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dias = Math.round((inicio(new Date()) - inicio(d)) / 86_400_000);
+  if (dias <= 0) return 'hoje';
+  if (dias === 1) return 'ontem';
+  return `há ${dias} dias`;
+}
+
+/** Dias de hoje até uma data "AAAA-MM-DD" (negativo se já passou). */
+export function diasAte(isoData) {
+  const [a, m, d] = String(isoData).slice(0, 10).split('-').map(Number);
+  const agora = new Date();
+  return Math.round((Date.UTC(a, m - 1, d) - Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate())) / 86_400_000);
+}
+
+/** Copia um texto para a área de transferência. */
+export async function copiarTexto(texto) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    return true;
+  } catch {
+    const campo = h('textarea', { value: texto, readonly: true });
+    // estilo pelo CSSOM (atributo style é bloqueado pela CSP)
+    Object.assign(campo.style, { position: 'fixed', opacity: '0' });
+    document.body.append(campo);
+    campo.select();
+    const ok = document.execCommand?.('copy');
+    campo.remove();
+    return Boolean(ok);
+  }
+}
+
 /** Iniciais para avatar: "João da Silva" → "JS". */
 export function iniciais(nome) {
   const partes = String(nome || '?')
@@ -299,6 +339,9 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
         ),
       );
       raiz.append(lista);
+      // Perto do fim da tela, abre para cima (o menu inferior do celular cobre a parte de baixo).
+      const limite = window.innerHeight - (window.innerWidth < 1024 ? 90 : 16);
+      if (lista.getBoundingClientRect().bottom > limite) lista.classList.add('para-cima');
       botao.setAttribute('aria-expanded', 'true');
       menuAberto = raiz;
       lista.querySelector('button:not(:disabled)')?.focus();
