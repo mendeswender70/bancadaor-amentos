@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test \"tests/**/*.test.js\""
+    "test": "node --test \"tests/**/*.test.js\"",
+    "build:cena": "esbuild src/cena-login.js --bundle --format=esm --minify --target=es2020 --legal-comments=eof --outfile=public/js/cena-login.js"
   },
   "dependencies": {
     "express": "^5.2.1",
@@ -19,6 +20,8 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
-    "@electric-sql/pglite-socket": "^0.2.11"
+    "@electric-sql/pglite-socket": "^0.2.11",
+    "esbuild": "^0.28.2",
+    "three": "^0.186.1"
   }
 }

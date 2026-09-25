@@ -182,15 +182,39 @@ async function sair() {
 
 // ------------------------------------------------------ Login / primeiro acesso
 
+// Cena 3D da tela de entrada (carregada só aqui, em arquivo separado).
+let cenaAtual = null;
+function pararCena() {
+  cenaAtual?.parar();
+  cenaAtual = null;
+}
+async function iniciarCena() {
+  const palco = raiz.querySelector('.acesso-cena');
+  if (!palco) return;
+  try {
+    const { montarCena } = await import('./cena-login.js');
+    if (!palco.isConnected) return;
+    pararCena();
+    cenaAtual = montarCena(palco, { aoMontar: () => palco.classList.add('montado') });
+    palco.classList.add('com-3d');
+  } catch (erro) {
+    // Sem WebGL (ou falha ao carregar): fica o fundo em degradê.
+    console.warn('Cena 3D indisponível:', erro?.message || erro);
+  }
+}
+
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
   if (estado.usuario) {
+    pararCena();
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
     return rotear();
   }
+  pararCena();
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
+  iniciarCena();
 }
 
 function cartaoAcesso(titulo, subtitulo, formulario) {
@@ -201,10 +225,11 @@ function cartaoAcesso(titulo, subtitulo, formulario) {
     h(
       'section',
       { class: 'acesso-marca' },
+      h('div', { class: 'acesso-cena' }),
       marcaEsquadro('marca-clara'),
       h(
         'div',
-        {},
+        { class: 'acesso-chamada' },
         h('h2', {}, 'Orçamentos de móveis planejados em poucos minutos.'),
         h(
           'ul',
