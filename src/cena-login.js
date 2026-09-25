@@ -593,11 +593,12 @@ export function montarCena(container, { aoMontar } = {}) {
     if (!ativo) return;
     quadro = requestAnimationFrame(desenhar);
     const agora = performance.now();
-    const dt = Math.min((agora - anterior) / 1000, 0.05);
+    // Tempo nunca negativo, mesmo se o relógio do navegador voltar.
+    const dt = MathUtils.clamp((agora - anterior) / 1000, 0, 0.05);
     anterior = agora;
     if (document.hidden) return;
 
-    const total = semMovimento ? T.montagem + T.cota + 0.1 : (agora - inicio) / 1000;
+    const total = semMovimento ? T.montagem + T.cota + 0.1 : Math.max(0, (agora - inicio) / 1000);
     const indice = semMovimento ? 0 : Math.floor(total / DURACAO) % moveis.length;
     const t = semMovimento ? total : total % DURACAO;
     const m = moveis[indice];
