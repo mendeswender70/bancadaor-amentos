@@ -512,7 +512,7 @@ export async function paginaEditor({ id, clienteId }) {
             h(
               'div',
               { class: 'chips' },
-              AMBIENTES_SUGERIDOS.slice(0, 8).map((nome) =>
+              sugestoesAmbiente().slice(0, 8).map((nome) =>
                 h('button', { type: 'button', class: 'chip', onclick: () => criarAmbiente({ nome, descricao: '' }) }, `+ ${nome}`),
               ),
             ),
@@ -1345,6 +1345,26 @@ function formatarDataHora(texto) {
 
 // ---------------------------------------------------------- Formulário do ambiente
 
+// Sugestões de ambiente da empresa (ficam salvas no servidor).
+const sugestoesAmbiente = () => cache.empresa?.ambientes_sugeridos ?? AMBIENTES_SUGERIDOS;
+const chaveAmbiente = (nome) =>
+  nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+let filaSugestoes = Promise.resolve();
+
+/** Grava a lista inteira; os pedidos saem em ordem para o último sempre valer. */
+function salvarSugestoesAmbiente(lista) {
+  filaSugestoes = filaSugestoes
+    .catch(() => {})
+    .then(async () => {
+      cache.empresa = await api.put('/empresa/ambientes-sugeridos', { ambientes: lista });
+    });
+  return filaSugestoes;
+}
+
 function formularioAmbiente(inicial, ambientes) {
   return abrirModal(inicial ? 'Editar ambiente' : 'Novo ambiente', (fechar) => {
     const nome = h('input', { type: 'text', required: true, maxlength: '100', value: inicial?.nome || '', placeholder: 'Ex.: Quarto do casal', autocomplete: 'off' });
@@ -1355,24 +1375,122 @@ function formularioAmbiente(inicial, ambientes) {
       placeholder: 'Ex.: MDF branco TX, puxadores perfil em alumínio',
     });
     const usados = new Set(ambientes.map((a) => a.nome));
-    const sugestoes = h(
+    let lista = [...sugestoesAmbiente()];
+    let editando = false;
+    const naLista = (valor) => lista.some((s) => chaveAmbiente(s) === chaveAmbiente(valor));
+
+    const alterarLista = async (novaLista, mensagem) => {
+      const anterior = lista;
+      lista = novaLista;
+      desenharSugestoes();
+      try {
+        await salvarSugestoesAmbiente(lista);
+        if (mensagem) aviso(mensagem);
+      } catch (erro) {
+        lista = anterior;
+        desenharSugestoes();
+        avisoErro(erro);
+      }
+    };
+
+    const nova = h('input', { type: 'text', maxlength: '100', placeholder: 'Nome da nova sugestão', autocomplete: 'off', 'aria-label': 'Nova sugestão de ambiente' });
+    const adicionarNova = () => {
+      const valor = nova.value.trim();
+      if (!valor) return nova.focus();
+      nova.value = '';
+      nova.focus();
+      if (naLista(valor)) return aviso(`“${valor}” já está nas sugestões.`);
+      alterarLista([...lista, valor], `“${valor}” salvo nas sugestões.`);
+    };
+    // Enter aqui adiciona a sugestão em vez de criar o ambiente.
+    nova.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      adicionarNova();
+    });
+    const areaNova = h(
       'div',
-      { class: 'chips' },
-      AMBIENTES_SUGERIDOS.filter((s) => !usados.has(s) || s === inicial?.nome).map((s) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            class: 'chip',
-            onclick: () => {
-              nome.value = s;
-              nome.focus();
-            },
-          },
-          s,
-        ),
-      ),
+      { class: 'sugestao-nova' },
+      nova,
+      h('button', { type: 'button', class: 'botao', onclick: adicionarNova }, icone('mais'), 'Adicionar'),
     );
+
+    const botaoEditar = h('button', { type: 'button', class: 'botao botao-pequeno', 'aria-pressed': 'false' });
+    botaoEditar.addEventListener('click', () => {
+      editando = !editando;
+      desenharSugestoes();
+      if (editando) nova.focus();
+    });
+    const restaurar = h(
+      'button',
+      {
+        type: 'button',
+        class: 'botao botao-pequeno',
+        onclick: async () => {
+          if (!(await confirmar('Voltar para a lista de sugestões padrão? As que você adicionou serão removidas.', { sim: 'Restaurar' }))) return;
+          alterarLista([...AMBIENTES_SUGERIDOS], 'Sugestões padrão restauradas.');
+        },
+      },
+      'Restaurar padrão',
+    );
+
+    const sugestoes = h('div', { class: 'chips' });
+    const guardar = h('input', { type: 'checkbox' });
+    const opcaoGuardar = h('label', { class: 'caixa-marcar' }, guardar, h('span'));
+    const atualizarGuardar = () => {
+      const valor = nome.value.trim();
+      opcaoGuardar.hidden = !valor || naLista(valor);
+      opcaoGuardar.lastChild.textContent = ` Guardar “${valor}” nas sugestões`;
+    };
+    nome.addEventListener('input', atualizarGuardar);
+
+    function desenharSugestoes() {
+      botaoEditar.textContent = editando ? 'Concluir' : 'Editar sugestões';
+      botaoEditar.setAttribute('aria-pressed', String(editando));
+      areaNova.hidden = !editando;
+      restaurar.hidden = !editando;
+      const visiveis = editando ? lista : lista.filter((s) => !usados.has(s) || s === inicial?.nome);
+      substituir(
+        sugestoes,
+        visiveis.length
+          ? visiveis.map((s) =>
+              editando
+                ? h(
+                    'span',
+                    { class: 'chip chip-editavel' },
+                    s,
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        class: 'chip-remover',
+                        title: 'Remover das sugestões',
+                        'aria-label': `Remover ${s} das sugestões`,
+                        onclick: () => alterarLista(lista.filter((x) => x !== s)),
+                      },
+                      '×',
+                    ),
+                  )
+                : h(
+                    'button',
+                    {
+                      type: 'button',
+                      class: 'chip',
+                      onclick: () => {
+                        nome.value = s;
+                        atualizarGuardar();
+                        nome.focus();
+                      },
+                    },
+                    s,
+                  ),
+            )
+          : h('small', { class: 'dica' }, editando ? 'Nenhuma sugestão salva. Adicione a primeira abaixo.' : 'Nenhuma sugestão disponível.'),
+      );
+      atualizarGuardar();
+    }
+    desenharSugestoes();
+
     setTimeout(() => nome.focus());
     return h(
       'form',
@@ -1382,11 +1500,24 @@ function formularioAmbiente(inicial, ambientes) {
           e.preventDefault();
           const valor = nome.value.trim();
           if (!valor) return aviso('Dê um nome ao ambiente.', 'erro');
+          if (guardar.checked && !naLista(valor)) {
+            salvarSugestoesAmbiente([...lista, valor]).then(
+              () => aviso(`“${valor}” salvo nas sugestões.`),
+              avisoErro,
+            );
+          }
           fechar({ nome: valor, descricao: descricao.value.trim() });
         },
       },
       campo('Nome do ambiente', nome),
-      h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Sugestões'), sugestoes),
+      opcaoGuardar,
+      h(
+        'div',
+        { class: 'campo' },
+        h('div', { class: 'sugestoes-topo' }, h('span', { class: 'rotulo' }, 'Sugestões'), h('div', { class: 'sugestoes-acoes' }, restaurar, botaoEditar)),
+        sugestoes,
+        areaNova,
+      ),
       campo('Detalhes do ambiente (opcional, aparece no PDF)', descricao, { dica: 'Materiais, cores, acabamentos…' }),
       h(
         'div',

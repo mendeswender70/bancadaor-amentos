@@ -88,6 +88,9 @@ de produção (`postgres`) conectado pela rede.
 - **Ambientes**: os móveis ficam agrupados por cômodo (Quarto do casal, Sala,
   Cozinha…), com detalhes do ambiente (materiais, cores) e subtotal no PDF.
   Dá para renomear, duplicar, reordenar e mover móveis entre ambientes.
+- **Sugestões de ambiente** próprias: em **Novo ambiente → Editar sugestões**
+  dá para adicionar e remover nomes (ou marcar “Guardar nas sugestões” ao criar
+  um ambiente novo). A lista fica salva no banco e vale em todos os aparelhos.
 - Cálculo por **metro linear**, **metro quadrado** (largura × altura) e **por unidade**;
   quantidade; **preço personalizado** por orçamento.
 - Serviços adicionais, desconto e acréscimo em R$ ou %.

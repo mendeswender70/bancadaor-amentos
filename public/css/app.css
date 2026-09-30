@@ -1753,6 +1753,63 @@ input.invalido {
   justify-content: center;
 }
 
+/* Sugestões de ambiente editáveis (formulário do ambiente) */
+.sugestoes-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sugestoes-acoes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip-editavel {
+  cursor: default;
+  padding-right: 4px;
+}
+
+.chip-editavel:hover {
+  border-color: var(--borda-forte);
+  background: var(--superficie);
+  color: var(--texto-2);
+}
+
+.chip-remover {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--superficie-3);
+  color: var(--texto-2);
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip-remover:hover {
+  background: var(--perigo-fundo);
+  color: var(--perigo);
+}
+
+.sugestao-nova {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sugestao-nova input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Móvel dentro do ambiente */
 .item {
   display: flex;
