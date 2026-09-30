@@ -246,6 +246,9 @@ export const MIGRACOES = [
     `ALTER TABLE orcamento_historico ADD COLUMN tipo text NOT NULL DEFAULT 'evento'`,
     `CREATE INDEX orcamentos_status ON orcamentos(status)`,
   ],
+  // v3: sugestões de ambiente cadastradas pela empresa (lista em JSON; vazio
+  // até a primeira alteração, quando valem as sugestões padrão).
+  [`ALTER TABLE empresa ADD COLUMN ambientes_sugeridos text`],
 ];
 
 // ---------------------------------------------------------------------------

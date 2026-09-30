@@ -1,6 +1,6 @@
 import express from 'express';
 import { fileURLToPath } from 'node:url';
-import { METODOS, TIPOS_AJUSTE, LIMITES, formatarNumero } from '../public/shared/calc.js';
+import { AMBIENTES_SUGERIDOS, METODOS, TIPOS_AJUSTE, LIMITES, formatarNumero } from '../public/shared/calc.js';
 import {
   conferirSenha,
   criarLimitadorLogin,
@@ -38,6 +38,19 @@ const pasta = (relativo) => fileURLToPath(new URL(relativo, import.meta.url));
 const padraoLike = (s) => `%${String(s).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 const SEM_BUSCA = ({ nome_busca, telefone_digitos, whatsapp_digitos, ...resto }) => resto;
+
+const MAX_SUGESTOES_AMBIENTE = 80;
+
+/** Sugestões salvas pela empresa ou, se nunca foram alteradas, as padrão. */
+function lerSugestoesAmbiente(json) {
+  try {
+    const lista = JSON.parse(json);
+    if (Array.isArray(lista)) return lista;
+  } catch {
+    // Valor ausente ou inválido: usa as sugestões padrão.
+  }
+  return AMBIENTES_SUGERIDOS;
+}
 
 /**
  * @param {object} [opcoes]
@@ -438,8 +451,8 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
 
   // ----------------------------------------------------------------- Empresa
   const lerEmpresa = async () => {
-    const { logo, ...e } = await db.get('SELECT * FROM empresa WHERE id = 1');
-    return { ...e, tem_logo: Boolean(logo) };
+    const { logo, ambientes_sugeridos, ...e } = await db.get('SELECT * FROM empresa WHERE id = 1');
+    return { ...e, tem_logo: Boolean(logo), ambientes_sugeridos: lerSugestoesAmbiente(ambientes_sugeridos) };
   };
 
   api.get('/empresa', async (_req, res) => res.json(await lerEmpresa()));
@@ -465,6 +478,23 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     };
     const campos = Object.keys(e);
     await db.run(`UPDATE empresa SET ${campos.map((k) => `${k} = ?`).join(', ')} WHERE id = 1`, ...campos.map((k) => e[k]));
+    res.json(await lerEmpresa());
+  });
+
+  // Lista inteira de sugestões de ambiente (nomes repetidos são ignorados).
+  api.put('/empresa/ambientes-sugeridos', async (req, res) => {
+    const lista = req.body.ambientes;
+    if (!Array.isArray(lista)) throw invalido('Envie a lista de ambientes.');
+    if (lista.length > MAX_SUGESTOES_AMBIENTE) throw invalido(`Guarde no máximo ${MAX_SUGESTOES_AMBIENTE} sugestões de ambiente.`);
+    const vistos = new Set();
+    const nomes = [];
+    for (const valor of lista) {
+      const nome = texto(valor, { max: 100, campo: 'Nome do ambiente' });
+      if (!nome || vistos.has(semAcento(nome))) continue;
+      vistos.add(semAcento(nome));
+      nomes.push(nome);
+    }
+    await db.run('UPDATE empresa SET ambientes_sugeridos = ? WHERE id = 1', JSON.stringify(nomes));
     res.json(await lerEmpresa());
   });
 

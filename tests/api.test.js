@@ -276,6 +276,26 @@ test('logo da empresa entra no PDF', async () => {
   assert.equal(r.status, 200);
 });
 
+test('sugestões de ambiente começam com as padrão e ficam salvas', async () => {
+  let r = await chamar('GET', '/empresa');
+  assert.ok(r.dados.ambientes_sugeridos.includes('Quarto do casal'));
+
+  r = await chamar('PUT', '/empresa/ambientes-sugeridos', { ambientes: ['Cozinha', ' Home office ', 'home office', '', 'Adega'] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.dados.ambientes_sugeridos, ['Cozinha', 'Home office', 'Adega']);
+
+  // Salvar os dados da empresa não apaga as sugestões.
+  const { tem_logo, ambientes_sugeridos, id: _id, ...dados } = r.dados;
+  await chamar('PUT', '/empresa', dados);
+  r = await chamar('GET', '/empresa');
+  assert.deepEqual(r.dados.ambientes_sugeridos, ['Cozinha', 'Home office', 'Adega']);
+
+  r = await chamar('PUT', '/empresa/ambientes-sugeridos', { ambientes: 'Cozinha' });
+  assert.equal(r.status, 400);
+  r = await chamar('PUT', '/empresa/ambientes-sugeridos', { ambientes: ['x'.repeat(101)] });
+  assert.equal(r.status, 400);
+});
+
 let duplicadoId;
 test('duplica o orçamento com novo número e mesmos preços', async () => {
   const r = await chamar('POST', `/orcamentos/${orcamentoId}/duplicar`);
