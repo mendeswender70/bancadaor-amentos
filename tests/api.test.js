@@ -16,10 +16,11 @@ let pastaTemp;
 let pgliteServidor;
 let socketServidor;
 
-async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false } = {}) {
+async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false, autorizacao } = {}) {
   const headers = {};
   if (!semCookie && cookie) headers.cookie = cookie;
   if (!semCabecalho) headers['X-Requested-With'] = 'fetch';
+  if (autorizacao) headers.authorization = `Bearer ${autorizacao}`;
   if (corpo !== undefined) headers['Content-Type'] = 'application/json';
   const r = await fetch(base + caminho, { method: metodo, headers, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
   const setCookie = r.headers.get('set-cookie');
@@ -93,6 +94,61 @@ test('login, logout e senha errada', async () => {
   assert.equal(r.status, 200);
   r = await chamar('GET', '/auth/estado');
   assert.equal(r.dados.usuario.nome, 'Admin');
+});
+
+test('detecta nova versão para a aba autenticada e mostra configuração do push', async () => {
+  const versao = await chamar('GET', '/versao');
+  assert.equal(versao.status, 200);
+  assert.equal(typeof versao.dados.versao, 'string');
+  const push = await chamar('GET', '/notificacoes/config');
+  assert.equal(push.status, 200);
+  assert.equal(typeof push.dados.configurada, 'boolean');
+});
+
+test('inscrição push fica vinculada ao usuário e pode ser removida', async () => {
+  const chaves = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'];
+  const anteriores = Object.fromEntries(chaves.map((chave) => [chave, process.env[chave]]));
+  process.env.VAPID_PUBLIC_KEY = 'chave-publica-de-teste';
+  process.env.VAPID_PRIVATE_KEY = 'chave-privada-de-teste';
+  const inscricao = {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-device-1',
+    keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) },
+  };
+  try {
+    let r = await chamar('POST', '/notificacoes/push', { inscricao: { ...inscricao, endpoint: 'https://example.test/ssrf' } });
+    assert.equal(r.status, 400, 'recusa endpoints fora dos serviços de push conhecidos');
+    r = await chamar('POST', '/notificacoes/push', { inscricao });
+    assert.equal(r.status, 200);
+    const db = await app.locals.obterDb();
+    assert.equal((await db.get('SELECT usuario_id FROM inscricoes_push WHERE endpoint = ?', inscricao.endpoint)).usuario_id, 1);
+    r = await chamar('DELETE', '/notificacoes/push', { endpoint: inscricao.endpoint });
+    assert.equal(r.status, 200);
+    assert.equal(await db.get('SELECT endpoint FROM inscricoes_push WHERE endpoint = ?', inscricao.endpoint), undefined);
+  } finally {
+    for (const chave of chaves) {
+      if (anteriores[chave] === undefined) delete process.env[chave];
+      else process.env[chave] = anteriores[chave];
+    }
+  }
+});
+
+test('endpoint de deploy exige segredo e ignora eventos repetidos', async () => {
+  const anterior = process.env.DEPLOY_NOTIFICATION_SECRET;
+  process.env.DEPLOY_NOTIFICATION_SECRET = 'segredo-de-deploy-de-teste';
+  const deploy = { deployment_id: 'deploy-teste-1', commit: 'abc123' };
+  try {
+    let r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: 'incorreto' });
+    assert.equal(r.status, 401);
+    r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.enviadas, 0);
+    r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.duplicado, true);
+  } finally {
+    if (anterior === undefined) delete process.env.DEPLOY_NOTIFICATION_SECRET;
+    else process.env.DEPLOY_NOTIFICATION_SECRET = anterior;
+  }
 });
 
 test('alterações exigem o cabeçalho anti-CSRF', async () => {

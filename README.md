@@ -62,6 +62,30 @@ título e lista curta do que mudou. O aviso aparece uma vez por navegador após 
 login; o botão **Novidades** permite consultar as entradas anteriores. O aviso
 é marcado como lido no armazenamento local do navegador.
 
+### Notificações no site e no PWA
+
+Uma aba aberta consulta a versão publicada a cada 45 segundos e mostra um botão
+para atualizar, sem recarregar uma tela de orçamento por conta própria. O PWA
+recebe notificações push após deploys de produção quando o usuário ativou os
+avisos em **Ajustes → Minha conta → Notificações de atualização**. No iPhone,
+é necessário instalar o site na Tela de Início e permitir notificações.
+
+Para habilitar o push, gere um par VAPID uma vez no computador:
+
+```bash
+node -e "import('web-push').then(({ default: w }) => console.log(JSON.stringify(w.generateVAPIDKeys(), null, 2)))"
+openssl rand -hex 32
+```
+
+Copie a chave pública e privada para as variáveis **Production** da Vercel como
+`VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY`. Configure também `VAPID_SUBJECT` com
+`https://esquadro.site` e `DEPLOY_NOTIFICATION_SECRET` com o valor gerado pelo
+`openssl`. Adicione o mesmo `DEPLOY_NOTIFICATION_SECRET` em **GitHub → Settings
+→ Secrets and variables → Actions → New repository secret**. O workflow
+`.github/workflows/notificar-deploy.yml` usa esse segredo para autorizar o envio
+após deploys de produção. Sem essas variáveis, o aviso dentro do site continua
+funcionando, mas o navegador não pode receber push.
+
 Referência: [connection pooling na Neon](https://neon.com/docs/connect/connection-pooling).
 
 ## Rodar no computador

@@ -13,6 +13,12 @@ const ABAS = [
 // Endereços antigos continuam funcionando.
 const APELIDOS = { tipos: 'moveis', precos: 'moveis' };
 
+function chavePushParaBytes(chave) {
+  const base64 = chave.replace(/-/g, '+').replace(/_/g, '/');
+  const dados = atob(base64);
+  return Uint8Array.from(dados, (caractere) => caractere.charCodeAt(0));
+}
+
 export async function paginaConfiguracoes(aba = 'empresa') {
   aba = APELIDOS[aba] || aba;
   if (!ABAS.some(([a]) => a === aba)) aba = 'empresa';
@@ -438,6 +444,83 @@ function formularioCondicao(c, fechar) {
 
 async function abaConta() {
   const { usuario } = await api.get('/auth/estado');
+  const pushInfo = await api.get('/notificacoes/config');
+  const suportaPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  let inscricaoPush = null;
+  let pushAtivo = false;
+  const statusPush = h('p', { class: 'suave pequeno' });
+  const botaoPush = h('button', { type: 'button', class: 'botao botao-secundario', onclick: alternarPush });
+  const desenharPush = () => {
+    if (!suportaPush) {
+      statusPush.textContent = 'Este navegador não aceita notificações push. Os avisos continuarão aparecendo dentro do site.';
+      botaoPush.disabled = true;
+      botaoPush.textContent = 'Push indisponível neste navegador';
+    } else if (!pushInfo.configurada) {
+      statusPush.textContent = 'As notificações push ainda aguardam configuração do sistema.';
+      botaoPush.disabled = true;
+      botaoPush.textContent = 'Notificações não configuradas';
+    } else if (Notification.permission === 'denied' && !pushAtivo) {
+      statusPush.textContent = 'A permissão está bloqueada no navegador. Altere a permissão do esquadro nas configurações do navegador.';
+      botaoPush.disabled = true;
+      botaoPush.textContent = 'Permissão bloqueada';
+    } else if (pushAtivo) {
+      statusPush.textContent = 'Este dispositivo receberá um aviso quando uma nova versão for publicada.';
+      botaoPush.disabled = false;
+      botaoPush.textContent = 'Desativar neste dispositivo';
+    } else {
+      statusPush.textContent = 'Receba avisos de novas versões mesmo quando o PWA estiver fechado.';
+      botaoPush.disabled = false;
+      botaoPush.textContent = 'Ativar neste dispositivo';
+    }
+  };
+  async function alternarPush() {
+    botaoPush.disabled = true;
+    try {
+      if (pushAtivo) {
+        await api('DELETE', '/notificacoes/push', { endpoint: inscricaoPush.endpoint });
+        await inscricaoPush.unsubscribe();
+        inscricaoPush = null;
+        pushAtivo = false;
+        aviso('Avisos push desativados neste dispositivo.');
+      } else {
+        let permissao = Notification.permission;
+        if (permissao === 'default') permissao = await Notification.requestPermission();
+        if (permissao !== 'granted') {
+          aviso('Permita as notificações no navegador para ativá-las.', 'erro');
+          return;
+        }
+        const registro = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        inscricaoPush = await registro.pushManager.getSubscription();
+        if (!inscricaoPush) {
+          inscricaoPush = await registro.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: chavePushParaBytes(pushInfo.chave_publica),
+          });
+        }
+        await api.post('/notificacoes/push', { inscricao: inscricaoPush.toJSON() });
+        pushAtivo = true;
+        aviso('Avisos push ativados neste dispositivo.');
+      }
+    } catch (erro) {
+      avisoErro(erro);
+    } finally {
+      desenharPush();
+    }
+  }
+  desenharPush();
+  if (suportaPush && pushInfo.configurada && Notification.permission === 'granted') {
+    try {
+      const registro = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      inscricaoPush = await registro.pushManager.getSubscription();
+      if (inscricaoPush) {
+        await api.post('/notificacoes/push', { inscricao: inscricaoPush.toJSON() });
+        pushAtivo = true;
+        desenharPush();
+      }
+    } catch {
+      // A tela de conta segue disponível se o navegador bloquear o service worker.
+    }
+  }
   const nome = h('input', { type: 'text', required: true, value: usuario.nome, autocomplete: 'name' });
   const email = h('input', { type: 'email', required: true, value: usuario.email, autocomplete: 'username' });
   const atual = h('input', { type: 'password', required: true, autocomplete: 'current-password' });
@@ -447,6 +530,13 @@ async function abaConta() {
   return h(
     'div',
     { class: 'colunas' },
+    h(
+      'section',
+      { class: 'cartao notificacoes-conta' },
+      h('h2', {}, 'Notificações de atualização'),
+      statusPush,
+      botaoPush,
+    ),
     h(
       'form',
       {
