@@ -27,6 +27,7 @@ import {
   expirarVencidos,
   garantirToken,
   idPorToken,
+  listarLembretesAutomaticos,
   listarHistorico,
   listarOrcamentos,
   podeAprovar,
@@ -327,6 +328,78 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       await db.run("UPDATE notificacoes_deploy SET estado = 'erro' WHERE deployment_id = ?", deploymentId).catch(() => {});
       throw erro;
     }
+  });
+
+  // O GitHub Actions chama esta rota diariamente para lembrar propostas pendentes.
+  api.post('/lembretes/notificar', async (req, res) => {
+    const segredo = process.env.DEPLOY_NOTIFICATION_SECRET;
+    if (!segredo) throw new ErroHttp(503, 'Os lembretes automáticos ainda não foram configurados.');
+    const autorizacao = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    if (!segredoCorreto(autorizacao, segredo)) throw new ErroHttp(401, 'Não autorizado.');
+
+    const dataAtual = dataHoje();
+    await expirarVencidos(db, dataAtual);
+    const lembretes = await listarLembretesAutomaticos(db, dataAtual);
+    const resumo = { encontrados: lembretes.length, processados: 0, duplicados: 0, falhas: 0, falhas_push: 0 };
+    for (const lembrete of lembretes) {
+      const registro = await db.run(
+        `INSERT INTO notificacoes_lembrete (orcamento_id, tipo, referencia)
+         VALUES (?, ?, ?)
+         ON CONFLICT (orcamento_id, tipo, referencia) DO UPDATE
+         SET estado = 'enviando', iniciado_em = now(), enviado_em = NULL
+         WHERE notificacoes_lembrete.estado = 'erro'
+            OR notificacoes_lembrete.iniciado_em < now() - interval '5 minutes'`,
+        lembrete.id,
+        lembrete.tipo,
+        lembrete.referencia,
+      );
+      if (!registro.changes) {
+        resumo.duplicados++;
+        continue;
+      }
+
+      try {
+        const vencimento = lembrete.dias_para_vencer === 0
+          ? 'vence hoje'
+          : lembrete.dias_para_vencer === 1
+            ? 'vence amanhã'
+            : `vence em ${lembrete.dias_para_vencer} dias`;
+        const notificacao = lembrete.tipo === 'sem_resposta'
+          ? {
+              titulo: 'Proposta aguardando resposta',
+              texto: `O orçamento nº ${lembrete.numero} foi enviado há pelo menos 5 dias e ainda aguarda retorno.`,
+            }
+          : {
+              titulo: 'Proposta perto do vencimento',
+              texto: `O orçamento nº ${lembrete.numero} ${vencimento}.`,
+            };
+        const resultado = await enviarPushInscritos(db, {
+          ...notificacao,
+          caminho: `/#/orcamentos/${lembrete.id}`,
+          tag: `esquadro-lembrete-${lembrete.tipo}-${lembrete.id}`,
+        });
+        resumo.processados++;
+        resumo.falhas_push += resultado.falhas;
+        await db.run(
+          `UPDATE notificacoes_lembrete SET estado = 'enviado', enviado_em = now()
+           WHERE orcamento_id = ? AND tipo = ? AND referencia = ?`,
+          lembrete.id,
+          lembrete.tipo,
+          lembrete.referencia,
+        );
+      } catch {
+        resumo.falhas++;
+        await db.run(
+          `UPDATE notificacoes_lembrete SET estado = 'erro'
+           WHERE orcamento_id = ? AND tipo = ? AND referencia = ?`,
+          lembrete.id,
+          lembrete.tipo,
+          lembrete.referencia,
+        ).catch(() => {});
+        console.error('Falha ao enviar lembrete de proposta.');
+      }
+    }
+    res.json({ ok: true, ...resumo });
   });
 
   // Daqui para baixo, somente usuários autenticados.

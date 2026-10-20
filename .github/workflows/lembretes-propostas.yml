@@ -1,0 +1,29 @@
+name: Lembretes de propostas
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lembrar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar lembretes de propostas
+        env:
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_NOTIFICATION_SECRET }}
+        run: |
+          if [ -z "$DEPLOY_SECRET" ]; then
+            echo "::error title=Segredo ausente::Configure DEPLOY_NOTIFICATION_SECRET nos secrets do GitHub."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 2 \
+            -X POST "https://esquadro.site/api/lembretes/notificar" \
+            -H "Authorization: Bearer $DEPLOY_SECRET" \
+            -H 'X-Requested-With: fetch' \
+            -H 'Content-Type: application/json' \
+            --data '{}'

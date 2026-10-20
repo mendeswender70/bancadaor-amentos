@@ -626,6 +626,48 @@ async function precisaAtencao(db, dataHoje) {
   return lista.slice(0, 6);
 }
 
+/** Lembretes push diários para propostas sem resposta e perto de vencer. */
+export async function listarLembretesAutomaticos(db, dataHoje) {
+  const colunas = `o.id, o.numero, o.data_validade`;
+  const semResposta = await db.all(
+    `SELECT ${colunas}, 'sem_resposta' AS tipo,
+            COALESCE(o.enviado_em::text, o.atualizado_em::text) AS referencia
+     FROM orcamentos o
+     WHERE o.status = 'enviado'
+       AND o.data_validade > ?
+       AND COALESCE(o.enviado_em, o.atualizado_em) <= now() - interval '5 days'
+       AND NOT EXISTS (
+         SELECT 1 FROM notificacoes_lembrete l
+         WHERE l.orcamento_id = o.id AND l.tipo = 'sem_resposta'
+           AND l.referencia = COALESCE(o.enviado_em::text, o.atualizado_em::text)
+           AND l.estado = 'enviado'
+       )
+     ORDER BY COALESCE(o.enviado_em, o.atualizado_em), o.id
+     LIMIT 10`,
+    somarDias(dataHoje, 2),
+  );
+  const pertoVencimento = await db.all(
+    `SELECT ${colunas}, 'perto_vencimento' AS tipo, o.data_validade AS referencia
+     FROM orcamentos o
+     WHERE o.status IN ('enviado', 'negociacao') AND o.data_validade >= ? AND o.data_validade <= ?
+       AND NOT EXISTS (
+         SELECT 1 FROM notificacoes_lembrete l
+         WHERE l.orcamento_id = o.id AND l.tipo = 'perto_vencimento'
+           AND l.referencia = o.data_validade AND l.estado = 'enviado'
+       )
+     ORDER BY o.data_validade, o.id
+     LIMIT 10`,
+    dataHoje,
+    somarDias(dataHoje, 2),
+  );
+  return [...semResposta, ...pertoVencimento].map((lembrete) => ({
+    ...lembrete,
+    dias_para_vencer: Math.round(
+      (Date.parse(`${lembrete.data_validade}T00:00:00Z`) - Date.parse(`${dataHoje}T00:00:00Z`)) / 86_400_000,
+    ),
+  }));
+}
+
 export async function resumoDashboard(db, dataHoje) {
   const inicioMes = inicioDoMes(dataHoje);
   const mes = await numerosDoPeriodo(db, inicioMes, somarMeses(inicioMes, 1));

@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-lembretes-propostas',
+    data: '20 de outubro de 2026',
+    titulo: 'Lembretes de acompanhamento',
+    itens: [
+      'Receba um aviso se uma proposta enviada ficar 5 dias sem resposta.',
+      'Receba outro aviso quando uma proposta estiver a até 2 dias do vencimento.',
+      'Toque no aviso para abrir o orçamento correspondente.',
+    ],
+  },
+  {
     id: '2026-10-notificacoes-propostas',
     data: '20 de outubro de 2026',
     titulo: 'Avisos sobre propostas',
