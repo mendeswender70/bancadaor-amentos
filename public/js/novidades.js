@@ -2,6 +2,12 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-senha-visivel',
+    data: '20 de outubro de 2026',
+    titulo: 'Mais clareza ao entrar',
+    itens: ['Agora você pode mostrar ou ocultar a senha enquanto digita.'],
+  },
+  {
     id: '2026-10-validade-orcamento',
     data: '20 de outubro de 2026',
     titulo: 'Validade renovada nos orçamentos',

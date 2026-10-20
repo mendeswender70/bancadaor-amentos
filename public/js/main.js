@@ -371,7 +371,31 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
 
 function telaEntrar() {
   const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
-  const senha = h('input', { type: 'password', autocomplete: 'current-password', required: true });
+  const senha = h('input', { id: 'login-senha', type: 'password', autocomplete: 'current-password', required: true });
+  const alternarSenha = h(
+    'button',
+    {
+      type: 'button',
+      class: 'acesso-senha-alternar',
+      'aria-controls': 'login-senha',
+      'aria-label': 'Mostrar senha',
+      'aria-pressed': 'false',
+      onclick: () => {
+        const mostrar = senha.type === 'password';
+        senha.type = mostrar ? 'text' : 'password';
+        alternarSenha.textContent = mostrar ? 'Ocultar' : 'Mostrar';
+        alternarSenha.setAttribute('aria-label', mostrar ? 'Ocultar senha' : 'Mostrar senha');
+        alternarSenha.setAttribute('aria-pressed', String(mostrar));
+      },
+    },
+    'Mostrar',
+  );
+  const campoSenha = h(
+    'div',
+    { class: 'campo' },
+    h('label', { for: 'login-senha' }, 'Senha'),
+    h('div', { class: 'acesso-senha-controle' }, senha, alternarSenha),
+  );
   const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Entrar');
   const form = h(
     'form',
@@ -392,7 +416,7 @@ function telaEntrar() {
       },
     },
     campo('E-mail', email),
-    campo('Senha', senha),
+    campoSenha,
     botao,
   );
   return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form);
