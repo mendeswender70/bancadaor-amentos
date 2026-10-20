@@ -323,31 +323,9 @@ function iniciarMonitorVersao() {
 
 // ------------------------------------------------------ Login / primeiro acesso
 
-// Cena 3D da tela de entrada (carregada só aqui, em arquivo separado).
-let cenaAtual = null;
-function pararCena() {
-  cenaAtual?.parar();
-  cenaAtual = null;
-}
-async function iniciarCena() {
-  const palco = raiz.querySelector('.acesso-cena');
-  if (!palco) return;
-  try {
-    const { montarCena } = await import('./cena-login.js');
-    if (!palco.isConnected) return;
-    pararCena();
-    cenaAtual = montarCena(palco, { aoMontar: () => palco.classList.add('montado') });
-    palco.classList.add('com-3d');
-  } catch (erro) {
-    // Sem WebGL (ou falha ao carregar): fica o fundo em degradê.
-    console.warn('Cena 3D indisponível:', erro?.message || erro);
-  }
-}
-
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
   if (estado.usuario) {
-    pararCena();
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
@@ -356,35 +334,24 @@ async function mostrarAcesso() {
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
-  pararCena();
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
-  iniciarCena();
 }
 
-function cartaoAcesso(titulo, subtitulo, formulario) {
-  const vantagem = (texto) => h('li', {}, icone('check'), texto);
+function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO' } = {}) {
   return h(
     'div',
     { class: 'acesso' },
     h(
       'section',
       { class: 'acesso-marca' },
-      h('div', { class: 'acesso-cena' }),
-      marcaEsquadro('marca-clara'),
+      h('header', { class: 'acesso-topo' }, marcaEsquadro('marca-clara'), h('span', {}, 'ORÇAMENTOS DE MARCENARIA')),
       h(
         'div',
         { class: 'acesso-chamada' },
-        h('h2', {}, 'Orçamentos de móveis planejados em poucos minutos.'),
-        h(
-          'ul',
-          {},
-          vantagem('Cálculo automático por metro linear, m² ou unidade'),
-          vantagem('Móveis organizados por ambiente'),
-          vantagem('PDF profissional sem mostrar seu preço por metro'),
-          vantagem('Envio direto pelo WhatsApp'),
-        ),
+        h('span', { class: 'acesso-chamada-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
+        h('h2', {}, 'Seus projetos. Seus números. No esquadro.'),
+        h('p', {}, 'Sua marcenaria organizada, do primeiro cálculo ao orçamento aprovado.'),
       ),
-      h('small', {}, 'esquadro · orçamentos de marcenaria no esquadro'),
     ),
     h(
       'div',
@@ -392,17 +359,18 @@ function cartaoAcesso(titulo, subtitulo, formulario) {
       h(
         'div',
         { class: 'acesso-cartao' },
-        marcaEsquadro('marca-acesso'),
+        h('span', { class: 'acesso-etiqueta' }, etiqueta),
         h('h1', {}, titulo),
-        subtitulo ? h('p', { class: 'suave' }, subtitulo) : null,
+        subtitulo ? h('p', { class: 'acesso-subtitulo' }, subtitulo) : null,
         formulario,
+        h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados e orçamentos ficam protegidos.')),
       ),
     ),
   );
 }
 
 function telaEntrar() {
-  const email = h('input', { type: 'email', autocomplete: 'username', required: true, autofocus: true });
+  const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
   const senha = h('input', { type: 'password', autocomplete: 'current-password', required: true });
   const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Entrar');
   const form = h(
@@ -412,12 +380,14 @@ function telaEntrar() {
       onsubmit: async (e) => {
         e.preventDefault();
         botao.disabled = true;
+        botao.textContent = 'Entrando…';
         try {
           await api.post('/auth/entrar', { email: email.value, senha: senha.value });
           await mostrarAcesso();
         } catch (erro) {
           avisoErro(erro);
           botao.disabled = false;
+          botao.textContent = 'Entrar';
         }
       },
     },
@@ -425,8 +395,7 @@ function telaEntrar() {
     campo('Senha', senha),
     botao,
   );
-  setTimeout(() => email.focus());
-  return cartaoAcesso('Entrar', 'Que bom ter você de volta. Entre para ver seus orçamentos.', form);
+  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form);
 }
 
 function telaConfigurar() {
@@ -444,6 +413,7 @@ function telaConfigurar() {
         e.preventDefault();
         if (senha.value !== confirmar.value) return aviso('As senhas não conferem.', 'erro');
         botao.disabled = true;
+        botao.textContent = 'Preparando…';
         try {
           await api.post('/auth/configurar', {
             empresa: empresa.value,
@@ -457,6 +427,7 @@ function telaConfigurar() {
         } catch (erro) {
           avisoErro(erro);
           botao.disabled = false;
+          botao.textContent = 'Começar';
         }
       },
     },
@@ -467,8 +438,7 @@ function telaConfigurar() {
     campo('Confirme a senha', confirmar),
     botao,
   );
-  setTimeout(() => empresa.focus());
-  return cartaoAcesso('Bem-vindo ao esquadro!', 'Crie o acesso do administrador para começar a fazer seus orçamentos.', form);
+  return cartaoAcesso('Vamos começar', 'Crie o acesso da sua empresa e prepare seu primeiro orçamento.', form, { etiqueta: 'PRIMEIRO ACESSO' });
 }
 
 quandoPerderSessao(() => {
