@@ -7,6 +7,7 @@ export const novidades = [
     titulo: 'Novo visual para entrar no esquadro',
     itens: [
       'A tela de acesso ganhou fundo de madeira escura com detalhes em bronze e cartão de vidro fumê.',
+      'O visual se adapta ao tema claro ou escuro do dispositivo.',
       'A marca e os campos do login mantêm a leitura clara no celular e no computador.',
     ],
   },
