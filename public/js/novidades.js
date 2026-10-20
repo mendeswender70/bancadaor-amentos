@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-login-premium-madeira',
+    data: '20 de outubro de 2026',
+    titulo: 'Novo visual para entrar no esquadro',
+    itens: [
+      'A tela de acesso ganhou fundo de madeira escura com detalhes em bronze e cartão de vidro fumê.',
+      'A marca e os campos do login mantêm a leitura clara no celular e no computador.',
+    ],
+  },
+  {
     id: '2026-10-login-capslock-serra',
     data: '20 de outubro de 2026',
     titulo: 'Login com retorno mais claro',

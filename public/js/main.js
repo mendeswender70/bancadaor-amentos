@@ -323,9 +323,25 @@ function iniciarMonitorVersao() {
 
 // ------------------------------------------------------ Login / primeiro acesso
 
+function atualizarAparenciaAcesso(ativo) {
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    if (meta.dataset.corOriginal === undefined) meta.dataset.corOriginal = meta.content;
+    meta.content = ativo ? 'transparent' : meta.dataset.corOriginal;
+  }
+
+  const barraIos = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (barraIos) {
+    if (barraIos.dataset.valorOriginal === undefined) barraIos.dataset.valorOriginal = barraIos.content;
+    barraIos.content = ativo ? 'black-translucent' : barraIos.dataset.valorOriginal;
+  }
+
+  document.documentElement.classList.toggle('tela-acesso', ativo);
+}
+
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
   if (estado.usuario) {
+    atualizarAparenciaAcesso(false);
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
@@ -334,6 +350,7 @@ async function mostrarAcesso() {
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
+  atualizarAparenciaAcesso(true);
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
 }
 
@@ -341,20 +358,9 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
   return h(
     'div',
     { class: 'acesso' },
+    h('header', { class: 'acesso-topo' }, marcaEsquadro('marca-clara'), h('span', {}, 'ORÇAMENTOS DE MARCENARIA')),
     h(
-      'section',
-      { class: 'acesso-marca' },
-      h('header', { class: 'acesso-topo' }, marcaEsquadro('marca-clara'), h('span', {}, 'ORÇAMENTOS DE MARCENARIA')),
-      h(
-        'div',
-        { class: 'acesso-chamada' },
-        h('span', { class: 'acesso-chamada-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
-        h('h2', {}, 'Seus projetos. Seus números. No esquadro.'),
-        h('p', {}, 'Sua marcenaria organizada, do primeiro cálculo ao orçamento aprovado.'),
-      ),
-    ),
-    h(
-      'div',
+      'main',
       { class: 'acesso-lado' },
       h(
         'div',
@@ -363,7 +369,7 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
         h('h1', {}, titulo),
         subtitulo ? h('p', { class: 'acesso-subtitulo' }, subtitulo) : null,
         formulario,
-        h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados e orçamentos ficam protegidos.')),
+        h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados ficam protegidos.')),
       ),
     ),
   );
@@ -432,7 +438,7 @@ function telaEntrar() {
     campoSenha,
     botao,
   );
-  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form);
+  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos.', form);
 }
 
 function telaConfigurar() {
