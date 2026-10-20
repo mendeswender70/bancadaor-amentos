@@ -323,9 +323,25 @@ function iniciarMonitorVersao() {
 
 // ------------------------------------------------------ Login / primeiro acesso
 
+function atualizarAparenciaAcesso(ativo) {
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    if (meta.dataset.corOriginal === undefined) meta.dataset.corOriginal = meta.content;
+    meta.content = ativo ? '#30251c' : meta.dataset.corOriginal;
+  }
+
+  const barraIos = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (barraIos) {
+    if (barraIos.dataset.valorOriginal === undefined) barraIos.dataset.valorOriginal = barraIos.content;
+    barraIos.content = ativo ? 'black-translucent' : barraIos.dataset.valorOriginal;
+  }
+
+  document.documentElement.classList.toggle('tela-acesso', ativo);
+}
+
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
   if (estado.usuario) {
+    atualizarAparenciaAcesso(false);
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
@@ -334,6 +350,7 @@ async function mostrarAcesso() {
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
+  atualizarAparenciaAcesso(true);
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
 }
 
