@@ -5,7 +5,7 @@ export const novidades = [
     id: '2026-10-login-barra-superior',
     data: '20 de outubro de 2026',
     titulo: 'Login integrado à barra superior',
-    itens: ['A área da barra de status acompanha o fundo escuro do acesso, sem a faixa clara no topo.'],
+    itens: ['A arte escura do acesso continua atrás da barra de status, sem uma faixa de cor sólida.'],
   },
   {
     id: '2026-10-login-capslock-serra',
