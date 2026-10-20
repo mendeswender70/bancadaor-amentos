@@ -6,7 +6,7 @@ export const novidades = [
     data: '20 de outubro de 2026',
     titulo: 'Entrada do login mais suave',
     itens: [
-      'A marca aparece primeiro, seguida pelo cartão do login com um movimento leve.',
+      'O cartão do login aparece com um movimento leve para cima.',
       'A animação respeita a configuração de redução de movimento do aparelho.',
     ],
   },
