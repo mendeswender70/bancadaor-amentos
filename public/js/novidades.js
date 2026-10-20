@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-visual-premium',
+    data: '20 de outubro de 2026',
+    titulo: 'Visual mais acolhedor no esquadro',
+    itens: [
+      'Painel, orçamentos, clientes, editor e ajustes ganharam uma hierarquia visual mais clara.',
+      'Títulos, cartões e filtros agora seguem melhor a identidade premium da marcenaria.',
+    ],
+  },
+  {
     id: '2026-10-proposta-mobile',
     data: '20 de outubro de 2026',
     titulo: 'Propostas mais claras no celular',

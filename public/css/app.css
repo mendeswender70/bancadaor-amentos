@@ -32,10 +32,10 @@
 
   --fundo: #f6f4f1;
   --superficie: #ffffff;
-  --superficie-2: #faf8f6;
-  --superficie-3: #f2eee9;
-  --borda: #e9e3dc;
-  --borda-forte: #d7cfc5;
+  --superficie-2: #fbf9f6;
+  --superficie-3: #f1ede8;
+  --borda: #e8e1d8;
+  --borda-forte: #d6cabe;
   --texto: #1d1a17;
   --texto-2: #4b4540;
   --suave: #6b635b;
@@ -56,10 +56,10 @@
   --whatsapp: #128c4a;
   --foco: #2f6fdf;
 
-  --raio: 14px;
+  --raio: 16px;
   --raio-p: 10px;
-  --sombra-1: 0 1px 2px rgb(29 26 23 / 5%);
-  --sombra-2: 0 1px 2px rgb(29 26 23 / 4%), 0 4px 14px rgb(29 26 23 / 6%);
+  --sombra-1: 0 1px 2px rgb(29 26 23 / 4%);
+  --sombra-2: 0 1px 2px rgb(29 26 23 / 3%), 0 8px 24px rgb(59 42 25 / 4%);
   --sombra-3: 0 10px 40px rgb(29 26 23 / 18%);
   --altura-menu: 68px;
   --largura-lateral: 256px;
@@ -682,12 +682,12 @@ a {
   border: 1px solid var(--borda);
   border-radius: var(--raio);
   box-shadow: var(--sombra-2);
-  padding: 18px;
+  padding: 20px;
 }
 
 @media (min-width: 700px) {
   .cartao {
-    padding: 22px 24px;
+    padding: 24px 26px;
   }
 }
 
@@ -763,7 +763,7 @@ a {
   background: var(--primaria);
   border-color: var(--primaria);
   color: var(--primaria-texto);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 10%), 0 4px 12px color-mix(in srgb, var(--primaria) 22%, transparent);
+  box-shadow: 0 2px 5px rgb(39 25 13 / 12%), 0 8px 18px color-mix(in srgb, var(--primaria) 16%, transparent);
 }
 
 .botao-primario:hover {
@@ -1138,9 +1138,9 @@ input.invalido {
 }
 
 .chip.ativo {
-  background: var(--texto);
-  border-color: var(--texto);
-  color: var(--superficie);
+  background: var(--primaria-100);
+  border-color: var(--primaria-200);
+  color: var(--primaria);
 }
 
 .chips-rolagem {
@@ -4044,4 +4044,38 @@ input.invalido {
   border-radius: 12px;
   background: var(--superficie-2);
   border: 1px solid var(--borda);
+}
+
+
+/* Refinamento visual: direção premium acolhedora */
+.cabecalho-pagina .titulos h1,
+.saudacao h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.cabecalho-pagina .titulos h1 {
+  font-size: clamp(1.65rem, 2.8vw, 2.1rem);
+  line-height: 1.1;
+}
+
+.saudacao h1 {
+  font-size: clamp(1.85rem, 3.2vw, 2.2rem);
+  line-height: 1.08;
+}
+
+.cartao > h2,
+.cartao-titulo h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.18rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+@media (max-width: 480px) {
+  .cabecalho-pagina .titulos h1 {
+    font-size: 1.5rem;
+  }
 }
