@@ -4534,3 +4534,45 @@ html.tela-acesso body {
     animation: none;
   }
 }
+
+/* Entrada breve do login: marca primeiro, cartão em seguida */
+.acesso-topo {
+  animation: acesso-marca-entrar 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.acesso-cartao {
+  animation: acesso-cartao-entrar 440ms cubic-bezier(0.2, 0.8, 0.2, 1) 90ms both;
+}
+
+@keyframes acesso-marca-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes acesso-cartao-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acesso-topo,
+  .acesso-cartao {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
