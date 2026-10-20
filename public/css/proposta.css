@@ -572,16 +572,23 @@ p {
 }
 
 @media (max-width: 480px) {
-  .p-barra-botoes .p-texto-botao {
+  .p-barra-total strong {
+    font-size: 1rem;
+  }
+
+  .p-barra-botoes .p-texto-botao,
+  .p-barra-botoes .p-texto-aprovar-completo {
     display: none;
   }
 
   .p-barra-botoes .p-botao-principal {
-    padding: 0 16px;
+    gap: 6px;
+    padding: 0 12px;
   }
 
   .p-barra-botoes .p-botao-sec {
-    padding: 0 14px;
+    width: 48px;
+    padding: 0;
   }
 
   .p-itens li {
@@ -590,6 +597,29 @@ p {
 
   .p-ambiente > footer {
     padding-left: 20px;
+  }
+}
+
+@media (max-width: 360px) {
+  .p-barra {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .p-barra-total {
+    flex: 1 0 100%;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .p-barra-botoes {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .p-pagina {
+    padding-bottom: calc(158px + env(safe-area-inset-bottom));
   }
 }
 
