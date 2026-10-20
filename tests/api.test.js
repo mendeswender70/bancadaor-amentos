@@ -880,3 +880,34 @@ test('edição e aprovação simultâneas nunca aprovam conteúdo diferente do l
   if (atual.status === 'aprovado') assert.equal(atual.prazo_entrega, orc.prazo_entrega);
   else assert.equal(atual.prazo_entrega, 'Prazo novo');
 });
+
+test('exclui orçamento e os dados relacionados somente com sessão autenticada', async () => {
+  const { orc, token } = await novaProposta({ abrir: false });
+  const db = await app.locals.obterDb();
+  const atualizado = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, observacoes_internas: 'Pronto para exclusão' });
+  assert.equal(atualizado.status, 200);
+  const filha = await chamar('POST', `/orcamentos/${orc.id}/duplicar`);
+  assert.equal(filha.status, 201);
+  assert.equal(filha.dados.duplicado_de_id, orc.id);
+  await db.run(
+    "INSERT INTO notificacoes_lembrete (orcamento_id, tipo, referencia) VALUES (?, 'sem_resposta', 'teste-exclusao')",
+    orc.id,
+  );
+
+  assert.equal((await semLogin('DELETE', `/orcamentos/${orc.id}`)).status, 401);
+  assert.ok(await db.get('SELECT id FROM orcamentos WHERE id = ?', orc.id), 'a tentativa sem sessão não remove o orçamento');
+
+  const removido = await chamar('DELETE', `/orcamentos/${orc.id}`);
+  assert.equal(removido.status, 200);
+  assert.deepEqual(removido.dados, { ok: true });
+  assert.equal(await db.get('SELECT id FROM orcamentos WHERE id = ?', orc.id), undefined);
+  assert.ok(await db.get('SELECT id FROM orcamentos WHERE id = ?', orcamentoId), 'o orçamento original permanece');
+  for (const tabela of ['orcamento_ambientes', 'orcamento_itens', 'orcamento_servicos', 'orcamento_historico', 'notificacoes_lembrete']) {
+    assert.equal(await db.get(`SELECT 1 AS existe FROM ${tabela} WHERE orcamento_id = ? LIMIT 1`, orc.id), undefined, `${tabela} foi removida em cascata`);
+  }
+  const filhaPreservada = await db.get('SELECT id, duplicado_de_id FROM orcamentos WHERE id = ?', filha.dados.id);
+  assert.ok(filhaPreservada, 'a cópia feita a partir do orçamento removido permanece');
+  assert.equal(filhaPreservada.duplicado_de_id, null);
+  assert.equal((await semLogin('GET', `/publico/propostas/${token}`)).status, 404);
+  assert.equal((await chamar('DELETE', `/orcamentos/${orc.id}`)).status, 404);
+});
