@@ -73,6 +73,7 @@ const ICONES = {
   externo: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
   calculo: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h8"/>',
   usuario: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.2-6 8-6s7 2 8 6"/>',
+  serra: '<path d="M10.7 2.5h2.6l.6 2.3 1.7.5 1.7-1.7 2 2-.9 2.2.9 1.5 2.2.8v2.8l-2.2.8-.9 1.5.9 2.2-2 2-1.7-1.7-1.7.5-.6 2.3h-2.6l-.6-2.3-1.7-.5-1.7 1.7-2-2 .9-2.2-.9-1.5-2.2-.8v-2.8l2.2-.8.9-1.5-.9-2.2 2-2 1.7 1.7 1.7-.5z"/><circle cx="12" cy="12" r="3.1"/>',
 };
 
 export function icone(nome, classe = 'icone') {
