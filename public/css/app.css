@@ -4235,7 +4235,7 @@ html.tela-acesso {
     --login-vinheta: radial-gradient(ellipse at 50% 48%, transparent 18%, rgb(6 5 4 / 28%) 100%);
     --login-texto: #f6f1ea;
     --login-texto-suave: rgb(245 238 229 / 72%);
-    --login-cartao: rgb(17 15 13 / 78%);
+    --login-cartao: rgb(17 15 13 / 92%);
     --login-cartao-borda: rgb(225 183 139 / 36%);
     --login-cartao-sombra: 0 28px 90px rgb(0 0 0 / 46%), inset 0 1px 0 rgb(255 255 255 / 8%);
     --login-topo: #fffaf4;
@@ -4669,7 +4669,7 @@ html.tela-acesso[data-theme='light'] {
 .acesso-planta {
   z-index: 0;
   object-fit: cover;
-  opacity: 0.34;
+  opacity: 0.18;
 }
 
 .acesso-serragem {
@@ -4805,7 +4805,7 @@ html.tela-acesso[data-theme='light'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .acesso-planta { opacity: 0.34; }
+  .acesso-planta { opacity: 0.18; }
   .acesso-serragem { display: none; }
   .acesso-serragem > span,
   .acesso-simbolo-desenho path {
@@ -4815,4 +4815,18 @@ html.tela-acesso[data-theme='light'] {
   .acesso-cartao::before,
   .acesso-medida { transition: none; }
   .acesso-serra { animation: none; }
+}
+
+
+/* Contraste do título e rolagem sem a barra lateral sobre o visual */
+.acesso-cartao h2 {
+  color: var(--login-texto);
+}
+
+.acesso {
+  scrollbar-width: none;
+}
+
+.acesso::-webkit-scrollbar {
+  display: none;
 }
