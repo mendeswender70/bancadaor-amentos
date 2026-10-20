@@ -464,11 +464,11 @@ async function abaConta() {
       botaoPush.disabled = true;
       botaoPush.textContent = 'Permissão bloqueada';
     } else if (pushAtivo) {
-      statusPush.textContent = 'Este dispositivo receberá um aviso quando uma nova versão for publicada.';
+      statusPush.textContent = 'Este dispositivo receberá avisos de atualização e atividades importantes dos clientes.';
       botaoPush.disabled = false;
       botaoPush.textContent = 'Desativar neste dispositivo';
     } else {
-      statusPush.textContent = 'Receba avisos de novas versões mesmo quando o PWA estiver fechado.';
+      statusPush.textContent = 'Receba avisos sobre propostas e atualizações mesmo com o PWA fechado.';
       botaoPush.disabled = false;
       botaoPush.textContent = 'Ativar neste dispositivo';
     }
@@ -533,7 +533,7 @@ async function abaConta() {
     h(
       'section',
       { class: 'cartao notificacoes-conta' },
-      h('h2', {}, 'Notificações de atualização'),
+      h('h2', {}, 'Avisos no PWA'),
       statusPush,
       botaoPush,
     ),

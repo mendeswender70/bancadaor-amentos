@@ -58,6 +58,48 @@ function configurarVapid() {
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://esquadro.site', publica, privada);
 }
 
+async function enviarPushInscritos(db, { titulo, texto, caminho = '/', tag = 'esquadro-atualizacao' }) {
+  const inscricoes = await db.all('SELECT endpoint, chave_p256dh, chave_auth FROM inscricoes_push');
+  if (!inscricoes.length) return { inscricoes: 0, enviadas: 0, expiradas: 0, falhas: 0 };
+
+  configurarVapid();
+  const payload = JSON.stringify({ titulo, texto, caminho, tag });
+  const resultados = await Promise.allSettled(
+    inscricoes.map(async (inscricao) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: inscricao.endpoint, keys: { p256dh: inscricao.chave_p256dh, auth: inscricao.chave_auth } },
+          payload,
+          { TTL: 60 * 60 * 24 },
+        );
+        return 'enviada';
+      } catch (erro) {
+        if ([404, 410].includes(erro.statusCode)) {
+          await db.run('DELETE FROM inscricoes_push WHERE endpoint = ?', inscricao.endpoint);
+          return 'expirada';
+        }
+        throw erro;
+      }
+    }),
+  );
+  const resumo = { inscricoes: inscricoes.length, enviadas: 0, expiradas: 0, falhas: 0 };
+  for (const resultado of resultados) {
+    if (resultado.status === 'rejected') resumo.falhas++;
+    else if (resultado.value === 'enviada') resumo.enviadas++;
+    else if (resultado.value === 'expirada') resumo.expiradas++;
+  }
+  return resumo;
+}
+
+async function tentarNotificar(db, notificacao) {
+  try {
+    await enviarPushInscritos(db, notificacao);
+  } catch (erro) {
+    // A proposta do cliente não deve falhar só porque o serviço push está indisponível.
+    console.error('Não foi possível enviar a notificação push.', erro.statusCode || erro.code || 'erro desconhecido');
+  }
+}
+
 function endpointPushValido(url) {
   const host = url.hostname.toLowerCase();
   const servidorPush =
@@ -209,9 +251,18 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     const orcId = await idPorToken(db, req.params.token);
     await expirarVencidos(db, dataHoje());
     // A própria empresa conferindo o link não conta como visita do cliente.
-    if (!(await usuarioDaSessao(db, req))) await registrarVisualizacao(db, orcId);
+    const primeiraVisualizacao = !(await usuarioDaSessao(db, req)) && await registrarVisualizacao(db, orcId);
+    const proposta = await montarProposta(orcId);
+    if (primeiraVisualizacao) {
+      await tentarNotificar(db, {
+        titulo: 'Proposta visualizada',
+        texto: `O cliente abriu o orçamento nº ${proposta.publica.numero} pela primeira vez.`,
+        caminho: `/#/orcamentos/${orcId}`,
+        tag: `esquadro-proposta-${orcId}-visualizada`,
+      });
+    }
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-    res.json((await montarProposta(orcId)).publica);
+    res.json(proposta.publica);
   });
 
   api.get('/publico/propostas/:token/logo', async (req, res) => {
@@ -234,8 +285,17 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (nome.length < 3) throw invalido('Digite seu nome completo para aprovar.');
     if (req.body.aceite !== true) throw invalido('Confirme que leu e concorda com a proposta.');
     await expirarVencidos(db, dataHoje());
-    await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta);
-    res.json((await montarProposta(orcId)).publica);
+    const aprovadaAgora = await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta);
+    const proposta = await montarProposta(orcId);
+    if (aprovadaAgora) {
+      await tentarNotificar(db, {
+        titulo: 'Proposta aprovada',
+        texto: `O cliente aprovou o orçamento nº ${proposta.publica.numero}.`,
+        caminho: `/#/orcamentos/${orcId}`,
+        tag: `esquadro-proposta-${orcId}-aprovada`,
+      });
+    }
+    res.json(proposta.publica);
   });
 
   // O GitHub chama esta rota após um deploy de produção concluído.
@@ -257,42 +317,12 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (!registro.changes) return res.json({ ok: true, duplicado: true });
 
     try {
-      const inscricoes = await db.all('SELECT endpoint, chave_p256dh, chave_auth FROM inscricoes_push');
-      let enviadas = 0;
-      let expiradas = 0;
-      if (inscricoes.length) {
-        configurarVapid();
-        const payload = JSON.stringify({
-          titulo: 'Atualização no esquadro',
-          texto: 'Uma nova versão está disponível. Abra o app para ver as novidades.',
-          caminho: '/',
-        });
-        const resultados = await Promise.allSettled(
-          inscricoes.map(async (inscricao) => {
-            try {
-              await webpush.sendNotification(
-                { endpoint: inscricao.endpoint, keys: { p256dh: inscricao.chave_p256dh, auth: inscricao.chave_auth } },
-                payload,
-                { TTL: 60 * 60 * 24 },
-              );
-              return 'enviada';
-            } catch (erro) {
-              if ([404, 410].includes(erro.statusCode)) {
-                await db.run('DELETE FROM inscricoes_push WHERE endpoint = ?', inscricao.endpoint);
-                return 'expirada';
-              }
-              return 'falhou';
-            }
-          }),
-        );
-        for (const resultado of resultados) {
-          if (resultado.status !== 'fulfilled') continue;
-          if (resultado.value === 'enviada') enviadas++;
-          if (resultado.value === 'expirada') expiradas++;
-        }
-      }
+      const resultado = await enviarPushInscritos(db, {
+        titulo: 'Atualização no esquadro',
+        texto: 'Uma nova versão está disponível. Abra o app para ver as novidades.',
+      });
       await db.run("UPDATE notificacoes_deploy SET estado = 'enviado', enviado_em = now() WHERE deployment_id = ?", deploymentId);
-      res.json({ ok: true, inscricoes: inscricoes.length, enviadas, expiradas });
+      res.json({ ok: true, ...resultado });
     } catch (erro) {
       await db.run("UPDATE notificacoes_deploy SET estado = 'erro' WHERE deployment_id = ?", deploymentId).catch(() => {});
       throw erro;

@@ -14,7 +14,7 @@ self.addEventListener('push', (evento) => {
       body: dados.texto || 'Uma nova versão está disponível. Abra o app para ver as novidades.',
       icon: '/icons/icon-192.png',
       badge: '/icons/esquadro.svg',
-      tag: 'esquadro-atualizacao',
+      tag: dados.tag || 'esquadro-atualizacao',
       data: { caminho: dados.caminho || '/' },
     }),
   );

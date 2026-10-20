@@ -66,9 +66,11 @@ login; o botão **Novidades** permite consultar as entradas anteriores. O aviso
 
 Uma aba aberta consulta a versão publicada a cada 45 segundos e mostra um botão
 para atualizar, sem recarregar uma tela de orçamento por conta própria. O PWA
-recebe notificações push após deploys de produção quando o usuário ativou os
-avisos em **Ajustes → Minha conta → Notificações de atualização**. No iPhone,
-é necessário instalar o site na Tela de Início e permitir notificações.
+recebe notificações push após deploys de produção e quando um cliente abre uma
+proposta pela primeira vez ou a aprova. Os avisos vão para os dispositivos
+inscritos da conta, ativados em **Ajustes → Minha conta → Avisos no PWA**. No
+iPhone, é necessário instalar o site na Tela de Início e
+permitir notificações.
 
 Para habilitar o push, gere um par VAPID uma vez no computador:
 
