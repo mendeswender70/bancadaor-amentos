@@ -80,8 +80,7 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+:root {
     --primaria: #d8ad78;
     --primaria-hover: #e5bf91;
     --primaria-texto: #2a1b0f;
@@ -132,7 +131,6 @@
     --sombra-2: 0 2px 5px rgb(0 0 0 / 28%), 0 10px 28px rgb(0 0 0 / 22%);
     --sombra-3: 0 14px 40px rgb(0 0 0 / 52%);
     color-scheme: dark;
-  }
 }
 
 *,
@@ -2946,7 +2944,8 @@ input.invalido {
   color: #94724f;
 }
 
-.acesso-cartao h1 {
+.acesso-cartao h1,
+.acesso-cartao h2 {
   color: #211c16;
   font-family: 'Playfair Display', Georgia, serif;
   font-size: clamp(1.9rem, 7vw, 2.35rem);
@@ -4227,14 +4226,13 @@ html.tela-acesso {
   background-repeat: no-repeat;
 }
 
-@media (prefers-color-scheme: dark) {
-  html.tela-acesso:not([data-theme='light']) {
+html.tela-acesso {
     --login-fundo: #100f0d;
     --login-sobreposicao: linear-gradient(180deg, rgb(8 7 6 / 20%), rgb(8 7 6 / 35%));
     --login-vinheta: radial-gradient(ellipse at 50% 48%, transparent 18%, rgb(6 5 4 / 28%) 100%);
     --login-texto: #f6f1ea;
     --login-texto-suave: rgb(245 238 229 / 72%);
-    --login-cartao: rgb(17 15 13 / 78%);
+    --login-cartao: rgb(17 15 13 / 52%);
     --login-cartao-borda: rgb(225 183 139 / 36%);
     --login-cartao-sombra: 0 28px 90px rgb(0 0 0 / 46%), inset 0 1px 0 rgb(255 255 255 / 8%);
     --login-topo: #fffaf4;
@@ -4255,7 +4253,6 @@ html.tela-acesso {
     --login-icone: #c79a6c;
     --login-marca-borda: rgb(255 255 255 / 15%);
     --login-marca-sombra: 0 9px 28px rgb(0 0 0 / 36%);
-  }
 }
 
 html.tela-acesso body {
@@ -4289,10 +4286,8 @@ html.tela-acesso body {
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  html.tela-acesso:not([data-theme='light']) .acesso {
-    color-scheme: dark;
-  }
+html.tela-acesso .acesso {
+  color-scheme: dark;
 }
 
 .acesso::before {
@@ -4363,8 +4358,8 @@ html.tela-acesso body {
   border-radius: 28px;
   background: var(--login-cartao);
   box-shadow: var(--login-cartao-sombra);
-  -webkit-backdrop-filter: blur(20px) saturate(125%);
-  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  backdrop-filter: blur(28px) saturate(165%);
   color: var(--login-texto);
   animation: acesso-aparecer 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -4567,4 +4562,272 @@ html.tela-acesso body {
   min-height: 100svh;
   min-height: 100dvh;
   background-color: var(--fundo);
+}
+
+
+/* Apresentação breve antes do cartão de acesso */
+.acesso {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.acesso-lado {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  width: min(100%, 560px);
+}
+
+.acesso-apresentacao {
+  padding: 0 6px;
+}
+
+.acesso-apresentacao-etiqueta {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--login-etiqueta);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+}
+
+.acesso-apresentacao h1 {
+  max-width: 540px;
+  color: var(--login-texto);
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2rem, 7vw, 2.65rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.06;
+}
+
+.acesso-apresentacao p {
+  max-width: 470px;
+  margin-top: 10px;
+  color: var(--login-texto-suave);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 420px) {
+  .acesso-lado {
+    gap: 16px;
+  }
+
+  .acesso-apresentacao {
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+}
+
+@media (max-height: 700px) and (max-width: 700px) {
+  .acesso-lado {
+    margin: 12px auto 20px;
+  }
+}
+
+
+/* Detalhes de projeto e movimento discreto na tela de acesso */
+html.tela-acesso {
+  --login-detalhe: rgb(148 101 53 / 55%);
+  --login-particula: #b98a56;
+}
+
+html.tela-acesso {
+    --login-detalhe: rgb(220 178 128 / 60%);
+    --login-particula: #e2bd8e;
+}
+
+html.tela-acesso[data-theme='dark'] {
+  --login-detalhe: rgb(220 178 128 / 60%);
+  --login-particula: #e2bd8e;
+}
+
+.acesso-planta,
+.acesso-serragem {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.acesso-planta {
+  z-index: 0;
+  object-fit: cover;
+  opacity: 0.18;
+}
+
+.acesso-serragem {
+  z-index: 0;
+  overflow: hidden;
+}
+
+.acesso-serragem > span {
+  position: absolute;
+  top: var(--particula-y);
+  left: var(--particula-x);
+  width: var(--particula-tamanho);
+  height: var(--particula-tamanho);
+  border-radius: 50%;
+  background: var(--login-particula);
+  opacity: 0;
+  box-shadow: 0 0 8px var(--login-particula);
+  animation: acesso-flutuar var(--particula-duracao) var(--particula-atraso) ease-in-out infinite alternate;
+}
+
+.acesso-serragem > span:nth-child(1) { --particula-x: 12%; --particula-y: 28%; --particula-tamanho: 3px; --particula-duracao: 17s; --particula-atraso: -5s; }
+.acesso-serragem > span:nth-child(2) { --particula-x: 85%; --particula-y: 19%; --particula-tamanho: 2px; --particula-duracao: 22s; --particula-atraso: -13s; }
+.acesso-serragem > span:nth-child(3) { --particula-x: 76%; --particula-y: 76%; --particula-tamanho: 3px; --particula-duracao: 19s; --particula-atraso: -9s; }
+.acesso-serragem > span:nth-child(4) { --particula-x: 24%; --particula-y: 82%; --particula-tamanho: 2px; --particula-duracao: 24s; --particula-atraso: -17s; }
+.acesso-serragem > span:nth-child(5) { --particula-x: 92%; --particula-y: 52%; --particula-tamanho: 2px; --particula-duracao: 18s; --particula-atraso: -8s; }
+.acesso-serragem > span:nth-child(6) { --particula-x: 39%; --particula-y: 35%; --particula-tamanho: 2px; --particula-duracao: 21s; --particula-atraso: -12s; }
+.acesso-serragem > span:nth-child(7) { --particula-x: 58%; --particula-y: 91%; --particula-tamanho: 3px; --particula-duracao: 25s; --particula-atraso: -15s; }
+
+@keyframes acesso-flutuar {
+  from { transform: translate3d(-4px, 7px, 0); opacity: 0.12; }
+  to { transform: translate3d(5px, -12px, 0); opacity: 0.48; }
+}
+
+.acesso-cartao {
+  position: relative;
+  isolation: isolate;
+}
+
+.acesso-cartao::before {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  z-index: 0;
+  border-radius: 20px;
+  opacity: 0.38;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left top / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left top / 1px 26px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right top / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right top / 1px 26px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left bottom / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left bottom / 1px 26px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right bottom / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right bottom / 1px 26px no-repeat;
+  transition: inset 220ms ease, opacity 220ms ease;
+}
+
+.acesso-cartao:focus-within::before {
+  inset: 8px;
+  opacity: 0.88;
+}
+
+.acesso-cartao > * {
+  position: relative;
+  z-index: 1;
+}
+
+.acesso-simbolo {
+  width: 25px;
+  height: 25px;
+  margin-bottom: 8px;
+  color: var(--login-etiqueta);
+}
+
+.acesso-simbolo-desenho {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.acesso-simbolo-desenho path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: acesso-tracar-simbolo 1550ms cubic-bezier(0.45, 0, 0.25, 1) both;
+}
+
+.acesso-simbolo-desenho path:not(.acesso-traco-principal) {
+  animation-delay: 360ms;
+}
+
+@keyframes acesso-tracar-simbolo {
+  to { stroke-dashoffset: 0; }
+}
+
+.acesso-medidor {
+  position: relative;
+  min-width: 0;
+}
+
+.acesso-medidor > input,
+.acesso-medidor > .acesso-senha-controle {
+  width: 100%;
+}
+
+.acesso-medida {
+  position: absolute;
+  right: 15px;
+  bottom: 1px;
+  left: 15px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--login-foco);
+  opacity: 0;
+  pointer-events: none;
+  transform: scaleX(var(--acesso-progresso, 0));
+  transform-origin: left center;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.acesso-medidor:focus-within .acesso-medida {
+  opacity: 0.88;
+}
+
+.acesso-senha-controle {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acesso-planta { opacity: 0.18; }
+  .acesso-serragem { display: none; }
+  .acesso-serragem > span,
+  .acesso-simbolo-desenho path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .acesso-cartao::before,
+  .acesso-medida { transition: none; }
+  .acesso-serra { animation: none; }
+}
+
+
+/* Contraste do título e rolagem sem a barra lateral sobre o visual */
+.acesso-cartao h2 {
+  color: var(--login-texto);
+}
+
+.acesso {
+  scrollbar-width: none;
+}
+
+.acesso::-webkit-scrollbar {
+  display: none;
+}
+
+
+/* Superfície de vidro com reflexo suave */
+.acesso-cartao::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(100% 72% at 0% 0%, rgb(255 255 255 / 12%), transparent 58%),
+    linear-gradient(145deg, rgb(255 255 255 / 8%), transparent 40%, transparent 76%, rgb(255 255 255 / 3%));
 }

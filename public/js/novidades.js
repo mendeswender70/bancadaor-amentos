@@ -2,13 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
-    id: '2026-10-login-entrada-suave',
+    id: '2026-10-login-vidro-escuro',
     data: '20 de outubro de 2026',
-    titulo: 'Entrada do login mais suave',
+    titulo: 'Tema escuro e vidro líquido no acesso',
     itens: [
-      'O cartão do login aparece com um movimento leve para cima.',
-      'A abertura não exibe mais uma tela intermediária com logo e spinner.',
-      'A animação respeita a configuração de redução de movimento do aparelho.',
+      'O esquadro mantém o tema escuro mesmo quando o celular ou computador está configurado no claro.',
+      'O cartão ganha transparência, desfoque e reflexos sutis de vidro líquido.',
+      'Linhas de planta baixa, cantoneiras e um símbolo de esquadro trazem detalhes de marcenaria ao login.',
+      'Uma régua acompanha o preenchimento dos campos e partículas douradas flutuam discretamente.',
+      'O cartão continua como único elemento de entrada, e os movimentos respeitam a opção de reduzir movimento.',
     ],
   },
   {

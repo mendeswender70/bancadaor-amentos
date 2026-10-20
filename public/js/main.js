@@ -354,19 +354,72 @@ async function mostrarAcesso() {
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
 }
 
+function simboloAcessoAnimado() {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('viewBox', '0 0 40 40');
+  svg.setAttribute('class', 'acesso-simbolo-desenho');
+  svg.setAttribute('aria-hidden', 'true');
+  const tracos = [
+    ['M9 5V33H35', 'acesso-traco-principal'],
+    ['M9 12H16'],
+    ['M9 19H14'],
+    ['M9 26H16'],
+    ['M16 33V27'],
+    ['M23 33V29'],
+    ['M30 33V27'],
+  ];
+  for (const [d, classe] of tracos) {
+    const path = document.createElementNS(svgNs, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('pathLength', '100');
+    if (classe) path.setAttribute('class', classe);
+    svg.append(path);
+  }
+  return svg;
+}
+
+function medidorAcesso(input, controle = input, limite = 30) {
+  const linha = h('span', { class: 'acesso-medida', 'aria-hidden': 'true' });
+  const medidor = h('div', { class: 'acesso-medidor' }, controle, linha);
+  const atualizar = () => {
+    const progresso = Math.min(1, input.value.length / limite);
+    medidor.style.setProperty('--acesso-progresso', String(progresso));
+  };
+  input.addEventListener('input', atualizar);
+  input.addEventListener('change', atualizar);
+  atualizar();
+  return medidor;
+}
+
 function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO' } = {}) {
+  const serragem = h(
+    'div',
+    { class: 'acesso-serragem', 'aria-hidden': 'true' },
+    ...Array.from({ length: 7 }, () => h('span', {})),
+  );
   return h(
     'div',
     { class: 'acesso' },
+    h('img', { class: 'acesso-planta', src: '/images/login-planta.svg', alt: '', 'aria-hidden': 'true' }),
+    serragem,
     h('header', { class: 'acesso-topo' }, marcaEsquadro('marca-clara'), h('span', {}, 'ORÇAMENTOS DE MARCENARIA')),
     h(
       'main',
       { class: 'acesso-lado' },
       h(
+        'section',
+        { class: 'acesso-apresentacao', 'aria-labelledby': 'acesso-apresentacao-titulo' },
+        h('span', { class: 'acesso-apresentacao-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
+        h('h1', { id: 'acesso-apresentacao-titulo' }, 'Seus projetos. Seus números. No esquadro.'),
+        h('p', {}, 'Sua marcenaria organizada, do primeiro cálculo ao orçamento aprovado.'),
+      ),
+      h(
         'div',
         { class: 'acesso-cartao' },
+        h('div', { class: 'acesso-simbolo' }, simboloAcessoAnimado()),
         h('span', { class: 'acesso-etiqueta' }, etiqueta),
-        h('h1', {}, titulo),
+        h('h2', {}, titulo),
         subtitulo ? h('p', { class: 'acesso-subtitulo' }, subtitulo) : null,
         formulario,
         h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados ficam protegidos.')),
@@ -374,9 +427,8 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
     ),
   );
 }
-
 function telaEntrar() {
-  const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
+  const email = h('input', { id: 'login-email', type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
   const senha = h('input', { id: 'login-senha', type: 'password', autocomplete: 'current-password', required: true });
   const avisoCapsLock = h('small', { class: 'acesso-caps-lock', role: 'status', 'aria-live': 'polite' }, 'Caps Lock ativado');
   avisoCapsLock.hidden = true;
@@ -410,7 +462,7 @@ function telaEntrar() {
     'div',
     { class: 'campo' },
     h('label', { for: 'login-senha' }, 'Senha'),
-    h('div', { class: 'acesso-senha-controle' }, senha, alternarSenha),
+    medidorAcesso(senha, h('div', { class: 'acesso-senha-controle' }, senha, alternarSenha), 20),
     avisoCapsLock,
   );
   const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, h('span', {}, 'Entrar'));
@@ -434,7 +486,7 @@ function telaEntrar() {
         }
       },
     },
-    campo('E-mail', email),
+    h('div', { class: 'campo' }, h('label', { for: 'login-email' }, 'E-mail'), medidorAcesso(email, email, 36)),
     campoSenha,
     botao,
   );
