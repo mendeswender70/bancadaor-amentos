@@ -372,6 +372,16 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
 function telaEntrar() {
   const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
   const senha = h('input', { id: 'login-senha', type: 'password', autocomplete: 'current-password', required: true });
+  const avisoCapsLock = h('small', { class: 'acesso-caps-lock', role: 'status', 'aria-live': 'polite' }, 'Caps Lock ativado');
+  avisoCapsLock.hidden = true;
+  const atualizarAvisoCapsLock = (evento) => {
+    avisoCapsLock.hidden = !evento.getModifierState?.('CapsLock');
+  };
+  senha.addEventListener('keydown', atualizarAvisoCapsLock);
+  senha.addEventListener('keyup', atualizarAvisoCapsLock);
+  senha.addEventListener('blur', () => {
+    avisoCapsLock.hidden = true;
+  });
   const alternarSenha = h(
     'button',
     {
@@ -395,8 +405,9 @@ function telaEntrar() {
     { class: 'campo' },
     h('label', { for: 'login-senha' }, 'Senha'),
     h('div', { class: 'acesso-senha-controle' }, senha, alternarSenha),
+    avisoCapsLock,
   );
-  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Entrar');
+  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, h('span', {}, 'Entrar'));
   const form = h(
     'form',
     {
@@ -404,14 +415,16 @@ function telaEntrar() {
       onsubmit: async (e) => {
         e.preventDefault();
         botao.disabled = true;
-        botao.textContent = 'Entrando…';
+        botao.setAttribute('aria-busy', 'true');
+        botao.replaceChildren(icone('serra', 'icone acesso-serra'), h('span', {}, 'Entrando…'));
         try {
           await api.post('/auth/entrar', { email: email.value, senha: senha.value });
           await mostrarAcesso();
         } catch (erro) {
           avisoErro(erro);
           botao.disabled = false;
-          botao.textContent = 'Entrar';
+          botao.removeAttribute('aria-busy');
+          botao.replaceChildren(h('span', {}, 'Entrar'));
         }
       },
     },
