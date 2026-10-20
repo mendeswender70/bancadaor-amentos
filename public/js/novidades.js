@@ -2,14 +2,14 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
-    id: '2026-10-login-precisao-animada',
+    id: '2026-10-login-vidro-escuro',
     data: '20 de outubro de 2026',
-    titulo: 'Acesso com detalhes de marcenaria',
+    titulo: 'Tema escuro e vidro líquido no acesso',
     itens: [
-      'Linhas de planta baixa se desenham suavemente sobre o fundo.',
-      'Cantoneiras do cartão reagem ao foco, com uma régua sutil acompanhando o preenchimento dos campos.',
-      'Um símbolo de esquadro se desenha acima do acesso privado.',
-      'Pontos dourados flutuam discretamente como serragem iluminada.',
+      'O esquadro mantém o tema escuro mesmo quando o celular ou computador está configurado no claro.',
+      'O cartão ganha transparência, desfoque e reflexos sutis de vidro líquido.',
+      'Linhas de planta baixa, cantoneiras e um símbolo de esquadro trazem detalhes de marcenaria ao login.',
+      'Uma régua acompanha o preenchimento dos campos e partículas douradas flutuam discretamente.',
       'O cartão continua como único elemento de entrada, e os movimentos respeitam a opção de reduzir movimento.',
     ],
   },
