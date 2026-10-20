@@ -2946,7 +2946,8 @@ input.invalido {
   color: #94724f;
 }
 
-.acesso-cartao h1 {
+.acesso-cartao h1,
+.acesso-cartao h2 {
   color: #211c16;
   font-family: 'Playfair Display', Georgia, serif;
   font-size: clamp(1.9rem, 7vw, 2.35rem);
@@ -4597,7 +4598,7 @@ html.tela-acesso body {
   letter-spacing: 0.17em;
 }
 
-.acesso-apresentacao h2 {
+.acesso-apresentacao h1 {
   max-width: 540px;
   color: var(--login-texto);
   font-family: 'Playfair Display', Georgia, serif;
