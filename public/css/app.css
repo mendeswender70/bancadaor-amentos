@@ -4559,3 +4559,12 @@ html.tela-acesso body {
     transform: none;
   }
 }
+
+
+/* Evita um splash de logo enquanto a sessão inicial é verificada */
+#app:empty {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  background-color: var(--fundo);
+}
