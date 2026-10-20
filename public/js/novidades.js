@@ -7,6 +7,7 @@ export const novidades = [
     titulo: 'Entrada do login mais suave',
     itens: [
       'O cartão do login aparece com um movimento leve para cima.',
+      'Uma apresentação curta destaca a precisão e a organização da marcenaria.',
       'A abertura não exibe mais uma tela intermediária com logo e spinner.',
       'A animação respeita a configuração de redução de movimento do aparelho.',
     ],

@@ -363,6 +363,13 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
       'main',
       { class: 'acesso-lado' },
       h(
+        'section',
+        { class: 'acesso-apresentacao', 'aria-labelledby': 'acesso-apresentacao-titulo' },
+        h('span', { class: 'acesso-apresentacao-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
+        h('h2', { id: 'acesso-apresentacao-titulo' }, 'Seus projetos. Seus números. No esquadro.'),
+        h('p', {}, 'Sua marcenaria organizada, do primeiro cálculo ao orçamento aprovado.'),
+      ),
+      h(
         'div',
         { class: 'acesso-cartao' },
         h('span', { class: 'acesso-etiqueta' }, etiqueta),

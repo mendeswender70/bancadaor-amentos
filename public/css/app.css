@@ -4568,3 +4568,66 @@ html.tela-acesso body {
   min-height: 100dvh;
   background-color: var(--fundo);
 }
+
+
+/* Apresentação breve antes do cartão de acesso */
+.acesso {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.acesso-lado {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  width: min(100%, 560px);
+}
+
+.acesso-apresentacao {
+  padding: 0 6px;
+}
+
+.acesso-apresentacao-etiqueta {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--login-etiqueta);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+}
+
+.acesso-apresentacao h2 {
+  max-width: 540px;
+  color: var(--login-texto);
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2rem, 7vw, 2.65rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.06;
+}
+
+.acesso-apresentacao p {
+  max-width: 470px;
+  margin-top: 10px;
+  color: var(--login-texto-suave);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 420px) {
+  .acesso-lado {
+    gap: 16px;
+  }
+
+  .acesso-apresentacao {
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+}
+
+@media (max-height: 700px) and (max-width: 700px) {
+  .acesso-lado {
+    margin: 12px auto 20px;
+  }
+}
