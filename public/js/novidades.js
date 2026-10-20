@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-login-capslock-serra',
+    data: '20 de outubro de 2026',
+    titulo: 'Login com retorno mais claro',
+    itens: [
+      'O login avisa quando o Caps Lock está ativado.',
+      'Uma serra de marcenaria gira enquanto o sistema verifica a senha.',
+    ],
+  },
+  {
     id: '2026-10-senha-visivel',
     data: '20 de outubro de 2026',
     titulo: 'Mais clareza ao entrar',
