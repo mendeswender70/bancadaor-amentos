@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-excluir-orcamentos',
+    data: '20 de outubro de 2026',
+    titulo: 'Exclusão segura de orçamentos',
+    itens: [
+      'Exclua um orçamento pela lista ou pela tela de edição.',
+      'A exclusão remove apenas o orçamento escolhido; o original e as outras cópias permanecem.',
+    ],
+  },
+  {
     id: '2026-10-lembretes-propostas',
     data: '20 de outubro de 2026',
     titulo: 'Lembretes de acompanhamento',
