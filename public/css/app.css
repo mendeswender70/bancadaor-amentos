@@ -2752,21 +2752,25 @@ input.invalido {
 }
 
 /* ================================================================= Acesso */
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('/fonts/playfair-display-latin-500-normal.woff') format('woff');
+}
+
 .acesso {
-  min-height: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr;
-  background: var(--fundo);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(300px, 39svh) 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #eee9e0;
+  color: #211c16;
+  color-scheme: light;
 }
 
-@media (min-width: 960px) {
-  .acesso {
-    grid-template-columns: 1.25fr 1fr;
-    grid-template-rows: none;
-  }
-}
-
-/* Lado da marca: cena 3D sobre um fundo escuro e quente */
 .acesso-marca {
   position: relative;
   overflow: hidden;
@@ -2774,287 +2778,249 @@ input.invalido {
   flex-direction: column;
   justify-content: space-between;
   gap: 24px;
-  min-height: max(46vh, 320px);
-  padding: max(20px, env(safe-area-inset-top)) 20px 56px;
+  min-width: 0;
+  min-height: 300px;
+  padding: max(24px, env(safe-area-inset-top)) 24px 42px;
   color: #fff;
   background:
-    radial-gradient(ellipse 70% 55% at 62% 58%, rgb(214 150 82 / 32%), transparent 70%),
-    radial-gradient(ellipse 60% 50% at 18% 12%, rgb(255 214 160 / 10%), transparent 70%),
-    linear-gradient(160deg, #2c1e13 0%, #1a120c 55%, #0f0a06 100%);
+    radial-gradient(ellipse 65% 55% at 62% 58%, rgb(202 148 91 / 25%), transparent 72%),
+    radial-gradient(ellipse 60% 50% at 16% 10%, rgb(255 223 181 / 9%), transparent 72%),
+    linear-gradient(145deg, #30251c 0%, #1a1713 54%, #100f0d 100%);
   isolation: isolate;
 }
 
 .acesso-marca::before {
-  /* piso sutil em perspectiva */
   content: '';
   position: absolute;
-  inset: auto -20% -30% -20%;
-  height: 55%;
-  background: radial-gradient(ellipse at 50% 0%, rgb(255 210 160 / 9%), transparent 65%);
-  z-index: -1;
+  top: 45%;
+  right: -18%;
+  width: clamp(280px, 49vw, 560px);
+  aspect-ratio: 1;
+  border: 1px solid rgb(226 193 157 / 13%);
+  border-radius: 50%;
+  box-shadow: 0 0 0 30px rgb(226 193 157 / 2%), 0 0 0 82px rgb(226 193 157 / 2%);
+  transform: translateY(-50%);
+  z-index: 0;
+  pointer-events: none;
 }
 
-.acesso-cena {
+.acesso-marca::after {
+  content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
-  opacity: 0;
-  transition: opacity 900ms ease;
-}
-
-.acesso-cena.com-3d {
-  opacity: 1;
-}
-
-.cena-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.acesso-marca > :not(.acesso-cena) {
-  position: relative;
   z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(0deg, rgb(13 11 9 / 38%), transparent 80%);
 }
 
-@media (min-width: 960px) {
-  /* Escurece o canto do texto para ele ficar legível sobre a cena */
-  .acesso-marca::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background: linear-gradient(75deg, rgb(15 10 6 / 78%) 0%, rgb(15 10 6 / 40%) 38%, transparent 62%);
-  }
+.acesso-marca > * {
+  position: relative;
+  z-index: 2;
+}
+
+.acesso-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.acesso-topo > span {
+  display: none;
+  color: rgb(255 255 255 / 63%);
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  text-align: right;
+}
+
+.acesso .marca-esquadro {
+  color: #fff;
+}
+
+.acesso .marca-esquadro img {
+  border: 1px solid rgb(255 255 255 / 13%);
+  box-shadow: 0 8px 26px rgb(0 0 0 / 30%);
 }
 
 .acesso-chamada {
-  display: none;
-  max-width: 440px;
+  display: block;
+  width: min(100%, 540px);
+  margin: auto 0 22px;
+}
+
+.acesso-chamada-etiqueta,
+.acesso-etiqueta {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+}
+
+.acesso-chamada-etiqueta {
+  margin-bottom: 8px;
+  color: #d8b487;
 }
 
 .acesso-chamada h2 {
-  font-size: 2.3rem;
-  line-height: 1.12;
-  letter-spacing: -0.035em;
-  text-shadow: 0 2px 24px rgb(0 0 0 / 35%);
+  max-width: 520px;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(1.8rem, 7vw, 2.25rem);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  text-shadow: 0 2px 24px rgb(0 0 0 / 32%);
 }
 
-.acesso-chamada ul {
-  list-style: none;
-  padding: 0;
-  margin: 26px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.acesso-chamada > p {
+  max-width: 350px;
+  margin-top: 8px;
+  color: rgb(255 255 255 / 75%);
+  font-size: 0.81rem;
+  line-height: 1.5;
 }
 
-.acesso-chamada li {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-size: 0.98rem;
-  color: rgb(255 255 255 / 88%);
-  opacity: 0;
-  animation: entrar-lado 600ms ease forwards;
-}
-
-.acesso-chamada li:nth-child(1) { animation-delay: 700ms; }
-.acesso-chamada li:nth-child(2) { animation-delay: 820ms; }
-.acesso-chamada li:nth-child(3) { animation-delay: 940ms; }
-.acesso-chamada li:nth-child(4) { animation-delay: 1060ms; }
-
-.acesso-chamada li .icone {
-  width: 22px;
-  height: 22px;
-  padding: 3px;
-  border-radius: 50%;
-  background: rgb(255 255 255 / 12%);
-  color: #f0cf9f;
-}
-
-.acesso-marca > small {
-  display: none;
-  color: rgb(255 255 255 / 55%);
-}
-
-@media (min-width: 960px) {
-  .acesso-marca {
-    min-height: 100dvh;
-    padding: 44px 48px;
-  }
-
-  .acesso-chamada,
-  .acesso-marca > small {
-    display: block;
-  }
-}
-
-/* Etiquetas sobre a cena (medida e preço) */
-.cena-etiqueta {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 2;
-  opacity: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  will-change: transform, opacity;
-}
-
-.cena-medida {
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgb(20 14 9 / 72%);
-  border: 1px solid rgb(241 217 181 / 45%);
-  color: #f5e2c4;
-  font-size: 0.78rem;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  backdrop-filter: blur(6px);
-}
-
-.cena-preco {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 10px 14px 11px;
-  border-radius: 14px;
-  background: rgb(26 18 12 / 66%);
-  border: 1px solid rgb(255 255 255 / 18%);
-  backdrop-filter: blur(12px) saturate(1.3);
-  box-shadow: 0 12px 30px rgb(0 0 0 / 30%);
-}
-
-.cena-preco small {
-  font-size: 0.7rem;
-  color: rgb(255 255 255 / 70%);
-  font-weight: 550;
-}
-
-.cena-preco strong {
-  font-size: 1.15rem;
-  font-weight: 750;
-  color: #fff;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 959px) {
-  .cena-preco {
-    padding: 8px 11px 9px;
-  }
-
-  .cena-preco strong {
-    font-size: 1rem;
-  }
-}
-
-/* Lado do formulário */
 .acesso-lado {
   position: relative;
   z-index: 2;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  margin-top: -32px;
-  padding: 28px 18px calc(28px + env(safe-area-inset-bottom));
-  background: var(--fundo);
-  border-radius: 26px 26px 0 0;
-  box-shadow: 0 -12px 40px rgb(0 0 0 / 18%);
-  animation: subir-cartao 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-@media (min-width: 960px) {
-  .acesso-lado {
-    align-items: center;
-    margin-top: 0;
-    padding: 40px;
-    border-radius: 0;
-    box-shadow: none;
-    animation: none;
-  }
+  min-width: 0;
+  margin-top: -28px;
+  padding: 0 16px calc(26px + env(safe-area-inset-bottom));
 }
 
 .acesso-cartao {
-  width: min(420px, 100%);
+  width: min(100%, 464px);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  min-width: 0;
+  padding: 28px 23px 22px;
+  border: 1px solid rgb(255 255 255 / 86%);
+  border-radius: 25px;
+  background: #fffdfa;
+  box-shadow: 0 18px 55px rgb(44 34 23 / 17%), 0 2px 8px rgb(44 34 23 / 7%);
+  color: #211c16;
+  animation: acesso-aparecer 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.acesso-cartao > * {
-  opacity: 0;
-  animation: entrar-cima 600ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+.acesso-etiqueta {
+  margin-bottom: 8px;
+  color: #94724f;
 }
-
-.acesso-cartao > :nth-child(1) { animation-delay: 150ms; }
-.acesso-cartao > :nth-child(2) { animation-delay: 230ms; }
-.acesso-cartao > :nth-child(3) { animation-delay: 310ms; }
-.acesso-cartao > :nth-child(4) { animation-delay: 390ms; }
-
-.acesso-cartao .formulario > * {
-  opacity: 0;
-  animation: entrar-cima 550ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-.acesso-cartao .formulario > :nth-child(1) { animation-delay: 420ms; }
-.acesso-cartao .formulario > :nth-child(2) { animation-delay: 490ms; }
-.acesso-cartao .formulario > :nth-child(3) { animation-delay: 560ms; }
-.acesso-cartao .formulario > :nth-child(4) { animation-delay: 630ms; }
-.acesso-cartao .formulario > :nth-child(5) { animation-delay: 700ms; }
-.acesso-cartao .formulario > :nth-child(6) { animation-delay: 770ms; }
 
 .acesso-cartao h1 {
-  font-size: 1.9rem;
-  letter-spacing: -0.03em;
+  color: #211c16;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(1.9rem, 7vw, 2.35rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.14;
 }
 
-.acesso-cartao > p {
-  margin: 0 0 14px;
+.acesso-subtitulo {
+  max-width: 380px;
+  margin-top: 9px;
+  color: #71685e;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.acesso-cartao .formulario {
+  gap: 17px;
+  margin-top: 24px;
+}
+
+.acesso-cartao .campo {
+  gap: 7px;
+}
+
+.acesso-cartao .campo label {
+  color: #443c33;
+  font-size: 0.82rem;
+  font-weight: 650;
 }
 
 .acesso-cartao input {
-  min-height: 52px;
+  min-height: 54px;
+  padding: 12px 14px;
   border-radius: 12px;
-  background: var(--superficie);
+  border-color: #ddd5ca;
+  background: #fff;
+  color: #211c16;
+  font-size: 16px;
+  box-shadow: inset 0 1px 2px rgb(36 28 19 / 3%);
+}
+
+.acesso-cartao input::placeholder {
+  color: #9b9287;
+}
+
+.acesso-cartao input:focus {
+  border-color: #a97948;
+  box-shadow: 0 0 0 3px rgb(169 121 72 / 16%);
+}
+
+.acesso-cartao .dica {
+  color: #766e65;
+  font-size: 0.77rem;
 }
 
 .acesso-cartao .botao-primario {
   position: relative;
   overflow: hidden;
-  min-height: 54px;
-  border-radius: 14px;
-  margin-top: 6px;
-  background: linear-gradient(135deg, #9a6230 0%, #7c4a1d 50%, #5f3714 100%);
+  min-height: 56px;
+  margin-top: 4px;
+  border: 1px solid #75471f;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #9b7044 0%, #805326 58%, #68421f 100%);
+  box-shadow: 0 9px 20px rgb(105 68 33 / 19%), inset 0 1px 0 rgb(255 255 255 / 17%);
+  font-size: 0.97rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
 }
 
 .acesso-cartao .botao-primario::after {
-  /* brilho que passa pelo botão */
   content: '';
   position: absolute;
-  inset: 0 auto 0 -60%;
-  width: 45%;
-  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 28%), transparent);
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 28%, rgb(255 255 255 / 16%) 50%, transparent 72%);
   transform: skewX(-18deg);
-  animation: brilho-botao 4.5s ease-in-out 1.6s infinite;
+  transition: opacity 180ms ease;
 }
 
-@keyframes brilho-botao {
-  0%,
-  70% {
-    left: -60%;
-  }
-  100% {
-    left: 130%;
-  }
+.acesso-cartao .botao-primario:hover::after {
+  opacity: 1;
 }
 
-@keyframes entrar-cima {
+.acesso-seguranca {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 19px;
+  padding-top: 15px;
+  border-top: 1px solid #eee9e2;
+  color: #766e65;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.acesso-seguranca .icone {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: #8b6b48;
+}
+
+@keyframes acesso-aparecer {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(18px);
   }
   to {
     opacity: 1;
@@ -3062,34 +3028,130 @@ input.invalido {
   }
 }
 
-@keyframes entrar-lado {
-  from {
-    opacity: 0;
-    transform: translateX(-12px);
+@media (min-width: 960px) {
+  .acesso {
+    grid-template-columns: minmax(0, 1.08fr) minmax(440px, 0.92fr);
+    grid-template-rows: minmax(100dvh, auto);
   }
-  to {
-    opacity: 1;
-    transform: none;
+
+  .acesso-marca {
+    min-height: 100dvh;
+    padding: max(40px, env(safe-area-inset-top)) clamp(36px, 5.2vw, 82px) max(34px, env(safe-area-inset-bottom));
+  }
+
+  .acesso-topo > span,
+  .acesso-chamada {
+    display: block;
+  }
+
+  .acesso-chamada {
+    margin-bottom: 30px;
+  }
+
+  .acesso-chamada-etiqueta {
+    margin-bottom: 14px;
+  }
+
+  .acesso-chamada h2 {
+    font-size: clamp(2.7rem, 4.6vw, 4rem);
+  }
+
+  .acesso-chamada > p {
+    max-width: 420px;
+    margin-top: 16px;
+    font-size: 0.98rem;
+    line-height: 1.65;
+  }
+
+  .acesso-marca::after {
+    inset: 0;
+    background: linear-gradient(0deg, rgb(12 10 8 / 86%) 0%, rgb(12 10 8 / 48%) 38%, rgb(12 10 8 / 4%) 82%);
+  }
+
+  .acesso-lado {
+    align-items: center;
+    margin-top: 0;
+    padding: 42px clamp(28px, 4vw, 72px);
+    background:
+      radial-gradient(ellipse at 95% 4%, rgb(191 165 127 / 12%), transparent 43%),
+      linear-gradient(145deg, #f5f1ea, #e9e2d8);
+  }
+
+  .acesso-cartao {
+    padding: clamp(34px, 4.5vw, 52px);
+    border-color: rgb(255 255 255 / 90%);
+    border-radius: 28px;
+    box-shadow: 0 28px 85px rgb(56 42 26 / 13%), 0 2px 10px rgb(56 42 26 / 5%);
+  }
+
+  .acesso-etiqueta {
+    margin-bottom: 11px;
+  }
+
+  .acesso-cartao h1 {
+    font-size: clamp(2rem, 3vw, 2.5rem);
+  }
+
+  .acesso-cartao .formulario {
+    gap: 19px;
+    margin-top: 28px;
+  }
+
+  .acesso-cartao .botao-primario {
+    margin-top: 7px;
   }
 }
 
-@keyframes subir-cartao {
-  from {
-    transform: translateY(40px);
+@media (max-width: 380px) {
+  .acesso-marca {
+    padding-right: 19px;
+    padding-left: 19px;
+  }
+
+  .acesso-lado {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .acesso-cartao {
+    padding: 25px 19px 20px;
+  }
+
+  .acesso-cartao .formulario {
+    gap: 14px;
+  }
+
+  .acesso-topo > span {
+    display: none;
+  }
+}
+
+@media (max-height: 740px) and (min-width: 960px) {
+  .acesso-cartao {
+    padding-top: 30px;
+    padding-bottom: 28px;
+  }
+
+  .acesso-cartao .formulario {
+    gap: 14px;
+    margin-top: 20px;
+  }
+
+  .acesso-cartao input {
+    min-height: 48px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .acesso-lado,
-  .acesso-cartao > *,
-  .acesso-cartao .formulario > *,
-  .acesso-chamada li {
+  .acesso-cartao,
+  .acesso-cartao .botao-primario::after {
     animation: none;
-    opacity: 1;
+    transition: none;
   }
 
-  .acesso-cartao .botao-primario::after {
-    display: none;
+  .acesso-cartao {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -3120,10 +3182,6 @@ input.invalido {
   width: 46px;
   height: 46px;
   box-shadow: 0 6px 18px rgb(0 0 0 / 25%);
-}
-
-.marca-acesso {
-  display: none;
 }
 
 .lateral-assinatura {
@@ -3184,84 +3242,6 @@ input.invalido {
 .arquivo-pdf span:not(.selo-icone) {
   font-size: 0.84rem;
   color: var(--suave);
-}
-
-/* Cena 3D: ambiente na etiqueta, trilha dos ambientes e arrasto */
-.cena-ambiente {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #f0cf9f;
-}
-
-.cena-preco {
-  transition: transform 80ms linear;
-}
-
-.cena-trilha {
-  position: absolute;
-  z-index: 2;
-  right: 14px;
-  top: max(20px, env(safe-area-inset-top));
-  display: flex;
-  gap: 6px;
-  padding: 5px;
-  border-radius: 999px;
-  background: rgb(20 14 9 / 55%);
-  border: 1px solid rgb(255 255 255 / 12%);
-  backdrop-filter: blur(8px);
-  pointer-events: none;
-}
-
-.cena-trilha span {
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 650;
-  color: rgb(255 255 255 / 55%);
-  transition: background 400ms ease, color 400ms ease;
-}
-
-.cena-trilha span.ativo {
-  background: rgb(240 207 159 / 22%);
-  color: #fff;
-}
-
-@media (min-width: 960px) {
-  .cena-trilha {
-    top: auto;
-    right: auto;
-    left: 72%;
-    bottom: 40px;
-    transform: translateX(-50%);
-  }
-}
-
-.acesso-marca {
-  touch-action: pan-y;
-  cursor: grab;
-}
-
-.acesso-marca:active {
-  cursor: grabbing;
-}
-
-.acesso-marca a,
-.acesso-marca button {
-  cursor: pointer;
-}
-
-@media (max-width: 959px) {
-  .cena-trilha {
-    gap: 2px;
-    padding: 3px;
-  }
-
-  .cena-trilha span {
-    padding: 3px 8px;
-    font-size: 0.64rem;
-  }
 }
 
 /* ==========================================================================
