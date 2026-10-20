@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-notificacoes-pwa',
+    data: '20 de outubro de 2026',
+    titulo: 'Avisos de atualização no site e no PWA',
+    itens: [
+      'O site avisa quando há uma nova versão enquanto você está trabalhando.',
+      'O PWA pode enviar uma notificação mesmo fechado, depois que você ativar os avisos neste dispositivo.',
+    ],
+  },
+  {
     id: '2026-10-aprovacao-segura',
     data: '20 de outubro de 2026',
     titulo: 'Aprovação de propostas mais segura',

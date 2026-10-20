@@ -254,6 +254,26 @@ export const MIGRACOES = [
     `ALTER TABLE orcamentos ADD COLUMN versao integer NOT NULL DEFAULT 1`,
     `ALTER TABLE orcamentos ADD COLUMN versao_proposta integer NOT NULL DEFAULT 1`,
   ],
+  // v5: dispositivos inscritos para avisos push e controle de deploys enviados.
+  [
+    `CREATE TABLE inscricoes_push (
+      endpoint text PRIMARY KEY,
+      usuario_id integer NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      chave_p256dh text NOT NULL,
+      chave_auth text NOT NULL,
+      criado_em timestamptz NOT NULL DEFAULT now(),
+      atualizado_em timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX inscricoes_push_usuario ON inscricoes_push(usuario_id)`,
+    `CREATE TABLE notificacoes_deploy (
+      deployment_id text PRIMARY KEY,
+      commit_sha text NOT NULL DEFAULT '',
+      estado text NOT NULL DEFAULT 'enviando' CHECK (estado IN ('enviando', 'enviado', 'erro')),
+      iniciado_em timestamptz NOT NULL DEFAULT now(),
+      enviado_em timestamptz
+    )`,
+    ...['inscricoes_push', 'notificacoes_deploy'].map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`),
+  ],
 ];
 
 // ---------------------------------------------------------------------------

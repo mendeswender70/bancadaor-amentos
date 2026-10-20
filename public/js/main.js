@@ -10,6 +10,8 @@ import { paginaConfiguracoes } from './pages/config.js';
 
 const raiz = document.getElementById('app');
 let usuario = null;
+let intervaloVersao = null;
+let avisoVersaoAtivo = null;
 
 // ------------------------------------------------------------------ Rotas
 
@@ -256,10 +258,67 @@ function marcarMenu(caminho) {
 export async function sair() {
   if (verificarSaida && !(await verificarSaida())) return;
   verificarSaida = null;
+  pararMonitorVersao();
   await api.post('/auth/sair').catch(() => {});
   usuario = null;
   cache.empresa = null;
   mostrarAcesso();
+}
+
+function registrarServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((erro) => {
+    console.warn('Notificações do PWA indisponíveis:', erro?.message || erro);
+  });
+}
+
+function avisarNovaVersao() {
+  if (avisoVersaoAtivo) return;
+  const atualizar = () => location.reload();
+  const dispensar = () => {
+    avisoVersaoAtivo?.remove();
+    avisoVersaoAtivo = null;
+  };
+  avisoVersaoAtivo = h(
+    'div',
+    { class: 'atualizacao-disponivel', role: 'status', 'aria-live': 'polite' },
+    icone('historico'),
+    h('div', {}, h('strong', {}, 'Nova versão disponível'), h('span', {}, 'Atualize para ver as novidades.')),
+    h('button', { type: 'button', class: 'botao botao-primario botao-pequeno', onclick: atualizar }, 'Atualizar'),
+    h('button', { type: 'button', class: 'botao-icone', 'aria-label': 'Depois', title: 'Depois', onclick: dispensar }, '×'),
+  );
+  document.body.append(avisoVersaoAtivo);
+}
+
+function pararMonitorVersao() {
+  if (intervaloVersao) clearInterval(intervaloVersao);
+  intervaloVersao = null;
+  avisoVersaoAtivo?.remove();
+  avisoVersaoAtivo = null;
+}
+
+function iniciarMonitorVersao() {
+  pararMonitorVersao();
+  const versaoDaAba = novidades[0]?.id || 'inicio';
+  let versaoAvisada = null;
+  let consultando = false;
+  const conferir = async () => {
+    if (consultando || !usuario) return;
+    consultando = true;
+    try {
+      const atual = (await api.get('/versao')).versao;
+      if (atual !== versaoDaAba && atual !== versaoAvisada) {
+        versaoAvisada = atual;
+        avisarNovaVersao();
+      }
+    } catch {
+      // A próxima verificação tenta de novo quando a rede ou o servidor voltar.
+    } finally {
+      consultando = false;
+    }
+  };
+  conferir();
+  intervaloVersao = setInterval(conferir, 45_000);
 }
 
 // ------------------------------------------------------ Login / primeiro acesso
@@ -292,6 +351,8 @@ async function mostrarAcesso() {
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
+    registrarServiceWorker();
+    iniciarMonitorVersao();
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
@@ -412,6 +473,7 @@ function telaConfigurar() {
 
 quandoPerderSessao(() => {
   if (!usuario) return;
+  pararMonitorVersao();
   usuario = null;
   verificarSaida = null;
   aviso('Sua sessão expirou. Entre novamente.', 'erro');
