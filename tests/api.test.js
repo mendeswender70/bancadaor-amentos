@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import webpush from 'web-push';
 import { criarApp } from '../server/app.js';
 import { visaoCliente } from '../server/visaoCliente.js';
 import { carregarOrcamento } from '../server/orcamentos.js';
@@ -615,16 +616,76 @@ async function aprovarProposta(token, corpo, opcoes) {
   return semLogin('POST', `/publico/propostas/${token}/aprovar`, { ...corpo, versao_proposta: proposta.versao_proposta }, opcoes);
 }
 
-async function novaProposta() {
+async function novaProposta({ abrir = true } = {}) {
   const r = await chamar('POST', `/orcamentos/${orcamentoId}/duplicar`);
   assert.equal(r.status, 201);
   const orc = r.dados;
   const { token } = (await chamar('POST', `/orcamentos/${orc.id}/link`)).dados;
-  const proposta = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+  const proposta = abrir ? (await semLogin('GET', `/publico/propostas/${token}`)).dados : null;
   return { orc, token, proposta };
 }
 
 const aceite = (proposta) => ({ nome: 'João da Silva', aceite: true, versao_proposta: proposta.versao_proposta });
+
+test('push avisa na primeira visita e aprovação sem duplicar e sem bloquear a proposta', async () => {
+  const anterior = {
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+    sendNotification: webpush.sendNotification,
+  };
+  const chavesVapid = webpush.generateVAPIDKeys();
+  process.env.VAPID_PUBLIC_KEY = chavesVapid.publicKey;
+  process.env.VAPID_PRIVATE_KEY = chavesVapid.privateKey;
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/push-event-device-1';
+  const envios = [];
+  webpush.sendNotification = async (_inscricao, payload) => envios.push(JSON.parse(payload));
+
+  try {
+    const inscricao = {
+      endpoint,
+      keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) },
+    };
+    assert.equal((await chamar('POST', '/notificacoes/push', { inscricao })).status, 200);
+
+    const { orc, token } = await novaProposta({ abrir: false });
+    const primeiraVisita = await semLogin('GET', `/publico/propostas/${token}`);
+    assert.equal(primeiraVisita.status, 200);
+    assert.equal(envios.length, 1);
+    assert.equal(envios[0].titulo, 'Proposta visualizada');
+    assert.match(envios[0].texto, new RegExp(primeiraVisita.dados.numero));
+    assert.equal(envios[0].caminho, `/#/orcamentos/${orc.id}`);
+    assert.equal(envios[0].tag, `esquadro-proposta-${orc.id}-visualizada`);
+
+    await semLogin('GET', `/publico/propostas/${token}`);
+    assert.equal(envios.length, 1, 'visitas seguintes não repetem o aviso');
+
+    const aprovada = await aprovarProposta(token, { nome: 'João da Silva', aceite: true });
+    assert.equal(aprovada.status, 200);
+    assert.equal(envios.length, 2);
+    assert.equal(envios[1].titulo, 'Proposta aprovada');
+    assert.match(envios[1].texto, new RegExp(aprovada.dados.numero));
+    assert.equal(envios[1].caminho, `/#/orcamentos/${orc.id}`);
+    assert.equal(envios[1].tag, `esquadro-proposta-${orc.id}-aprovada`);
+
+    await aprovarProposta(token, { nome: 'João da Silva', aceite: true });
+    assert.equal(envios.length, 2, 'aprovações repetidas não repetem o aviso');
+
+    const outra = await novaProposta({ abrir: false });
+    webpush.sendNotification = async () => {
+      throw Object.assign(new Error('inscrição expirada'), { statusCode: 410 });
+    };
+    const visitaComInscricaoExpirada = await semLogin('GET', `/publico/propostas/${outra.token}`);
+    assert.equal(visitaComInscricaoExpirada.status, 200, 'a falha push não impede o cliente de abrir a proposta');
+    assert.equal(await (await app.locals.obterDb()).get('SELECT endpoint FROM inscricoes_push WHERE endpoint = ?', endpoint), undefined);
+  } finally {
+    await chamar('DELETE', '/notificacoes/push', { endpoint });
+    webpush.sendNotification = anterior.sendNotification;
+    for (const [chave, valor] of Object.entries({ VAPID_PUBLIC_KEY: anterior.publicKey, VAPID_PRIVATE_KEY: anterior.privateKey })) {
+      if (valor === undefined) delete process.env[chave];
+      else process.env[chave] = valor;
+    }
+  }
+});
 
 test('uma tela antiga não desfaz o aceite nem sobrescreve os valores', async () => {
   const { orc, token, proposta } = await novaProposta();

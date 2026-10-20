@@ -673,14 +673,16 @@ export async function idPorToken(db, token) {
 }
 
 export async function registrarVisualizacao(db, id) {
-  await db.transacao(async (t) => {
+  return db.transacao(async (t) => {
     const r = await t.get(
       `UPDATE orcamentos SET visualizacoes = visualizacoes + 1, ultima_visualizacao_em = now(),
          visualizado_em = COALESCE(visualizado_em, now())
        WHERE id = ? RETURNING visualizacoes`,
       id,
     );
-    if (r?.visualizacoes === 1) await registrarHistorico(t, id, 'Cliente abriu a proposta pelo link', null);
+    const primeiraVisualizacao = r?.visualizacoes === 1;
+    if (primeiraVisualizacao) await registrarHistorico(t, id, 'Cliente abriu a proposta pelo link', null);
+    return primeiraVisualizacao;
   });
 }
 
@@ -696,7 +698,7 @@ export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
     if (!Number.isInteger(versaoProposta) || versaoProposta !== orc.versao_proposta) {
       throw new ErroHttp(409, 'A proposta foi alterada. Atualize a página, confira os valores e as condições e confirme novamente.');
     }
-    if (orc.status === 'aprovado') return;
+    if (orc.status === 'aprovado') return false;
     if (!podeAprovar(orc, dataHoje)) {
       throw new ErroHttp(
         409,
@@ -708,5 +710,6 @@ export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
     await t.run(`UPDATE orcamentos SET status = 'aprovado', versao = versao + 1, atualizado_em = now() WHERE id = ?`, id);
     await marcarDatasStatus(t, id, orc.status, 'aprovado', { peloLink: true, nome });
     await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})`, null);
+    return true;
   });
 }
