@@ -4144,3 +4144,45 @@ input.invalido {
     font-size: 1.5rem;
   }
 }
+
+
+/* Feedback discreto durante o login */
+.acesso-caps-lock {
+  display: flex;
+  align-items: center;
+  min-height: 1em;
+  color: #8a6339;
+  font-size: 0.76rem;
+  font-weight: 550;
+}
+
+.acesso-caps-lock[hidden] {
+  display: none;
+}
+
+.acesso-cartao .botao-primario[aria-busy='true'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: wait;
+}
+
+.acesso-serra {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  animation: acesso-serra-girar 850ms linear infinite;
+}
+
+@keyframes acesso-serra-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acesso-serra {
+    animation: none;
+  }
+}
