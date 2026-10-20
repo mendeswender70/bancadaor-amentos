@@ -82,11 +82,11 @@ test('atualiza um banco v3 preservando os orçamentos e aprovações existentes'
     banco = await abrirBanco({ url: `pglite:${pasta}` });
     const orc = await banco.get('SELECT status, total_cents, aprovado_por, aprovado_pelo_link, versao, versao_proposta FROM orcamentos WHERE numero = 1');
     assert.deepEqual(orc, { status: 'aprovado', total_cents: 12345, aprovado_por: 'Cliente existente', aprovado_pelo_link: 1, versao: 1, versao_proposta: 1 });
-    assert.equal((await banco.get('SELECT MAX(versao) AS versao FROM migracoes')).versao, 5);
-    const tabelasPush = await banco.all("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('inscricoes_push', 'notificacoes_deploy') ORDER BY tablename");
-    assert.deepEqual(tabelasPush.map((t) => t.tablename), ['inscricoes_push', 'notificacoes_deploy']);
-    const rlsPush = await banco.all("SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('inscricoes_push', 'notificacoes_deploy') AND relrowsecurity");
-    assert.equal(rlsPush.length, 2);
+    assert.equal((await banco.get('SELECT MAX(versao) AS versao FROM migracoes')).versao, 6);
+    const tabelasNotificacoes = await banco.all("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('inscricoes_push', 'notificacoes_deploy', 'notificacoes_lembrete') ORDER BY tablename");
+    assert.deepEqual(tabelasNotificacoes.map((t) => t.tablename), ['inscricoes_push', 'notificacoes_deploy', 'notificacoes_lembrete']);
+    const rlsPush = await banco.all("SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('inscricoes_push', 'notificacoes_deploy', 'notificacoes_lembrete') AND relrowsecurity");
+    assert.equal(rlsPush.length, 3);
     await banco.close();
     banco = await abrirBanco({ url: `pglite:${pasta}` });
     assert.equal((await banco.get('SELECT COUNT(*) AS n FROM orcamentos')).n, 1);

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import webpush from 'web-push';
+import { somarDias } from '../public/shared/calc.js';
 import { criarApp } from '../server/app.js';
 import { visaoCliente } from '../server/visaoCliente.js';
 import { carregarOrcamento } from '../server/orcamentos.js';
@@ -681,6 +682,81 @@ test('push avisa na primeira visita e aprovação sem duplicar e sem bloquear a 
     await chamar('DELETE', '/notificacoes/push', { endpoint });
     webpush.sendNotification = anterior.sendNotification;
     for (const [chave, valor] of Object.entries({ VAPID_PUBLIC_KEY: anterior.publicKey, VAPID_PRIVATE_KEY: anterior.privateKey })) {
+      if (valor === undefined) delete process.env[chave];
+      else process.env[chave] = valor;
+    }
+  }
+});
+
+test('lembretes push avisam propostas sem resposta e perto do vencimento uma vez', async () => {
+  const anteriores = {
+    secret: process.env.DEPLOY_NOTIFICATION_SECRET,
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+    sendNotification: webpush.sendNotification,
+  };
+  const chavesVapid = webpush.generateVAPIDKeys();
+  process.env.DEPLOY_NOTIFICATION_SECRET = 'segredo-lembrete-teste';
+  process.env.VAPID_PUBLIC_KEY = chavesVapid.publicKey;
+  process.env.VAPID_PRIVATE_KEY = chavesVapid.privateKey;
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/push-reminder-device-1';
+  const envios = [];
+  webpush.sendNotification = async (_inscricao, payload) => envios.push(JSON.parse(payload));
+
+  try {
+    const inscricao = {
+      endpoint,
+      keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) },
+    };
+    assert.equal((await chamar('POST', '/notificacoes/push', { inscricao })).status, 200);
+
+    const { orc: semRetorno } = await novaProposta({ abrir: false });
+    assert.equal((await mudarStatus(semRetorno.id, 'enviado')).status, 200);
+    const db = await app.locals.obterDb();
+    await db.run(
+      `UPDATE orcamentos SET enviado_em = now() - interval '6 days', data_validade = ? WHERE id = ?`,
+      somarDias(hojeFalso, 10),
+      semRetorno.id,
+    );
+    const { orc: pertoDoVencimento } = await novaProposta({ abrir: false });
+    assert.equal((await mudarStatus(pertoDoVencimento.id, 'enviado')).status, 200);
+    await db.run(
+      `UPDATE orcamentos SET enviado_em = now() - interval '1 day', data_validade = ? WHERE id = ?`,
+      somarDias(hojeFalso, 2),
+      pertoDoVencimento.id,
+    );
+
+    let r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true });
+    assert.equal(r.status, 401, 'exige o segredo do agendamento');
+    r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true, autorizacao: 'incorreto' });
+    assert.equal(r.status, 401);
+    r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.encontrados, 2);
+    assert.equal(r.dados.processados, 2);
+    assert.equal(envios.length, 2);
+
+    const semResposta = envios.find((aviso) => aviso.titulo === 'Proposta aguardando resposta');
+    const vencimento = envios.find((aviso) => aviso.titulo === 'Proposta perto do vencimento');
+    assert.match(semResposta.texto, new RegExp(`nº ${semRetorno.numero}`));
+    assert.match(vencimento.texto, /vence em 2 dias/);
+    assert.equal(semResposta.caminho, `/#/orcamentos/${semRetorno.id}`);
+    assert.equal(vencimento.caminho, `/#/orcamentos/${pertoDoVencimento.id}`);
+
+    r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.encontrados, 0, 'não seleciona eventos já enviados');
+    assert.equal(r.dados.processados, 0);
+    assert.equal(envios.length, 2);
+    assert.equal((await db.get('SELECT COUNT(*) AS n FROM notificacoes_lembrete')).n, 2);
+  } finally {
+    await chamar('DELETE', '/notificacoes/push', { endpoint });
+    webpush.sendNotification = anteriores.sendNotification;
+    for (const [chave, valor] of Object.entries({
+      DEPLOY_NOTIFICATION_SECRET: anteriores.secret,
+      VAPID_PUBLIC_KEY: anteriores.publicKey,
+      VAPID_PRIVATE_KEY: anteriores.privateKey,
+    })) {
       if (valor === undefined) delete process.env[chave];
       else process.env[chave] = valor;
     }

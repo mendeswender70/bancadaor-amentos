@@ -67,10 +67,13 @@ login; o botão **Novidades** permite consultar as entradas anteriores. O aviso
 Uma aba aberta consulta a versão publicada a cada 45 segundos e mostra um botão
 para atualizar, sem recarregar uma tela de orçamento por conta própria. O PWA
 recebe notificações push após deploys de produção e quando um cliente abre uma
-proposta pela primeira vez ou a aprova. Os avisos vão para os dispositivos
-inscritos da conta, ativados em **Ajustes → Minha conta → Avisos no PWA**. No
-iPhone, é necessário instalar o site na Tela de Início e
-permitir notificações.
+proposta pela primeira vez ou a aprova. Também envia lembretes diários às 10h
+(horário de Brasília) para propostas enviadas há pelo menos cinco dias sem
+resposta e para propostas com vencimento nos próximos dois dias. Cada lembrete
+é enviado uma vez por proposta e evento; o aviso abre o orçamento correspondente.
+Os avisos vão para os dispositivos inscritos da conta, ativados em
+**Ajustes → Minha conta → Avisos no PWA**. No iPhone, é necessário instalar o
+site na Tela de Início e permitir notificações.
 
 Para habilitar o push, gere um par VAPID uma vez no computador:
 
@@ -87,6 +90,9 @@ Copie a chave pública e privada para as variáveis **Production** da Vercel com
 `.github/workflows/notificar-deploy.yml` usa esse segredo para autorizar o envio
 após deploys de produção. Sem essas variáveis, o aviso dentro do site continua
 funcionando, mas o navegador não pode receber push.
+
+O workflow `.github/workflows/lembretes-propostas.yml` usa o mesmo segredo para
+acionar os lembretes uma vez ao dia. Ele não exige uma variável adicional.
 
 Referência: [connection pooling na Neon](https://neon.com/docs/connect/connection-pooling).
 

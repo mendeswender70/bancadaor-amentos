@@ -274,6 +274,19 @@ export const MIGRACOES = [
     )`,
     ...['inscricoes_push', 'notificacoes_deploy'].map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`),
   ],
+  // v6: controle idempotente dos lembretes automáticos de propostas.
+  [
+    `CREATE TABLE notificacoes_lembrete (
+      orcamento_id integer NOT NULL REFERENCES orcamentos(id) ON DELETE CASCADE,
+      tipo text NOT NULL CHECK (tipo IN ('sem_resposta', 'perto_vencimento')),
+      referencia text NOT NULL,
+      estado text NOT NULL DEFAULT 'enviando' CHECK (estado IN ('enviando', 'enviado', 'erro')),
+      iniciado_em timestamptz NOT NULL DEFAULT now(),
+      enviado_em timestamptz,
+      PRIMARY KEY (orcamento_id, tipo, referencia)
+    )`,
+    `ALTER TABLE notificacoes_lembrete ENABLE ROW LEVEL SECURITY`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------
