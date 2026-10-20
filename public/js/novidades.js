@@ -2,6 +2,12 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-login-barra-superior',
+    data: '20 de outubro de 2026',
+    titulo: 'Login integrado à barra superior',
+    itens: ['A área da barra de status acompanha o fundo escuro do acesso, sem a faixa clara no topo.'],
+  },
+  {
     id: '2026-10-login-capslock-serra',
     data: '20 de outubro de 2026',
     titulo: 'Login com retorno mais claro',
