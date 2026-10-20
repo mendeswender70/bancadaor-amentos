@@ -4,6 +4,7 @@ import {
   h,
   campo,
   abrirModal,
+  confirmar,
   avisoErro,
   aviso,
   debounce,
@@ -84,6 +85,26 @@ async function acaoDuplicar(o) {
   }
 }
 
+export async function excluirOrcamento(o, aoExcluir) {
+  const cliente = o.cliente_nome || o.cliente?.nome;
+  const identificacao = `orçamento nº ${formatarNumero(o.numero)}${cliente ? ` de ${cliente}` : ''}`;
+  if (!(await confirmar(`Excluir o ${identificacao}? Os móveis, serviços, histórico e lembretes vinculados também serão removidos. Outras cópias relacionadas serão preservadas. Esta ação não pode ser desfeita.`, {
+    titulo: 'Excluir orçamento',
+    sim: 'Excluir orçamento',
+    perigo: true,
+  }))) return false;
+
+  try {
+    await api.delete(`/orcamentos/${o.id}`);
+    aviso(`Orçamento nº ${formatarNumero(o.numero)} excluído.`);
+    aoExcluir?.();
+    return true;
+  } catch (erro) {
+    avisoErro(erro);
+    return false;
+  }
+}
+
 async function acaoPdf(o) {
   try {
     aviso('Gerando o PDF…');
@@ -157,6 +178,8 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar } =
               ['link', 'Copiar link da proposta', () => acaoCopiarLink(o)],
               ['pdf', 'Baixar PDF', () => acaoPdf(o)],
               ['copiar', 'Duplicar', () => acaoDuplicar(o)],
+              '-',
+              ['lixeira', 'Excluir orçamento', () => excluirOrcamento(o, aoMudar), { perigo: true }],
             ],
             { rotulo: `Ações do orçamento nº ${formatarNumero(o.numero)}` },
           ),

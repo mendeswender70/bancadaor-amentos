@@ -37,7 +37,7 @@ import {
   menuSuspenso,
   haQuanto,
 } from '../ui.js';
-import { avatar, selo, seletorCliente, numeroWhatsApp } from '../comum.js';
+import { avatar, selo, seletorCliente, numeroWhatsApp, excluirOrcamento } from '../comum.js';
 import { abrirEnvio, linkDaProposta } from '../envio.js';
 import { aoSairDaPagina, irPara, substituirEndereco } from '../main.js';
 import { seletorParcelas } from './config.js';
@@ -341,6 +341,8 @@ export async function paginaEditor({ id, clienteId }) {
       ['olho', 'Ver como o cliente vê', verComoCliente],
       ['pdf', 'Baixar PDF', abrirPdf],
       ['copiar', 'Duplicar orçamento', duplicar, { desativado: !orc.id }],
+      '-',
+      ['lixeira', 'Excluir orçamento', excluir, { perigo: true, desativado: !orc.id }],
     ];
     substituir(
       acoesLateral,
@@ -1057,6 +1059,11 @@ export async function paginaEditor({ id, clienteId }) {
     } catch (erro) {
       avisoErro(erro);
     }
+  }
+
+  async function excluir() {
+    if (!orc.id) return;
+    await excluirOrcamento(orc, () => irPara('#/orcamentos'));
   }
 
   async function trocarCliente() {

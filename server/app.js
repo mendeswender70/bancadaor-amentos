@@ -830,6 +830,12 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     res.json(await carregarOrcamento(db, orcId));
   });
 
+  api.delete('/orcamentos/:id', async (req, res) => {
+    const resultado = await db.run('DELETE FROM orcamentos WHERE id = ?', id(req.params.id));
+    if (!resultado.changes) throw naoEncontrado('Orçamento não encontrado.');
+    res.json({ ok: true });
+  });
+
   api.patch('/orcamentos/:id/status', async (req, res) => {
     await alterarStatus(db, id(req.params.id), req.body.status, req.usuario.id, req.body.versao);
     res.json(await carregarOrcamento(db, id(req.params.id)));
