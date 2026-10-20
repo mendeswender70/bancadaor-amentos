@@ -406,28 +406,45 @@ test('dashboard mostra indicadores do mês', async () => {
   assert.equal(r2.dados.em_aberto, 1);
 });
 
-test('orçamento enviado expira e reabre quando a validade é renovada', async () => {
+test('orçamento expirado é reaberto ao renovar a validade, inclusive nos links existentes', async () => {
   hojeFalso = '2026-10-05';
   let r = await chamar('GET', `/orcamentos/${orcamentoId}`);
   assert.equal(r.dados.status, 'expirado');
   const aprovado = await chamar('GET', `/orcamentos/${duplicadoId}`);
   assert.equal(aprovado.dados.status, 'aprovado', 'aprovado não expira');
 
-  // Reproduz o caso da proposta: validade renovada para 30/10 e hoje é 20/10.
+  // Simula um registro já salvo pela versão antiga: datas futuras, status expirado.
+  const db = await app.locals.obterDb();
+  await db.run(
+    'UPDATE orcamentos SET data = ?, validade_dias = ?, data_validade = ? WHERE id = ?',
+    '2026-10-20',
+    10,
+    '2026-10-30',
+    orcamentoId,
+  );
   hojeFalso = '2026-10-20';
-  const atual = (await chamar('GET', `/orcamentos/${orcamentoId}`)).dados;
-  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, {
-    ...atual,
-    data: '2026-10-20',
-    validade_dias: 10,
-  });
-  assert.equal(r.status, 200);
+  r = await chamar('GET', `/orcamentos/${orcamentoId}`);
   assert.equal(r.dados.data_validade, '2026-10-30');
-  assert.equal(r.dados.status, 'enviado');
+  assert.equal(r.dados.status, 'enviado', 'corrige ao abrir um orçamento já afetado');
 
   const { token: tokenRenovado } = (await chamar('POST', `/orcamentos/${orcamentoId}/link`)).dados;
-  const proposta = await semLogin('GET', `/publico/propostas/${tokenRenovado}`);
+  let proposta = await semLogin('GET', `/publico/propostas/${tokenRenovado}`);
   assert.equal(proposta.dados.situacao.status, 'enviado');
+  assert.equal(proposta.dados.situacao.pode_aprovar, true);
+
+  // Uma edição após outra expiração também recupera o status anterior.
+  hojeFalso = '2026-10-31';
+  r = await chamar('GET', `/orcamentos/${orcamentoId}`);
+  assert.equal(r.dados.status, 'expirado');
+  const atual = r.dados;
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, {
+    ...atual,
+    data: '2026-11-01',
+    validade_dias: 10,
+  });
+  assert.equal(r.dados.data_validade, '2026-11-11');
+  assert.equal(r.dados.status, 'enviado');
+  proposta = await semLogin('GET', `/publico/propostas/${tokenRenovado}`);
   assert.equal(proposta.dados.situacao.pode_aprovar, true);
 
   hojeFalso = '2026-09-24';

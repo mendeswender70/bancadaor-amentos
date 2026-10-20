@@ -6,8 +6,8 @@ export const novidades = [
     data: '20 de outubro de 2026',
     titulo: 'Validade renovada nos orçamentos',
     itens: [
-      'Ao atualizar a validade de uma proposta vencida, ela volta a ficar disponível para o cliente.',
-      'A situação anterior da proposta é recuperada e o link passa a refletir a nova data.',
+      'Renovar a validade reabre uma proposta expirada e preserva o status Enviado ou Em negociação.',
+      'Propostas já salvas com a data nova são corrigidas automaticamente ao abrir o orçamento ou o link.',
     ],
   },
   {

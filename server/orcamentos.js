@@ -485,7 +485,13 @@ export async function expirarVencidos(db, dataHoje) {
     `SELECT id FROM orcamentos WHERE status IN ('enviado', 'negociacao') AND data_validade < ?`,
     dataHoje,
   );
-  if (!vencidos.length) return;
+  // Corrige também registros em que a validade foi renovada antes desta
+  // correção, mas o status expirado acabou sendo mantido no banco.
+  const renovados = await db.all(
+    `SELECT id FROM orcamentos WHERE status = 'expirado' AND data_validade >= ?`,
+    dataHoje,
+  );
+  if (!vencidos.length && !renovados.length) return;
   await db.transacao(async (t) => {
     for (const { id } of vencidos) {
       const r = await t.run(
@@ -495,6 +501,22 @@ export async function expirarVencidos(db, dataHoje) {
         dataHoje,
       );
       if (r.changes) await registrarHistorico(t, id, 'Validade vencida — status alterado para Expirado', null);
+    }
+    for (const { id } of renovados) {
+      const atual = await t.get('SELECT status, data_validade FROM orcamentos WHERE id = ? FOR UPDATE', id);
+      if (!atual || atual.status !== 'expirado' || atual.data_validade < dataHoje) continue;
+      const status = await statusAbertoAnterior(t, id);
+      const r = await t.run(
+        `UPDATE orcamentos SET status = ?, versao = versao + 1, atualizado_em = now()
+         WHERE id = ? AND status = 'expirado' AND data_validade >= ?`,
+        status,
+        id,
+        dataHoje,
+      );
+      if (r.changes) {
+        await marcarDatasStatus(t, id, 'expirado', status);
+        await registrarHistorico(t, id, `Validade renovada — status restaurado para ${STATUS[status]}`, null);
+      }
     }
   });
 }
