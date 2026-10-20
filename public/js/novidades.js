@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-proposta-mobile',
+    data: '20 de outubro de 2026',
+    titulo: 'Propostas mais claras no celular',
+    itens: [
+      'A barra de ações da proposta não cobre mais o valor total em telas estreitas.',
+      'Os botões se ajustam ao espaço disponível para facilitar a leitura e a aprovação.',
+    ],
+  },
+  {
     id: '2026-10-excluir-orcamentos',
     data: '20 de outubro de 2026',
     titulo: 'Exclusão segura de orçamentos',
