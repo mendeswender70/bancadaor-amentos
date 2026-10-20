@@ -326,7 +326,7 @@ function iniciarMonitorVersao() {
 function atualizarAparenciaAcesso(ativo) {
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     if (meta.dataset.corOriginal === undefined) meta.dataset.corOriginal = meta.content;
-    meta.content = ativo ? '#30251c' : meta.dataset.corOriginal;
+    meta.content = ativo ? 'transparent' : meta.dataset.corOriginal;
   }
 
   const barraIos = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
