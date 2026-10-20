@@ -54,6 +54,14 @@ por compatibilidade. Confira o ambiente selecionado antes de publicar.
 A cada `git push` no branch de produção configurado na Vercel, uma nova versão
 é publicada e os dados continuam na Neon.
 
+### Avisar os usuários sobre mudanças
+
+Quando uma atualização trouxer mudanças que o usuário deve conhecer, inclua
+uma entrada no início de `public/js/novidades.js`, com um `id` novo, data,
+título e lista curta do que mudou. O aviso aparece uma vez por navegador após o
+login; o botão **Novidades** permite consultar as entradas anteriores. O aviso
+é marcado como lido no armazenamento local do navegador.
+
 Referência: [connection pooling na Neon](https://neon.com/docs/connect/connection-pooling).
 
 ## Rodar no computador

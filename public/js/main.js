@@ -1,5 +1,6 @@
 import { api, cache, quandoPerderSessao } from './api.js';
-import { h, anexar, icone, substituir, carregando, avisoErro, campo, aviso, iniciais, marcaEsquadro } from './ui.js';
+import { h, anexar, icone, substituir, carregando, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
+import { novidades } from './novidades.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
@@ -137,6 +138,7 @@ function montarLayout() {
         ),
         h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
         h('nav', { class: 'lateral-nav' }, MENU.map((m) => link(m))),
+        botaoNovidades('lateral'),
         h('a', { href: '#/config/conta', class: 'lateral-assinatura', title: 'esquadro' }, marcaEsquadro('marca-mini')),
         h(
           'div',
@@ -157,6 +159,7 @@ function montarLayout() {
           'header',
           { class: 'topo' },
           h('a', { href: '#/', class: 'topo-marca' }, monograma(), h('span', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos')),
+          botaoNovidades('topo'),
           h('a', { href: '#/config/conta', class: 'avatar topo-avatar', title: 'Minha conta', 'aria-label': 'Minha conta' }, iniciais(usuario?.nome)),
         ),
         h('main', { id: 'conteudo', class: 'conteudo' }),
@@ -172,6 +175,68 @@ function montarLayout() {
       ),
     ),
   );
+}
+
+const CHAVE_NOVIDADES_LIDAS = 'esquadro.novidades.lidas';
+
+function idsNovidadesLidas() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(CHAVE_NOVIDADES_LIDAS) || '[]');
+    return new Set(Array.isArray(ids) ? ids : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function botaoNovidades(posicao) {
+  const botao = h(
+    'button',
+    { type: 'button', class: `botao-novidades botao-novidades-${posicao}`, title: 'Ver novidades', 'aria-label': 'Ver novidades', onclick: () => abrirNovidades() },
+    icone('historico'),
+    h('span', { class: 'botao-novidades-texto' }, 'Novidades'),
+    h('span', { class: 'botao-novidades-ponto', 'aria-hidden': 'true', hidden: true }),
+  );
+  botao.querySelector('.botao-novidades-ponto').hidden = novidades.every((n) => idsNovidadesLidas().has(n.id));
+  return botao;
+}
+
+function atualizarIndicadorNovidades() {
+  const lidas = idsNovidadesLidas();
+  const haNovidades = novidades.some((n) => !lidas.has(n.id));
+  for (const botao of document.querySelectorAll('.botao-novidades')) {
+    botao.querySelector('.botao-novidades-ponto').hidden = !haNovidades;
+  }
+}
+
+async function abrirNovidades({ somenteNaoLidas = false } = {}) {
+  const lidas = idsNovidadesLidas();
+  const entradas = novidades.filter((n) => !somenteNaoLidas || !lidas.has(n.id));
+  if (!entradas.length) return;
+
+  await abrirModal('Novidades do esquadro', (fechar) =>
+    h(
+      'div',
+      { class: 'lista-novidades' },
+      entradas.map((n) =>
+        h(
+          'article',
+          { class: 'novidade' },
+          h('time', { class: 'novidade-data' }, n.data),
+          h('h3', {}, n.titulo),
+          h('ul', {}, n.itens.map((item) => h('li', {}, item))),
+        ),
+      ),
+      h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', autofocus: true, onclick: () => fechar(true) }, 'Entendi')),
+    ),
+  );
+
+  try {
+    const ids = new Set([...idsNovidadesLidas(), ...entradas.map((n) => n.id)]);
+    localStorage.setItem(CHAVE_NOVIDADES_LIDAS, JSON.stringify([...ids]));
+  } catch {
+    // Se o armazenamento local estiver bloqueado, a novidade pode reaparecer na próxima visita.
+  }
+  atualizarIndicadorNovidades();
 }
 
 export function atualizarMarca() {
@@ -227,6 +292,7 @@ async function mostrarAcesso() {
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
+    await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
   pararCena();
