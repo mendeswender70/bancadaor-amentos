@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-login-entrada-suave',
+    data: '20 de outubro de 2026',
+    titulo: 'Entrada do login mais suave',
+    itens: [
+      'O cartão do login aparece com um movimento leve para cima.',
+      'A abertura não exibe mais uma tela intermediária com logo e spinner.',
+      'A animação respeita a configuração de redução de movimento do aparelho.',
+    ],
+  },
+  {
     id: '2026-10-login-premium-madeira',
     data: '20 de outubro de 2026',
     titulo: 'Novo visual para entrar no esquadro',
