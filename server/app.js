@@ -162,12 +162,14 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     const e = await db.get('SELECT logo, logo_mime FROM empresa WHERE id = 1');
     return e?.logo ? { bytes: Buffer.from(e.logo), mime: e.logo_mime } : null;
   };
-  const montarProposta = async (orcId) => {
-    const orc = await carregarOrcamento(db, orcId);
-    const empresa = await db.get('SELECT * FROM empresa WHERE id = 1');
-    const temLogo = Boolean(await db.get('SELECT 1 AS ok FROM empresa WHERE id = 1 AND logo IS NOT NULL'));
+  const montarProposta = (orcId) => db.transacao(async (t) => {
+    // Mantém conteúdo e versão consistentes enquanto os itens são carregados.
+    await t.get('SELECT id FROM orcamentos WHERE id = ? FOR SHARE', orcId);
+    const orc = await carregarOrcamento(t, orcId);
+    const empresa = await t.get('SELECT * FROM empresa WHERE id = 1');
+    const temLogo = Boolean(empresa.logo);
     return { orc, empresa, publica: propostaPublica(orc, empresa, { podeAprovar: podeAprovar(orc, dataHoje()), temLogo }) };
-  };
+  });
   const nomeArquivoPdf = (orc) => {
     const nomeCliente = semAcento(orc.cliente?.nome ?? '')
       .replace(/[^a-z0-9]+/g, '-')
@@ -204,7 +206,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (nome.length < 3) throw invalido('Digite seu nome completo para aprovar.');
     if (req.body.aceite !== true) throw invalido('Confirme que leu e concorda com a proposta.');
     await expirarVencidos(db, dataHoje());
-    await aprovarPeloLink(db, orcId, nome, dataHoje());
+    await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta);
     res.json((await montarProposta(orcId)).publica);
   });
 
@@ -592,7 +594,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   });
 
   api.patch('/orcamentos/:id/status', async (req, res) => {
-    await alterarStatus(db, id(req.params.id), req.body.status, req.usuario.id);
+    await alterarStatus(db, id(req.params.id), req.body.status, req.usuario.id, req.body.versao);
     res.json(await carregarOrcamento(db, id(req.params.id)));
   });
 

@@ -79,6 +79,7 @@ export function propostaPublica(orc, empresa, { podeAprovar, temLogo }) {
   const visao = visaoCliente(orc, empresa);
   return {
     ...visao,
+    versao_proposta: orc.versao_proposta,
     cliente: { nome: visao.cliente.nome, cidade: visao.cliente.cidade, estado: visao.cliente.estado },
     tem_logo: Boolean(temLogo),
     situacao: {

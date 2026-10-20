@@ -1,16 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { abrirBanco, configuracaoBanco, converterParametros } from '../server/db.js';
+import { abrirBanco, configuracaoBanco, converterParametros, MIGRACOES } from '../server/db.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PGlite } from '@electric-sql/pglite';
 
-test('detecta o banco Supabase pelas variáveis de ambiente', () => {
-  const supa = 'postgres://postgres.abc:senha@aws-0-sa-east-1.pooler.supabase.com:6543/postgres';
-  assert.deepEqual(configuracaoBanco({ DATABASE_URL: supa }), { url: supa });
-  // Integração Supabase ↔ Vercel
-  assert.deepEqual(configuracaoBanco({ POSTGRES_URL: supa, POSTGRES_URL_NON_POOLING: 'postgres://direto' }), { url: supa });
+test('detecta a conexão Neon pelas variáveis de ambiente', () => {
+  const neon = 'postgres://esquadro:senha@ep-example-pooler.c-2.sa-east-1.aws.neon.tech/neondb';
+  assert.deepEqual(configuracaoBanco({ DATABASE_URL: neon }), { url: neon });
+  assert.deepEqual(configuracaoBanco({ POSTGRES_URL: neon, POSTGRES_URL_NON_POOLING: 'postgres://direto' }), { url: neon });
   // Prefixo personalizado: prefere o endereço com pooler
   assert.deepEqual(
-    configuracaoBanco({ APP_URL: 'https://site.com', ESQ_POSTGRES_URL_NON_POOLING: 'postgres://direto', ESQ_POSTGRES_URL: supa }),
-    { url: supa },
+    configuracaoBanco({ APP_URL: 'https://site.com', ESQ_POSTGRES_URL_NON_POOLING: 'postgres://direto', ESQ_POSTGRES_URL: neon }),
+    { url: neon },
   );
   assert.equal(configuracaoBanco({ APP_URL: 'https://site.com', DATABASE_URL: 'libsql://x.turso.io' }), null);
   assert.equal(configuracaoBanco({}), null);
@@ -55,4 +58,36 @@ test('explica o que corrigir quando a conexão com o banco falha', async () => {
   assert.match(explicarErroBanco({ code: 'ENETUNREACH' }), /Transaction pooler/);
   assert.match(explicarErroBanco(new TypeError('Invalid URL')), /formato inválido/);
   assert.doesNotMatch(explicarErroBanco({ message: 'x', code: 'ECONNREFUSED' }), /senha123/);
+});
+
+test('atualiza um banco v3 preservando os orçamentos e aprovações existentes', async () => {
+  const pasta = mkdtempSync(join(tmpdir(), 'esquadro-migracao-'));
+  let banco;
+  try {
+    const antigo = await PGlite.create(pasta);
+    try {
+      await antigo.exec('CREATE TABLE migracoes (versao integer PRIMARY KEY, aplicada_em timestamptz NOT NULL DEFAULT now())');
+      for (const [i, comandos] of MIGRACOES.slice(0, 3).entries()) {
+        for (const sql of comandos) await antigo.exec(sql);
+        await antigo.query('INSERT INTO migracoes (versao) VALUES ($1)', [i + 1]);
+      }
+      await antigo.exec(`INSERT INTO clientes (nome) VALUES ('Cliente existente');
+        INSERT INTO orcamentos (numero, cliente_id, data, validade_dias, data_validade, status,
+          total_cents, aprovado_em, aprovado_por, aprovado_pelo_link)
+        VALUES (1, 1, '2026-09-24', 10, '2026-10-04', 'aprovado', 12345,
+          '2026-09-25T12:00:00Z', 'Cliente existente', 1)`);
+    } finally {
+      await antigo.close();
+    }
+    banco = await abrirBanco({ url: `pglite:${pasta}` });
+    const orc = await banco.get('SELECT status, total_cents, aprovado_por, aprovado_pelo_link, versao, versao_proposta FROM orcamentos WHERE numero = 1');
+    assert.deepEqual(orc, { status: 'aprovado', total_cents: 12345, aprovado_por: 'Cliente existente', aprovado_pelo_link: 1, versao: 1, versao_proposta: 1 });
+    assert.equal((await banco.get('SELECT MAX(versao) AS versao FROM migracoes')).versao, 4);
+    await banco.close();
+    banco = await abrirBanco({ url: `pglite:${pasta}` });
+    assert.equal((await banco.get('SELECT COUNT(*) AS n FROM orcamentos')).n, 1);
+  } finally {
+    await banco?.close();
+    rmSync(pasta, { recursive: true, force: true });
+  }
 });

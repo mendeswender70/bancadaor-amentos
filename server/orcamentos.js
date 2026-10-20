@@ -14,6 +14,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import { semAcento } from './db.js';
 import { ErroHttp, dataIso, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
+import { visaoCliente } from './visaoCliente.js';
 
 const MAX_ITENS = 200;
 const MAX_AMBIENTES = 50;
@@ -383,29 +384,62 @@ export function criarOrcamento(db, body, usuarioId) {
 
 export function atualizarOrcamento(db, id, body, usuarioId) {
   return db.transacao(async (t) => {
+    await bloquearOrcamento(t, id);
     const anterior = await carregarOrcamento(t, id);
     if (!anterior) throw naoEncontrado('Orçamento não encontrado.');
+    conferirVersao(body.versao, anterior.versao);
     const novo = await normalizarOrcamento(t, body);
+    const mudouProposta = assinaturaProposta(anterior) !== assinaturaProposta(novo);
+    const precisaNovoAceite = anterior.status === 'aprovado' && mudouProposta;
+    if (precisaNovoAceite) novo.status = 'negociacao';
     await t.run(
-      `UPDATE orcamentos SET ${COLUNAS.map((c) => `${c} = ?`).join(', ')}, atualizado_em = now() WHERE id = ?`,
+      `UPDATE orcamentos SET ${COLUNAS.map((c) => `${c} = ?`).join(', ')},
+       versao = versao + 1, versao_proposta = versao_proposta + ?, atualizado_em = now() WHERE id = ?`,
       ...COLUNAS.map((c) => novo[c]),
+      mudouProposta ? 1 : 0,
       id,
     );
     await gravarFilhos(t, id, novo);
     await marcarDatasStatus(t, id, anterior.status, novo.status);
     const evento = descreverAlteracoes(anterior, novo);
     if (evento) await registrarEdicao(t, id, evento, usuarioId);
+    if (precisaNovoAceite) await registrarHistorico(t, id, 'Proposta alterada — nova aprovação necessária', usuarioId);
     return id;
   });
 }
 
-export function alterarStatus(db, id, status, usuarioId) {
+// Toda escrita de conteúdo/status trava o mesmo cabeçalho antes de ler os filhos.
+// Assim o aceite não pode acontecer no meio de um salvamento.
+async function bloquearOrcamento(db, id) {
+  if (!(await db.get('SELECT id FROM orcamentos WHERE id = ? FOR UPDATE', id))) {
+    throw naoEncontrado('Orçamento não encontrado.');
+  }
+}
+
+function conferirVersao(recebida, atual) {
+  if (!Number.isInteger(recebida) || recebida !== atual) {
+    throw new ErroHttp(409, 'Este orçamento foi atualizado em outra tela ou pelo cliente. Reabra a versão atual antes de continuar. Suas alterações nesta tela não foram salvas.');
+  }
+}
+
+// Compara o conteúdo comercial, sem IDs de linhas, notas/preços internos nem
+// dados mutáveis do cadastro de clientes. Inclui itens, valores e condições.
+function assinaturaProposta(orc) {
+  return JSON.stringify({
+    cliente_id: orc.cliente_id,
+    ...visaoCliente({ ...orc, numero: null, cliente: null }, {}),
+  });
+}
+
+export function alterarStatus(db, id, status, usuarioId, versao) {
   umDe(status, Object.keys(STATUS), 'Status');
   return db.transacao(async (t) => {
-    const atual = await t.get('SELECT status FROM orcamentos WHERE id = ?', id);
+    await bloquearOrcamento(t, id);
+    const atual = await t.get('SELECT status, versao FROM orcamentos WHERE id = ?', id);
     if (!atual) throw naoEncontrado('Orçamento não encontrado.');
+    conferirVersao(versao, atual.versao);
     if (atual.status === status) return;
-    await t.run('UPDATE orcamentos SET status = ?, atualizado_em = now() WHERE id = ?', status, id);
+    await t.run('UPDATE orcamentos SET status = ?, versao = versao + 1, atualizado_em = now() WHERE id = ?', status, id);
     await marcarDatasStatus(t, id, atual.status, status);
     await registrarHistorico(t, id, `Status: ${STATUS[atual.status]} → ${STATUS[status]}`, usuarioId);
   });
@@ -438,9 +472,10 @@ export async function expirarVencidos(db, dataHoje) {
   await db.transacao(async (t) => {
     for (const { id } of vencidos) {
       const r = await t.run(
-        `UPDATE orcamentos SET status = 'expirado', atualizado_em = now()
-         WHERE id = ? AND status IN ('enviado', 'negociacao')`,
+        `UPDATE orcamentos SET status = 'expirado', versao = versao + 1, atualizado_em = now()
+         WHERE id = ? AND status IN ('enviado', 'negociacao') AND data_validade < ?`,
         id,
+        dataHoje,
       );
       if (r.changes) await registrarHistorico(t, id, 'Validade vencida — status alterado para Expirado', null);
     }
@@ -505,7 +540,7 @@ export async function listarOrcamentos(db, filtros = {}) {
     ...params,
   );
   const orcamentos = await db.all(
-    `SELECT o.id, o.numero, o.data, o.data_validade, o.status, o.total_cents, o.cliente_id,
+    `SELECT o.id, o.numero, o.data, o.data_validade, o.status, o.total_cents, o.cliente_id, o.versao,
             o.visualizacoes, o.ultima_visualizacao_em, o.aprovado_pelo_link,
             (SELECT COUNT(*) FROM orcamento_ambientes a WHERE a.orcamento_id = o.id) AS ambientes,
             c.nome AS cliente_nome, c.telefone AS cliente_telefone, c.whatsapp AS cliente_whatsapp
@@ -654,9 +689,13 @@ export function podeAprovar(orc, dataHoje) {
   return ['rascunho', 'enviado', 'negociacao'].includes(orc.status) && orc.data_validade >= dataHoje;
 }
 
-export function aprovarPeloLink(db, id, nome, dataHoje) {
+export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
   return db.transacao(async (t) => {
-    const orc = await t.get('SELECT status, data_validade FROM orcamentos WHERE id = ?', id);
+    await bloquearOrcamento(t, id);
+    const orc = await t.get('SELECT status, data_validade, versao_proposta FROM orcamentos WHERE id = ?', id);
+    if (!Number.isInteger(versaoProposta) || versaoProposta !== orc.versao_proposta) {
+      throw new ErroHttp(409, 'A proposta foi alterada. Atualize a página, confira os valores e as condições e confirme novamente.');
+    }
     if (orc.status === 'aprovado') return;
     if (!podeAprovar(orc, dataHoje)) {
       throw new ErroHttp(
@@ -666,7 +705,7 @@ export function aprovarPeloLink(db, id, nome, dataHoje) {
           : 'Esta proposta não está mais disponível para aprovação.',
       );
     }
-    await t.run(`UPDATE orcamentos SET status = 'aprovado', atualizado_em = now() WHERE id = ?`, id);
+    await t.run(`UPDATE orcamentos SET status = 'aprovado', versao = versao + 1, atualizado_em = now() WHERE id = ?`, id);
     await marcarDatasStatus(t, id, orc.status, 'aprovado', { peloLink: true, nome });
     await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})`, null);
   });

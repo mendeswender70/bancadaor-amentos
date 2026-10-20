@@ -16,7 +16,11 @@ async function pedir(metodo, caminho = '', corpo) {
     body: corpo ? JSON.stringify(corpo) : undefined,
   });
   const dados = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(dados.erro || 'Não foi possível carregar a proposta.');
+  if (!r.ok) {
+    const erro = new Error(dados.erro || 'Não foi possível carregar a proposta.');
+    erro.status = r.status;
+    throw erro;
+  }
   return dados;
 }
 
@@ -233,6 +237,7 @@ function aprovar(p) {
   const aceite = h('input', { type: 'checkbox', id: 'aceite' });
   const erro = h('p', { class: 'p-erro', role: 'alert', hidden: true });
   const botao = h('button', { type: 'submit', class: 'p-botao p-botao-principal p-botao-bloco' }, icone('check'), 'Confirmar aprovação');
+  const atualizar = h('button', { type: 'button', class: 'p-botao p-botao-bloco', hidden: true, onclick: () => location.reload() }, 'Atualizar proposta e conferir');
   const fechar = () => {
     dialogo.close();
     dialogo.remove();
@@ -252,13 +257,15 @@ function aprovar(p) {
           }
           botao.disabled = true;
           try {
-            const atualizada = await pedir('POST', '/aprovar', { nome: nome.value, aceite: true });
+            const atualizada = await pedir('POST', '/aprovar', { nome: nome.value, aceite: true, versao_proposta: p.versao_proposta });
             fechar();
             mostrar(atualizada, { acabouDeAprovar: true });
           } catch (falha) {
             erro.textContent = falha.message;
             erro.hidden = false;
-            botao.disabled = false;
+            botao.disabled = falha.status === 409;
+            atualizar.hidden = falha.status !== 409;
+            if (falha.status === 409) aceite.checked = false;
           }
         },
       },
@@ -270,6 +277,7 @@ function aprovar(p) {
       h('label', { class: 'p-aceite', for: 'aceite' }, aceite, h('span', {}, 'Li a proposta e concordo com os itens, os valores e as condições.')),
       erro,
       botao,
+      atualizar,
       h('p', { class: 'p-suave p-pequeno' }, `${p.empresa.nome || 'A empresa'} recebe a aprovação na hora e entra em contato para os próximos passos.`),
     ),
   );

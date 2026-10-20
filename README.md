@@ -77,8 +77,11 @@ embutido (PGlite) na pasta `data/pglite`. Para usar um banco da Neon, defina
 | `COOKIE_SECURE` | `1` para cookie `Secure` fora da Vercel (HTTPS)               |
 | `TRUST_PROXY`   | Ex.: `1` atrás de proxy reverso (automático na Vercel)        |
 
-Testes: `npm test` — roda a API duas vezes: no Postgres embutido e com o driver
-de produção (`postgres`) conectado pela rede.
+Testes: `npm test` roda a API no Postgres embutido. Para validar também o driver
+de produção e os casos de gravação simultânea, inicie um Postgres local vazio e
+execute `TEST_POSTGRES_URL='postgres://usuario:senha@127.0.0.1:5432/esquadro_test?sslmode=disable' node tests/api-postgres.test.js`.
+O teste recusa conexões que não sejam locais e cria as tabelas nesse banco; use
+um banco descartável, exclusivo para testes.
 
 ## Fluxo
 
