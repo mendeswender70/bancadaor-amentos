@@ -406,12 +406,30 @@ test('dashboard mostra indicadores do mês', async () => {
   assert.equal(r2.dados.em_aberto, 1);
 });
 
-test('orçamento enviado expira após a validade', async () => {
+test('orçamento enviado expira e reabre quando a validade é renovada', async () => {
   hojeFalso = '2026-10-05';
-  const r = await chamar('GET', `/orcamentos/${orcamentoId}`);
+  let r = await chamar('GET', `/orcamentos/${orcamentoId}`);
   assert.equal(r.dados.status, 'expirado');
   const aprovado = await chamar('GET', `/orcamentos/${duplicadoId}`);
   assert.equal(aprovado.dados.status, 'aprovado', 'aprovado não expira');
+
+  // Reproduz o caso da proposta: validade renovada para 30/10 e hoje é 20/10.
+  hojeFalso = '2026-10-20';
+  const atual = (await chamar('GET', `/orcamentos/${orcamentoId}`)).dados;
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, {
+    ...atual,
+    data: '2026-10-20',
+    validade_dias: 10,
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.dados.data_validade, '2026-10-30');
+  assert.equal(r.dados.status, 'enviado');
+
+  const { token: tokenRenovado } = (await chamar('POST', `/orcamentos/${orcamentoId}/link`)).dados;
+  const proposta = await semLogin('GET', `/publico/propostas/${tokenRenovado}`);
+  assert.equal(proposta.dados.situacao.status, 'enviado');
+  assert.equal(proposta.dados.situacao.pode_aprovar, true);
+
   hojeFalso = '2026-09-24';
 });
 

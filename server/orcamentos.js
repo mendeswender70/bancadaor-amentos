@@ -382,13 +382,30 @@ export function criarOrcamento(db, body, usuarioId) {
   });
 }
 
-export function atualizarOrcamento(db, id, body, usuarioId) {
+// A expiração automática troca somente enviado/negociação por expirado.
+// Ao renovar a validade, recuperamos do histórico a situação que a proposta tinha.
+async function statusAbertoAnterior(db, id) {
+  const anterior = await db.get(
+    `SELECT snapshot::jsonb ->> 'status' AS status
+     FROM orcamento_historico
+     WHERE orcamento_id = ? AND snapshot IS NOT NULL
+       AND snapshot::jsonb ->> 'status' IN ('enviado', 'negociacao')
+     ORDER BY id DESC LIMIT 1`,
+    id,
+  );
+  return anterior?.status ?? 'enviado';
+}
+
+export function atualizarOrcamento(db, id, body, usuarioId, dataHoje) {
   return db.transacao(async (t) => {
     await bloquearOrcamento(t, id);
     const anterior = await carregarOrcamento(t, id);
     if (!anterior) throw naoEncontrado('Orçamento não encontrado.');
     conferirVersao(body.versao, anterior.versao);
     const novo = await normalizarOrcamento(t, body);
+    if (anterior.status === 'expirado' && novo.status === 'expirado' && novo.data_validade >= dataHoje) {
+      novo.status = await statusAbertoAnterior(t, id);
+    }
     const mudouProposta = assinaturaProposta(anterior) !== assinaturaProposta(novo);
     const precisaNovoAceite = anterior.status === 'aprovado' && mudouProposta;
     if (precisaNovoAceite) novo.status = 'negociacao';

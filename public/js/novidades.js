@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-validade-orcamento',
+    data: '20 de outubro de 2026',
+    titulo: 'Validade renovada nos orçamentos',
+    itens: [
+      'Ao atualizar a validade de uma proposta vencida, ela volta a ficar disponível para o cliente.',
+      'A situação anterior da proposta é recuperada e o link passa a refletir a nova data.',
+    ],
+  },
+  {
     id: '2026-10-modo-escuro',
     data: '20 de outubro de 2026',
     titulo: 'Modo escuro mais confortável',
