@@ -4632,3 +4632,187 @@ html.tela-acesso body {
     margin: 12px auto 20px;
   }
 }
+
+
+/* Detalhes de projeto e movimento discreto na tela de acesso */
+html.tela-acesso {
+  --login-detalhe: rgb(148 101 53 / 55%);
+  --login-particula: #b98a56;
+}
+
+@media (prefers-color-scheme: dark) {
+  html.tela-acesso:not([data-theme='light']) {
+    --login-detalhe: rgb(220 178 128 / 60%);
+    --login-particula: #e2bd8e;
+  }
+}
+
+html.tela-acesso[data-theme='dark'] {
+  --login-detalhe: rgb(220 178 128 / 60%);
+  --login-particula: #e2bd8e;
+}
+
+html.tela-acesso[data-theme='light'] {
+  --login-detalhe: rgb(148 101 53 / 55%);
+  --login-particula: #b98a56;
+}
+
+.acesso-planta,
+.acesso-serragem {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.acesso-planta {
+  z-index: 0;
+  object-fit: cover;
+  opacity: 0.34;
+}
+
+.acesso-serragem {
+  z-index: 0;
+  overflow: hidden;
+}
+
+.acesso-serragem > span {
+  position: absolute;
+  top: var(--particula-y);
+  left: var(--particula-x);
+  width: var(--particula-tamanho);
+  height: var(--particula-tamanho);
+  border-radius: 50%;
+  background: var(--login-particula);
+  opacity: 0;
+  box-shadow: 0 0 8px var(--login-particula);
+  animation: acesso-flutuar var(--particula-duracao) var(--particula-atraso) ease-in-out infinite alternate;
+}
+
+.acesso-serragem > span:nth-child(1) { --particula-x: 12%; --particula-y: 28%; --particula-tamanho: 3px; --particula-duracao: 17s; --particula-atraso: -5s; }
+.acesso-serragem > span:nth-child(2) { --particula-x: 85%; --particula-y: 19%; --particula-tamanho: 2px; --particula-duracao: 22s; --particula-atraso: -13s; }
+.acesso-serragem > span:nth-child(3) { --particula-x: 76%; --particula-y: 76%; --particula-tamanho: 3px; --particula-duracao: 19s; --particula-atraso: -9s; }
+.acesso-serragem > span:nth-child(4) { --particula-x: 24%; --particula-y: 82%; --particula-tamanho: 2px; --particula-duracao: 24s; --particula-atraso: -17s; }
+.acesso-serragem > span:nth-child(5) { --particula-x: 92%; --particula-y: 52%; --particula-tamanho: 2px; --particula-duracao: 18s; --particula-atraso: -8s; }
+.acesso-serragem > span:nth-child(6) { --particula-x: 39%; --particula-y: 35%; --particula-tamanho: 2px; --particula-duracao: 21s; --particula-atraso: -12s; }
+.acesso-serragem > span:nth-child(7) { --particula-x: 58%; --particula-y: 91%; --particula-tamanho: 3px; --particula-duracao: 25s; --particula-atraso: -15s; }
+
+@keyframes acesso-flutuar {
+  from { transform: translate3d(-4px, 7px, 0); opacity: 0.12; }
+  to { transform: translate3d(5px, -12px, 0); opacity: 0.48; }
+}
+
+.acesso-cartao {
+  position: relative;
+  isolation: isolate;
+}
+
+.acesso-cartao::before {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  z-index: 0;
+  border-radius: 20px;
+  opacity: 0.38;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left top / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left top / 1px 26px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right top / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right top / 1px 26px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left bottom / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) left bottom / 1px 26px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right bottom / 26px 1px no-repeat,
+    linear-gradient(var(--login-detalhe), var(--login-detalhe)) right bottom / 1px 26px no-repeat;
+  transition: inset 220ms ease, opacity 220ms ease;
+}
+
+.acesso-cartao:focus-within::before {
+  inset: 8px;
+  opacity: 0.88;
+}
+
+.acesso-cartao > * {
+  position: relative;
+  z-index: 1;
+}
+
+.acesso-simbolo {
+  width: 25px;
+  height: 25px;
+  margin-bottom: 8px;
+  color: var(--login-etiqueta);
+}
+
+.acesso-simbolo-desenho {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.acesso-simbolo-desenho path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: acesso-tracar-simbolo 1550ms cubic-bezier(0.45, 0, 0.25, 1) both;
+}
+
+.acesso-simbolo-desenho path:not(.acesso-traco-principal) {
+  animation-delay: 360ms;
+}
+
+@keyframes acesso-tracar-simbolo {
+  to { stroke-dashoffset: 0; }
+}
+
+.acesso-medidor {
+  position: relative;
+  min-width: 0;
+}
+
+.acesso-medidor > input,
+.acesso-medidor > .acesso-senha-controle {
+  width: 100%;
+}
+
+.acesso-medida {
+  position: absolute;
+  right: 15px;
+  bottom: 1px;
+  left: 15px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--login-foco);
+  opacity: 0;
+  pointer-events: none;
+  transform: scaleX(var(--acesso-progresso, 0));
+  transform-origin: left center;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.acesso-medidor:focus-within .acesso-medida {
+  opacity: 0.88;
+}
+
+.acesso-senha-controle {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acesso-planta { opacity: 0.34; }
+  .acesso-serragem { display: none; }
+  .acesso-serragem > span,
+  .acesso-simbolo-desenho path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .acesso-cartao::before,
+  .acesso-medida { transition: none; }
+  .acesso-serra { animation: none; }
+}

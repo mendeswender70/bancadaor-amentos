@@ -2,14 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
-    id: '2026-10-login-entrada-suave',
+    id: '2026-10-login-precisao-animada',
     data: '20 de outubro de 2026',
-    titulo: 'Entrada do login mais suave',
+    titulo: 'Acesso com detalhes de marcenaria',
     itens: [
-      'O cartão do login aparece com um movimento leve para cima.',
-      'Uma apresentação curta destaca a precisão e a organização da marcenaria.',
-      'A abertura não exibe mais uma tela intermediária com logo e spinner.',
-      'A animação respeita a configuração de redução de movimento do aparelho.',
+      'Linhas de planta baixa se desenham suavemente sobre o fundo.',
+      'Cantoneiras do cartão reagem ao foco, com uma régua sutil acompanhando o preenchimento dos campos.',
+      'Um símbolo de esquadro se desenha acima do acesso privado.',
+      'Pontos dourados flutuam discretamente como serragem iluminada.',
+      'O cartão continua como único elemento de entrada, e os movimentos respeitam a opção de reduzir movimento.',
     ],
   },
   {

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200" preserveAspectRatio="xMidYMid slice" fill="none">
+  <defs>
+    <style>
+      .planta { stroke: #d4aa78; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; opacity: .48; }
+      .dimensao { stroke: #e1bd91; stroke-width: 1.1; stroke-linecap: round; opacity: .56; }
+      .rotulo { fill: #e7c9a3; font: 13px system-ui, sans-serif; letter-spacing: 2px; opacity: .62; }
+      .desenhar path { stroke-dasharray: 100; stroke-dashoffset: 100; animation: traco 4.4s cubic-bezier(.45,0,.25,1) forwards; }
+      .desenhar path:nth-child(2n) { animation-delay: .12s; }
+      .desenhar path:nth-child(3n) { animation-delay: .24s; }
+      .medidas path { pathLength: 100; stroke-dasharray: 100; stroke-dashoffset: 100; animation: traco 3.3s 1s cubic-bezier(.45,0,.25,1) forwards; }
+      @keyframes traco { to { stroke-dashoffset: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .desenhar path, .medidas path { animation: none; stroke-dashoffset: 0; }
+      }
+    </style>
+  </defs>
+  <g class="planta desenhar">
+    <path pathLength="100" d="M170 455 450 328 730 455 450 582Z"/>
+    <path pathLength="100" d="M170 455V735L450 862V582Z"/>
+    <path pathLength="100" d="M450 582V862L730 735V455Z"/>
+    <path pathLength="100" d="M170 548 450 675 730 548"/>
+    <path pathLength="100" d="M170 642 450 769 730 642"/>
+    <path pathLength="100" d="M265 498V778"/>
+    <path pathLength="100" d="M356 540V820"/>
+    <path pathLength="100" d="M544 540V820"/>
+    <path pathLength="100" d="M635 498V778"/>
+    <path pathLength="100" d="M432 618h36v36h-36z"/>
+    <path pathLength="100" d="M432 712h36v36h-36z"/>
+    <path pathLength="100" d="M207 483l202 92"/>
+    <path pathLength="100" d="M492 580l202-92"/>
+    <path pathLength="100" d="M208 714l202 92"/>
+    <path pathLength="100" d="M492 806l202-92"/>
+  </g>
+  <g class="dimensao medidas">
+    <path pathLength="100" d="M120 455V735"/>
+    <path pathLength="100" d="M130 455h-20m20 280h-20"/>
+    <path pathLength="100" d="M170 405 450 278"/>
+    <path pathLength="100" d="M170 395v20m280-147v20"/>
+    <path pathLength="100" d="M730 455 790 428"/>
+    <path pathLength="100" d="M730 445v20m60-47v20"/>
+    <path pathLength="100" d="M450 900h100v-44"/>
+    <path pathLength="100" d="M450 890v20m100-54v20"/>
+  </g>
+  <text class="rotulo" x="80" y="605" transform="rotate(-90 80 605)">1200 mm</text>
+  <text class="rotulo" x="316" y="345" transform="rotate(-24 316 345)">600 mm</text>
+  <text class="rotulo" x="562" y="921">90°</text>
+  <path class="dimensao" d="M544 908a36 36 0 0 0-36-36"/>
+</svg>
