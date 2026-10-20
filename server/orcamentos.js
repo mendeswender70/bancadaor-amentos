@@ -382,13 +382,30 @@ export function criarOrcamento(db, body, usuarioId) {
   });
 }
 
-export function atualizarOrcamento(db, id, body, usuarioId) {
+// A expiração automática troca somente enviado/negociação por expirado.
+// Ao renovar a validade, recuperamos do histórico a situação que a proposta tinha.
+async function statusAbertoAnterior(db, id) {
+  const anterior = await db.get(
+    `SELECT snapshot::jsonb ->> 'status' AS status
+     FROM orcamento_historico
+     WHERE orcamento_id = ? AND snapshot IS NOT NULL
+       AND snapshot::jsonb ->> 'status' IN ('enviado', 'negociacao')
+     ORDER BY id DESC LIMIT 1`,
+    id,
+  );
+  return anterior?.status ?? 'enviado';
+}
+
+export function atualizarOrcamento(db, id, body, usuarioId, dataHoje) {
   return db.transacao(async (t) => {
     await bloquearOrcamento(t, id);
     const anterior = await carregarOrcamento(t, id);
     if (!anterior) throw naoEncontrado('Orçamento não encontrado.');
     conferirVersao(body.versao, anterior.versao);
     const novo = await normalizarOrcamento(t, body);
+    if (anterior.status === 'expirado' && novo.status === 'expirado' && novo.data_validade >= dataHoje) {
+      novo.status = await statusAbertoAnterior(t, id);
+    }
     const mudouProposta = assinaturaProposta(anterior) !== assinaturaProposta(novo);
     const precisaNovoAceite = anterior.status === 'aprovado' && mudouProposta;
     if (precisaNovoAceite) novo.status = 'negociacao';
@@ -468,7 +485,13 @@ export async function expirarVencidos(db, dataHoje) {
     `SELECT id FROM orcamentos WHERE status IN ('enviado', 'negociacao') AND data_validade < ?`,
     dataHoje,
   );
-  if (!vencidos.length) return;
+  // Corrige também registros em que a validade foi renovada antes desta
+  // correção, mas o status expirado acabou sendo mantido no banco.
+  const renovados = await db.all(
+    `SELECT id FROM orcamentos WHERE status = 'expirado' AND data_validade >= ?`,
+    dataHoje,
+  );
+  if (!vencidos.length && !renovados.length) return;
   await db.transacao(async (t) => {
     for (const { id } of vencidos) {
       const r = await t.run(
@@ -478,6 +501,22 @@ export async function expirarVencidos(db, dataHoje) {
         dataHoje,
       );
       if (r.changes) await registrarHistorico(t, id, 'Validade vencida — status alterado para Expirado', null);
+    }
+    for (const { id } of renovados) {
+      const atual = await t.get('SELECT status, data_validade FROM orcamentos WHERE id = ? FOR UPDATE', id);
+      if (!atual || atual.status !== 'expirado' || atual.data_validade < dataHoje) continue;
+      const status = await statusAbertoAnterior(t, id);
+      const r = await t.run(
+        `UPDATE orcamentos SET status = ?, versao = versao + 1, atualizado_em = now()
+         WHERE id = ? AND status = 'expirado' AND data_validade >= ?`,
+        status,
+        id,
+        dataHoje,
+      );
+      if (r.changes) {
+        await marcarDatasStatus(t, id, 'expirado', status);
+        await registrarHistorico(t, id, `Validade renovada — status restaurado para ${STATUS[status]}`, null);
+      }
     }
   });
 }

@@ -826,7 +826,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   });
 
   api.put('/orcamentos/:id', async (req, res) => {
-    const orcId = await atualizarOrcamento(db, id(req.params.id), req.body, req.usuario.id);
+    const orcId = await atualizarOrcamento(db, id(req.params.id), req.body, req.usuario.id, dataHoje());
     res.json(await carregarOrcamento(db, orcId));
   });
 
