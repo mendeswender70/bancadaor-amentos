@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-modo-escuro',
+    data: '20 de outubro de 2026',
+    titulo: 'Modo escuro mais confortável',
+    itens: [
+      'Fundos, cartões, menus e campos agora têm níveis mais claros entre si, sem perder o tom acolhedor da marca.',
+      'Botões e avisos ganharam cores com melhor contraste no tema escuro.',
+    ],
+  },
+  {
     id: '2026-10-visual-premium',
     data: '20 de outubro de 2026',
     titulo: 'Visual mais acolhedor no esquadro',
