@@ -2978,6 +2978,37 @@ input.invalido {
   font-weight: 650;
 }
 
+.acesso-senha-controle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.acesso-senha-controle input {
+  grid-area: 1 / 1 / 2 / 3;
+  padding-right: 78px;
+}
+
+.acesso-senha-alternar {
+  z-index: 1;
+  grid-area: 1 / 2;
+  margin-right: 12px;
+  padding: 6px 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #805326;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.acesso-senha-alternar:focus-visible {
+  outline: 2px solid #9b7044;
+  outline-offset: 2px;
+}
+
 .acesso-cartao input {
   min-height: 54px;
   padding: 12px 14px;
