@@ -145,6 +145,7 @@ export async function paginaEditor({ id, clienteId }) {
   let emAndamento = null;
   let refazer = false;
   let timer = 0;
+  let conflito = false;
 
   const alterado = () => salvo !== JSON.stringify(montarPayload(orc));
 
@@ -157,11 +158,13 @@ export async function paginaEditor({ id, clienteId }) {
 
   function agendar() {
     clearTimeout(timer);
+    if (conflito) return;
     timer = setTimeout(() => salvar({ silencioso: true }), 1200);
   }
 
   async function salvar({ silencioso = false } = {}) {
     clearTimeout(timer);
+    if (conflito) return false;
     if (emAndamento) {
       refazer = true;
       return emAndamento;
@@ -185,12 +188,14 @@ export async function paginaEditor({ id, clienteId }) {
     const eraNovo = !orc.id;
     emAndamento = (async () => {
       try {
-        const resposta = orc.id ? await api.put(`/orcamentos/${orc.id}`, payload) : await api.post('/orcamentos', payload);
+        const resposta = orc.id ? await api.put(`/orcamentos/${orc.id}`, { ...payload, versao: orc.versao }) : await api.post('/orcamentos', payload);
         // Não troca `orc` pela resposta: o usuário pode ter continuado digitando.
-        for (const campoServidor of ['id', 'numero', 'criado_em', 'data_validade', 'status', 'duplicado_de_numero', 'total_cents']) {
+        const perdeuAceite = orc.status === 'aprovado' && resposta.status === 'negociacao';
+        for (const campoServidor of ['id', 'numero', 'criado_em', 'data_validade', 'status', 'duplicado_de_numero', 'total_cents', 'versao', 'versao_proposta', 'aprovado_em', 'aprovado_por', 'aprovado_pelo_link']) {
           orc[campoServidor] = resposta[campoServidor];
         }
-        salvo = JSON.stringify(payload);
+        salvo = JSON.stringify({ ...payload, status: resposta.status });
+        if (perdeuAceite) aviso('Proposta alterada. O cliente precisa conferir e aprovar novamente.');
         salvoEm = new Date();
         estado = 'salvo';
         if (eraNovo) {
@@ -201,7 +206,8 @@ export async function paginaEditor({ id, clienteId }) {
         carregarHistorico();
         return true;
       } catch (erro) {
-        estado = 'erro';
+        if (erro.status === 409) marcarConflito();
+        else estado = 'erro';
         if (!silencioso || erro.status !== 0) avisoErro(erro);
         return false;
       } finally {
@@ -210,6 +216,7 @@ export async function paginaEditor({ id, clienteId }) {
       }
     })();
     const ok = await emAndamento;
+    if (conflito) return false;
     if (refazer) {
       refazer = false;
       if (alterado()) return salvar({ silencioso: true });
@@ -220,8 +227,11 @@ export async function paginaEditor({ id, clienteId }) {
   }
 
   async function garantirSalvo() {
-    if (orc.id && !alterado() && !emAndamento) return true;
-    return salvar();
+    if (conflito) return false;
+    while (!orc.id || alterado() || emAndamento) {
+      if (!(await salvar())) return false;
+    }
+    return true;
   }
 
   const verificar = async () => {
@@ -263,6 +273,25 @@ export async function paginaEditor({ id, clienteId }) {
   const menuBarra = h('div', {});
   const campoNomeAcrescimo = h('div', {});
   const contadorHistorico = h('span', { class: 'contador-aba' });
+  const avisoConflito = h(
+    'div',
+    { class: 'aviso-caixa aviso-atencao', role: 'alert', hidden: true },
+    h('div', {}, h('strong', {}, 'O orçamento foi atualizado em outra tela ou pelo cliente.'),
+      h('p', {}, 'Suas alterações continuam nesta tela, mas não foram salvas. Confira ou copie o que precisar antes de reabrir o orçamento.')),
+    h('button', { type: 'button', class: 'botao', onclick: async () => {
+      if (alterado() && !(await confirmar('Reabrir a versão atual e descartar as alterações não salvas desta tela?', { sim: 'Reabrir orçamento' }))) return;
+      salvo = JSON.stringify(montarPayload(orc));
+      location.reload();
+    } }, 'Reabrir orçamento'),
+  );
+
+  function marcarConflito() {
+    conflito = true;
+    clearTimeout(timer);
+    estado = 'conflito';
+    avisoConflito.hidden = false;
+    mostrarEstado();
+  }
 
   function mostrarEstado() {
     const textos = {
@@ -272,6 +301,7 @@ export async function paginaEditor({ id, clienteId }) {
       salvo: salvoEm ? `Salvo às ${salvoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Salvo',
       incompleto: motivoIncompleto,
       erro: 'Não foi salvo — tentar de novo',
+      conflito: 'Não salvo — reabra a versão atual',
     };
     for (const el of [estadoSalvo, estadoBarra]) {
       el.textContent = textos[estado];
@@ -384,16 +414,18 @@ export async function paginaEditor({ id, clienteId }) {
 
   async function mudarStatus(status) {
     if (status === orc.status) return;
-    if (!orc.id && !(await garantirSalvo())) return;
+    if (!(await garantirSalvo())) return;
     if (['recusado', 'cancelado'].includes(status) && !(await confirmar(`Marcar o orçamento como “${STATUS[status]}”?`, { sim: `Marcar como ${STATUS[status]}` }))) return;
     try {
-      const r = await api.patch(`/orcamentos/${orc.id}/status`, { status });
+      const r = await api.patch(`/orcamentos/${orc.id}/status`, { status, versao: orc.versao });
       const pendente = alterado();
       Object.assign(orc, {
         status: r.status,
         aprovado_em: r.aprovado_em,
         aprovado_por: r.aprovado_por,
         aprovado_pelo_link: r.aprovado_pelo_link,
+        versao: r.versao,
+        versao_proposta: r.versao_proposta,
       });
       // O servidor já tem a nova situação; só o resto (se houver) fica pendente.
       if (salvo) salvo = JSON.stringify({ ...JSON.parse(salvo), status: r.status });
@@ -402,6 +434,7 @@ export async function paginaEditor({ id, clienteId }) {
       carregarHistorico();
       aviso(`Situação: ${STATUS[r.status]}.`);
     } catch (erro) {
+      if (erro.status === 409) marcarConflito();
       avisoErro(erro);
     }
   }
@@ -1277,6 +1310,7 @@ export async function paginaEditor({ id, clienteId }) {
       h('div', { class: 'titulos' }, tituloEl, subtituloEl),
     ),
     etapasEl,
+    avisoConflito,
     h('div', { class: 'abas-editor', role: 'tablist', 'aria-label': 'Orçamento e histórico' }, abaOrcamento, abaHistorico),
     h(
       'div',

@@ -65,7 +65,7 @@ async function enviarDaLista(o, aoMudar) {
   });
   if (marcar && o.status !== 'enviado') {
     try {
-      await api.patch(`/orcamentos/${o.id}/status`, { status: 'enviado' });
+      await api.patch(`/orcamentos/${o.id}/status`, { status: 'enviado', versao: o.versao });
       aviso('Orçamento marcado como enviado.');
       aoMudar?.();
     } catch (erro) {

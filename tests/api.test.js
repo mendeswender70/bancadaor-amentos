@@ -32,7 +32,12 @@ async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho 
 before(async () => {
   pastaTemp = mkdtempSync(join(tmpdir(), 'orcamentos-'));
   let url = 'memory://';
-  if (process.env.TEST_BANCO === 'socket') {
+  if (process.env.TEST_BANCO === 'socket' && process.env.TEST_POSTGRES_URL) {
+    url = process.env.TEST_POSTGRES_URL;
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)) {
+      throw new Error('TEST_POSTGRES_URL deve apontar para um banco local exclusivo para testes.');
+    }
+  } else if (process.env.TEST_BANCO === 'socket') {
     // Mesmo driver da produção (postgres.js), falando com um Postgres de verdade
     // pela rede — aqui o PGlite exposto como servidor.
     const { PGlite } = await import('@electric-sql/pglite');
@@ -337,7 +342,7 @@ test('dashboard mostra indicadores do mês', async () => {
   assert.equal(r.dados.em_aberto, 2);
   assert.equal(r.dados.mes.aprovados, 0);
   assert.equal(r.dados.recentes.length, 2);
-  await chamar('PATCH', `/orcamentos/${duplicadoId}/status`, { status: 'aprovado' });
+  await mudarStatus(duplicadoId, 'aprovado');
   const r2 = await chamar('GET', '/dashboard');
   assert.equal(r2.dados.mes.aprovados, 1);
   assert.equal(r2.dados.em_aberto, 1);
@@ -413,7 +418,7 @@ test('link da proposta mostra ao cliente só o que ele pode ver', async () => {
   let orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
   orc.observacoes_internas = 'margem de 40%';
   await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
-  await chamar('PATCH', `/orcamentos/${orcamentoAmbientesId}/status`, { status: 'enviado' });
+  await mudarStatus(orcamentoAmbientesId, 'enviado');
 
   let r = await chamar('POST', `/orcamentos/${orcamentoAmbientesId}/link`);
   assert.equal(r.status, 200);
@@ -465,19 +470,19 @@ test('visitas do cliente são contadas; as da própria empresa, não', async () 
 });
 
 test('cliente aprova a proposta pelo link', async () => {
-  let r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva', aceite: true }, { semCabecalho: true });
+  let r = await aprovarProposta(token, { nome: 'João da Silva', aceite: true }, { semCabecalho: true });
   assert.equal(r.status, 403, 'exige o cabeçalho anti-CSRF');
-  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva' });
+  r = await aprovarProposta(token, { nome: 'João da Silva' });
   assert.equal(r.status, 400);
-  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'Jo', aceite: true });
+  r = await aprovarProposta(token, { nome: 'Jo', aceite: true });
   assert.equal(r.status, 400);
-  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva', aceite: true });
+  r = await aprovarProposta(token, { nome: 'João da Silva', aceite: true });
   assert.equal(r.status, 200, JSON.stringify(r.dados));
   assert.equal(r.dados.situacao.status, 'aprovado');
   assert.equal(r.dados.situacao.aprovado_por, 'João da Silva');
   assert.equal(r.dados.situacao.pode_aprovar, false);
   // aprovar de novo não dá erro nem duplica o histórico
-  r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva', aceite: true });
+  r = await aprovarProposta(token, { nome: 'João da Silva', aceite: true });
   assert.equal(r.status, 200);
 
   const orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
@@ -494,27 +499,28 @@ test('cliente aprova a proposta pelo link', async () => {
 
 test('proposta vencida ou recusada não pode ser aprovada', async () => {
   const { token: t } = (await chamar('POST', `/orcamentos/${duplicadoId}/link`)).dados;
-  await chamar('PATCH', `/orcamentos/${duplicadoId}/status`, { status: 'recusado' });
-  let r = await semLogin('POST', `/publico/propostas/${t}/aprovar`, { nome: 'João da Silva', aceite: true });
+  await mudarStatus(duplicadoId, 'recusado');
+  let r = await aprovarProposta(t, { nome: 'João da Silva', aceite: true });
   assert.equal(r.status, 409);
-  await chamar('PATCH', `/orcamentos/${duplicadoId}/status`, { status: 'enviado' });
+  await mudarStatus(duplicadoId, 'enviado');
   hojeFalso = '2026-12-01';
   r = await semLogin('GET', `/publico/propostas/${t}`);
   assert.equal(r.dados.situacao.status, 'expirado');
   assert.equal(r.dados.situacao.pode_aprovar, false);
-  r = await semLogin('POST', `/publico/propostas/${t}/aprovar`, { nome: 'João da Silva', aceite: true });
+  r = await aprovarProposta(t, { nome: 'João da Silva', aceite: true });
   assert.equal(r.status, 409);
   assert.match(r.dados.erro, /validade/);
   hojeFalso = '2026-09-24';
 });
 
 test('edições seguidas (salvamento automático) viram um só registro no histórico', async () => {
+  await mudarStatus(orcamentoAmbientesId, 'negociacao');
   const antes = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/historico`)).dados.length;
   const orc = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}`)).dados;
   orc.prazo_entrega = '45 dias úteis';
-  await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
+  Object.assign(orc, (await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc)).dados);
   orc.ambientes[0].itens[0].largura_mm = 3000;
-  await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
+  Object.assign(orc, (await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc)).dados);
   orc.ambientes[0].itens[0].largura_mm = 3100;
   await chamar('PUT', `/orcamentos/${orcamentoAmbientesId}`, orc);
   const hist = (await chamar('GET', `/orcamentos/${orcamentoAmbientesId}/historico`)).dados;
@@ -534,9 +540,150 @@ test('lista de orçamentos: grupo "perdidos", ambientes e WhatsApp do cliente', 
 });
 
 test('dashboard compara com o mês anterior e calcula a taxa de aprovação', async () => {
+  assert.equal((await aprovarProposta(token, { nome: 'João da Silva', aceite: true })).status, 200);
   const d = (await chamar('GET', '/dashboard')).dados;
   assert.equal(d.mes_anterior.quantidade, 0);
   assert.ok(d.mes.validos >= 1);
   assert.ok(d.conversao.enviados >= d.conversao.aprovados && d.conversao.aprovados >= 1);
   assert.ok(d.recentes.length <= 6);
+});
+
+// As ações usam a versão que foi lida, como o editor e a página pública.
+async function mudarStatus(orcId, status) {
+  const atual = (await chamar('GET', `/orcamentos/${orcId}`)).dados;
+  return chamar('PATCH', `/orcamentos/${orcId}/status`, { status, versao: atual.versao });
+}
+
+async function aprovarProposta(token, corpo, opcoes) {
+  const proposta = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+  return semLogin('POST', `/publico/propostas/${token}/aprovar`, { ...corpo, versao_proposta: proposta.versao_proposta }, opcoes);
+}
+
+async function novaProposta() {
+  const r = await chamar('POST', `/orcamentos/${orcamentoId}/duplicar`);
+  assert.equal(r.status, 201);
+  const orc = r.dados;
+  const { token } = (await chamar('POST', `/orcamentos/${orc.id}/link`)).dados;
+  const proposta = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+  return { orc, token, proposta };
+}
+
+const aceite = (proposta) => ({ nome: 'João da Silva', aceite: true, versao_proposta: proposta.versao_proposta });
+
+test('uma tela antiga não desfaz o aceite nem sobrescreve os valores', async () => {
+  const { orc, token, proposta } = await novaProposta();
+  const aprovado = await semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(proposta));
+  assert.equal(aprovado.status, 200);
+  const antes = (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
+  const historico = (await chamar('GET', `/orcamentos/${orc.id}/historico`)).dados;
+  const r = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, prazo_entrega: '99 dias' });
+  assert.equal(r.status, 409);
+  assert.match(r.dados.erro, /outra tela ou pelo cliente/);
+  const status = await chamar('PATCH', `/orcamentos/${orc.id}/status`, { status: 'enviado', versao: orc.versao });
+  assert.equal(status.status, 409);
+  assert.deepEqual((await chamar('GET', `/orcamentos/${orc.id}`)).dados, antes);
+  assert.deepEqual((await chamar('GET', `/orcamentos/${orc.id}/historico`)).dados, historico);
+});
+
+test('salvamento e alteração de status exigem a versão lida', async () => {
+  const { orc } = await novaProposta();
+  const semVersao = { ...orc };
+  delete semVersao.versao;
+  assert.equal((await chamar('PUT', `/orcamentos/${orc.id}`, semVersao)).status, 409);
+  assert.equal((await chamar('PATCH', `/orcamentos/${orc.id}/status`, { status: 'enviado' })).status, 409);
+  const primeira = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, observacoes_internas: 'Primeira tela' });
+  assert.equal(primeira.status, 200);
+  const segunda = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, observacoes_internas: 'Segunda tela' });
+  assert.equal(segunda.status, 409);
+  assert.equal((await chamar('GET', `/orcamentos/${orc.id}`)).dados.observacoes_internas, 'Primeira tela');
+});
+
+test('alterações comerciais retiram o aceite e exigem nova aprovação', async (t) => {
+  const alteracoes = {
+    'preço do móvel': (orc) => { orc.ambientes[0].itens[0].preco_unitario_interno_cents += 10000; },
+    'descrição sem mudar total': (orc) => { orc.ambientes[0].itens[0].descricao += ' com acabamento novo'; },
+    'condição de pagamento': (orc) => { orc.pagamento_descricao = 'Pagamento somente à vista'; },
+    'entrada': (orc) => { orc.pagamento_entrada_tipo = 'percentual'; orc.pagamento_entrada_valor = 3000; },
+    'prazo': (orc) => { orc.prazo_entrega = '60 dias úteis'; },
+    'validade': (orc) => { orc.validade_dias += 5; },
+    'observações para o cliente': (orc) => { orc.observacoes += '\nMaterial alterado.'; },
+  };
+  for (const [nome, alterar] of Object.entries(alteracoes)) await t.test(nome, async () => {
+    const { orc, token, proposta } = await novaProposta();
+    assert.equal((await semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(proposta))).status, 200);
+    const atual = (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
+    alterar(atual);
+    const r = await chamar('PUT', `/orcamentos/${orc.id}`, atual);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.status, 'negociacao');
+    assert.equal(r.dados.aprovado_em, null);
+    assert.equal(r.dados.aprovado_por, '');
+    assert.equal(r.dados.aprovado_pelo_link, 0);
+    assert.equal(r.dados.versao_proposta, proposta.versao_proposta + 1);
+    const antiga = await semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(proposta));
+    assert.equal(antiga.status, 409);
+    const nova = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+    assert.equal(nova.situacao.pode_aprovar, true);
+    assert.equal((await semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(nova))).status, 200);
+    const hist = (await chamar('GET', `/orcamentos/${orc.id}/historico`)).dados;
+    assert.equal(hist.filter((h) => h.evento === 'Proposta alterada — nova aprovação necessária').length, 1);
+    assert.equal(hist.filter((h) => h.evento.startsWith('Aprovado pelo cliente')).length, 2);
+  });
+});
+
+test('notas internas e salvamento sem mudanças preservam a aprovação', async () => {
+  const { orc, token, proposta } = await novaProposta();
+  await semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(proposta));
+  const aprovado = (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
+  for (const notas of [aprovado.observacoes_internas, 'Anotação só da empresa']) {
+    const atual = (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
+    const r = await chamar('PUT', `/orcamentos/${orc.id}`, { ...atual, observacoes_internas: notas });
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.status, 'aprovado');
+    assert.equal(r.dados.aprovado_em, aprovado.aprovado_em);
+    assert.equal(r.dados.aprovado_por, aprovado.aprovado_por);
+    assert.equal(r.dados.versao_proposta, proposta.versao_proposta);
+  }
+});
+
+test('cliente com uma proposta aberta antes da edição precisa ler a versão nova', async () => {
+  const { orc, token, proposta } = await novaProposta();
+  const r = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, prazo_entrega: '90 dias' });
+  assert.equal(r.status, 200);
+  const antiga = await semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(proposta));
+  assert.equal(antiga.status, 409);
+  assert.match(antiga.dados.erro, /confira os valores/);
+  assert.equal((await semLogin('POST', `/publico/propostas/${token}/aprovar`, { nome: 'João da Silva', aceite: true })).status, 409);
+  const atual = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+  assert.equal((await semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(atual))).status, 200);
+});
+
+// O multiplexador do PGlite Socket não isola sessões Postgres concorrentes.
+// Estes casos rodam no PGlite direto e também em um Postgres local real quando
+// TEST_POSTGRES_URL é informado (ver README).
+const concorrencia = { skip: process.env.TEST_BANCO === 'socket' && !process.env.TEST_POSTGRES_URL
+  ? 'Requer Postgres real para concorrência entre conexões; use TEST_POSTGRES_URL.' : false };
+
+test('aceites simultâneos registram uma única aprovação', concorrencia, async () => {
+  const { orc, token, proposta } = await novaProposta();
+  const respostas = await Promise.all([
+    semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(proposta)),
+    semLogin('POST', `/publico/propostas/${token}/aprovar`, { ...aceite(proposta), nome: 'Outra pessoa' }),
+  ]);
+  assert.deepEqual(respostas.map((r) => r.status), [200, 200]);
+  const hist = (await chamar('GET', `/orcamentos/${orc.id}/historico`)).dados;
+  assert.equal(hist.filter((h) => h.evento.startsWith('Aprovado pelo cliente')).length, 1);
+  assert.equal(respostas[0].dados.situacao.aprovado_por, respostas[1].dados.situacao.aprovado_por);
+});
+
+test('edição e aprovação simultâneas nunca aprovam conteúdo diferente do lido', concorrencia, async () => {
+  const { orc, token, proposta } = await novaProposta();
+  const [edicao, aprovacao] = await Promise.all([
+    chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, prazo_entrega: 'Prazo novo' }),
+    semLogin('POST', `/publico/propostas/${token}/aprovar`, aceite(proposta)),
+  ]);
+  assert.deepEqual([edicao.status, aprovacao.status].sort(), [200, 409]);
+  const atual = (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
+  if (atual.status === 'aprovado') assert.equal(atual.prazo_entrega, orc.prazo_entrega);
+  else assert.equal(atual.prazo_entrega, 'Prazo novo');
 });

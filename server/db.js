@@ -249,6 +249,11 @@ export const MIGRACOES = [
   // v3: sugestões de ambiente cadastradas pela empresa (lista em JSON; vazio
   // até a primeira alteração, quando valem as sugestões padrão).
   [`ALTER TABLE empresa ADD COLUMN ambientes_sugeridos text`],
+  // v4: versões para impedir sobrescritas e vincular o aceite ao conteúdo lido.
+  [
+    `ALTER TABLE orcamentos ADD COLUMN versao integer NOT NULL DEFAULT 1`,
+    `ALTER TABLE orcamentos ADD COLUMN versao_proposta integer NOT NULL DEFAULT 1`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------
