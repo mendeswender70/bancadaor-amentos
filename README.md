@@ -11,27 +11,50 @@ preço cadastrado. Nada de calcular peça por peça.
 > **Regra de ouro:** o preço por metro é uma ferramenta de cálculo interna. O
 > cliente vê apenas a descrição e o valor final de cada móvel.
 
-## Publicar na Vercel (via GitHub) com banco Supabase
+## Publicar na Vercel (via GitHub) com banco Neon
 
-Os dados ficam em um banco **Postgres no Supabase** (projeto `esquadro`, região
-São Paulo). A Vercel roda o sistema como função serverless na região `gru1`
-(São Paulo), perto do banco.
+Os dados ficam em um banco **Postgres na Neon**. A Vercel roda o sistema como
+função serverless na região `gru1` (São Paulo), perto do banco.
 
-1. **Supabase → projeto esquadro → botão Connect → Transaction pooler**: copie o
-   endereço (`postgresql://postgres.<ref>:[YOUR-PASSWORD]@…pooler.supabase.com:6543/postgres`).
-2. Troque `[YOUR-PASSWORD]` pela senha do banco. Se não souber a senha, gere uma
-   nova em **Project Settings → Database → Reset database password** (use só
-   letras e números).
-3. **Vercel → projeto → Settings → Environment Variables**: crie `DATABASE_URL`
-   com esse endereço, marcando *Production* e *Preview*.
-4. **Deployments → ⋯ → Redeploy**. As tabelas são criadas sozinhas se ainda não
-   existirem.
+Configuração conferida na Neon em 20/10/2026:
 
-Também funciona com a integração Supabase ↔ Vercel, que cria `POSTGRES_URL`
-automaticamente — o sistema reconhece essa variável.
+| Recurso | Configuração |
+| --- | --- |
+| Projeto | `esquadro` |
+| ID do projeto | `mute-math-04478709` |
+| Região | São Paulo — AWS `aws-sa-east-1` |
+| PostgreSQL | 18 |
+| Branch principal | `production` |
+| Banco | `neondb` |
 
-A cada `git push` no branch de produção a Vercel publica a nova versão, e os
-dados continuam no Supabase.
+O banco contém as 13 tabelas da aplicação, incluindo clientes, orçamentos,
+itens, histórico, usuários, sessões e controle de migrações. Na conferência,
+a última migração aplicada era a versão **3**, correspondente às migrações
+definidas em `server/db.js`.
+
+1. **Neon Console → projeto esquadro → Connect**: selecione a branch
+   `production`, o banco `neondb` e a role usada pela aplicação.
+2. Ative **Connection pooling** e copie a connection string fornecida pela Neon.
+   O hostname da conexão com pool contém `-pooler`. Preserve os parâmetros de
+   segurança fornecidos no endereço; não publique a string com senha no GitHub.
+3. **Vercel → projeto → Settings → Environment Variables**: configure
+   `DATABASE_URL` com esse endereço no ambiente **Production**.
+   Para **Preview**, use a conexão de uma branch separada na Neon, evitando
+   que testes alterem os dados de produção.
+4. **Deployments → ⋯ → Redeploy**. O servidor aplica automaticamente as
+   migrações pendentes na primeira requisição que acessa a API.
+
+O servidor usa o driver `postgres` e conecta diretamente ao Postgres; não
+depende do SDK nem do serviço de autenticação da Neon. O login da aplicação
+continua sendo controlado pelas tabelas `usuarios` e `sessoes`.
+
+`DATABASE_URL` tem prioridade sobre `POSTGRES_URL`, que também é aceita
+por compatibilidade. Confira o ambiente selecionado antes de publicar.
+
+A cada `git push` no branch de produção configurado na Vercel, uma nova versão
+é publicada e os dados continuam na Neon.
+
+Referência: [connection pooling na Neon](https://neon.com/docs/connect/connection-pooling).
 
 ## Rodar no computador
 
@@ -43,12 +66,12 @@ npm start
 ```
 
 Abra <http://localhost:3000>. Sem configuração, os dados ficam em um Postgres
-embutido (PGlite) na pasta `data/pglite`. Para usar o banco do Supabase, defina
+embutido (PGlite) na pasta `data/pglite`. Para usar um banco da Neon, defina
 `DATABASE_URL` antes do `npm start`.
 
 | Variável        | Para que serve                                                |
 | --------------- | ------------------------------------------------------------- |
-| `DATABASE_URL`  | Endereço Postgres (Supabase). Também aceita `POSTGRES_URL`    |
+| `DATABASE_URL`  | Endereço Postgres (Neon). Também aceita `POSTGRES_URL`    |
 | `PORT`          | Porta HTTP local (padrão `3000`)                              |
 | `TZ_EMPRESA`    | Fuso usado para "hoje" (padrão `America/Sao_Paulo`)           |
 | `COOKIE_SECURE` | `1` para cookie `Secure` fora da Vercel (HTTPS)               |
@@ -134,7 +157,7 @@ public/                 interface (HTML, CSS e JavaScript sem etapa de build)
 public/shared/calc.js   cálculos e formatação (servidor e navegador)
 api/index.js            entrada da função serverless na Vercel
 server/app.js           rotas da API (Express)
-server/db.js            conexão Postgres (Supabase ou PGlite) e migrações
+server/db.js            conexão Postgres (Neon ou PGlite) e migrações
 server/orcamentos.js    salvar, duplicar, histórico, busca, painel
 server/visaoCliente.js  dados que o cliente pode ver
 server/pdf.js           geração do PDF (PDFKit)
@@ -146,6 +169,17 @@ vercel.json             configuração da Vercel
 
 ## Backup
 
-Os dados ficam no Supabase, que faz cópias diárias no plano pago (no plano grátis,
-exporte pelo painel: **Database → Backups** ou `pg_dump`). Rodando no computador
-sem Supabase, copie a pasta `data/pglite`.
+Os dados de produção ficam na Neon. A restauração para um ponto no tempo
+depende da janela de histórico configurada no projeto. Confira essa janela
+no console antes de contar com a recuperação de uma alteração antiga.
+
+Para manter cópias independentes, use `pg_dump` com a conexão **direta**
+da Neon (hostname sem `-pooler`) e guarde os arquivos em local seguro.
+O mesmo tipo de conexão deve ser usado com `pg_restore` e ferramentas
+externas de migração que dependam de estado de sessão. As migrações internas
+da aplicação continuam sendo executadas automaticamente por `server/db.js`.
+
+Rodando no computador com o Postgres embutido, pare o servidor antes de copiar
+a pasta `data/pglite` para obter uma cópia consistente.
+
+Referência: [restauração na Neon](https://neon.com/docs/introduction/branch-restore).
