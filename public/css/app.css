@@ -4186,3 +4186,10 @@ input.invalido {
     animation: none;
   }
 }
+
+
+/* Mantém a área do sistema e a barra de status escuras na tela de acesso */
+html.tela-acesso,
+html.tela-acesso body {
+  background-color: #30251c;
+}
