@@ -86,7 +86,8 @@ export function icone(nome, classe = 'icone') {
   span.className = classe;
   span.setAttribute('aria-hidden', 'true');
   if (ICONES_FIGMA.has(nome)) {
-    span.append(h('span', { class: `icone-vetor icone-${nome}` }));
+    // A forma não compartilha classes de posicionamento do controle externo.
+    span.append(h('span', { class: `icone-vetor icone-figma-${nome}` }));
   } else {
     span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ''}</svg>`;
   }

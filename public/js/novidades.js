@@ -2,6 +2,15 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-icones-estados-vazios',
+    data: '21 de outubro de 2026',
+    titulo: 'Correção nas telas sem resultados',
+    itens: [
+      'A lupa permanece centralizada no ícone ao filtrar orçamentos ou buscar clientes sem resultados.',
+      'As mensagens e os botões dessas telas ficam livres de sobreposição.',
+    ],
+  },
+  {
     id: '2026-10-figma-proposta-madeira',
     data: '21 de outubro de 2026',
     titulo: 'Novo visual do Esquadro e das propostas',
