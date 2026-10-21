@@ -1,6 +1,6 @@
-import { STATUS, lerDinheiro } from '/shared/calc.js';
+import { lerDinheiro } from '/shared/calc.js';
 import { api } from '../api.js';
-import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, campo } from '../ui.js';
+import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, campo, abrirModal } from '../ui.js';
 import { cabecalhoPagina, listaOrcamentos } from '../comum.js';
 
 // Filtros principais; as situações uma a uma ficam em "Mais filtros".
@@ -47,8 +47,8 @@ export async function paginaOrcamentos(query) {
       substituir(resultado, carregando());
     }
     const r = await api.get(`/orcamentos?${montarBusca()}`);
-    contador.textContent = r.total === 1 ? '1 orçamento' : `${r.total} orçamentos`;
-    const lista = listaOrcamentos(r.orcamentos, { aoMudar: () => carregar() });
+    contador.textContent = r.total === 1 ? '1 proposta' : `${r.total} propostas`;
+    const lista = listaOrcamentos(r.orcamentos, { aoMudar: () => carregar(), variante: 'tabela' });
     if (!acrescentar) substituir(resultado);
     resultado.querySelector('.carregar-mais')?.remove();
     if (!r.total) {
@@ -79,7 +79,7 @@ export async function paginaOrcamentos(query) {
   const busca = h('input', {
     type: 'search',
     class: 'busca',
-    placeholder: 'Procurar por cliente ou número',
+    placeholder: window.matchMedia('(min-width: 768px)').matches ? 'Procurar por cliente ou número do orçamento' : 'Cliente ou número do orçamento',
     value: filtros.q,
     'aria-label': 'Procurar orçamento',
     oninput: debounce((e) => {
@@ -87,22 +87,6 @@ export async function paginaOrcamentos(query) {
       carregar();
     }),
   });
-
-  const seletorSituacao = h(
-    'select',
-    {
-      onchange: (e) => {
-        filtros.status = e.target.value;
-        desenharChips();
-        carregar();
-      },
-    },
-    h('option', { value: '' }, 'Todas'),
-    h('option', { value: 'abertos' }, 'Em aberto (rascunho, enviado, em negociação)'),
-    h('option', { value: 'perdidos' }, 'Perdidos (recusado, cancelado, expirado)'),
-    Object.entries(STATUS).map(([v, t]) => h('option', { value: v }, t)),
-  );
-  seletorSituacao.value = filtros.status;
 
   const chips = h('div', { class: 'chips chips-rolagem', role: 'group', 'aria-label': 'Filtrar por situação' });
   const desenharChips = () =>
@@ -117,7 +101,6 @@ export async function paginaOrcamentos(query) {
             'aria-pressed': String(filtros.status === valor),
             onclick: () => {
               filtros.status = valor;
-              seletorSituacao.value = valor;
               desenharChips();
               carregar();
             },
@@ -128,45 +111,56 @@ export async function paginaOrcamentos(query) {
     );
   desenharChips();
 
-  const campoFiltro = (chave, rotulo, attrs) =>
-    campo(
-      rotulo,
-      h('input', {
-        ...attrs,
-        value: filtros[chave],
-        onchange: (e) => {
-          filtros[chave] = e.target.value;
-          carregar();
-        },
-      }),
-      { classe: 'campo-metade' },
-    );
-
-  const maisFiltros = h(
-    'details',
-    { class: 'mais-filtros' },
-    h('summary', {}, 'Mais filtros (situação, data e valor)'),
-    h(
-      'div',
-      { class: 'grade-formulario' },
-      campo('Situação', seletorSituacao, { classe: 'campo-inteiro' }),
-      campoFiltro('de', 'Data inicial', { type: 'date' }),
-      campoFiltro('ate', 'Data final', { type: 'date' }),
-      campoFiltro('min', 'Valor mínimo (R$)', { type: 'text', inputmode: 'decimal', placeholder: '0,00' }),
-      campoFiltro('max', 'Valor máximo (R$)', { type: 'text', inputmode: 'decimal', placeholder: '0,00' }),
-    ),
+  const rotuloFiltro = h('span', {});
+  const atualizarRotuloFiltro = () => {
+    const ativos = [filtros.de, filtros.ate, filtros.min, filtros.max].filter(Boolean).length;
+    rotuloFiltro.textContent = ativos ? `Datas e valores · ${ativos}` : 'Datas e valores';
+  };
+  const aplicarFiltros = async () => {
+    const resultado = await abrirModal('Datas e valores', (fechar) => {
+      const de = h('input', { type: 'date', value: filtros.de });
+      const ate = h('input', { type: 'date', value: filtros.ate });
+      const min = h('input', { type: 'text', inputmode: 'decimal', placeholder: 'R$ 0,00', value: filtros.min });
+      const max = h('input', { type: 'text', inputmode: 'decimal', placeholder: 'R$ 0,00', value: filtros.max });
+      return h('form', { class: 'formulario filtros-data-valor', onsubmit: (e) => { e.preventDefault(); fechar({ de: de.value, ate: ate.value, min: min.value, max: max.value }); } },
+        h('div', { class: 'rotulo-grupo-filtro' }, 'PERÍODO DA PROPOSTA'),
+        h('div', { class: 'grade-formulario' }, campo('A partir de', de, { classe: 'campo-metade' }), campo('Até', ate, { classe: 'campo-metade' })),
+        h('div', { class: 'rotulo-grupo-filtro' }, 'FAIXA DE VALOR'),
+        h('div', { class: 'grade-formulario' }, campo('Mínimo', min, { classe: 'campo-metade' }), campo('Máximo', max, { classe: 'campo-metade' })),
+        h('div', { class: 'acoes-modal' },
+          h('button', { type: 'button', class: 'botao', onclick: () => fechar({ de: '', ate: '', min: '', max: '' }) }, 'Limpar filtros'),
+          h('button', { type: 'submit', class: 'botao botao-primario' }, 'Aplicar filtros'),
+        ),
+      );
+    }, { largo: true });
+    if (!resultado) return;
+    Object.assign(filtros, resultado);
+    atualizarRotuloFiltro();
+    carregar();
+  };
+  const botaoDatas = h('button', { type: 'button', class: 'botao botao-filtro-datas', onclick: aplicarFiltros }, icone('calendario'), rotuloFiltro, icone('baixo', 'icone icone-mini'));
+  const barraFiltros = h('div', { class: 'barra-filtros-orcamentos' }, chips, botaoDatas);
+  const cabecalhoLista = h('div', { class: 'cabecalho-lista-orcamentos', 'aria-hidden': 'true' },
+    h('span', {}, 'Cliente'), h('span', {}, 'Acompanhamento'), h('span', {}, 'Data'), h('span', {}, 'Situação'), h('span', { class: 'num' }, 'Total'), h('span', {}, 'Ações'),
   );
+  atualizarRotuloFiltro();
 
   carregar().catch((erro) => substituir(resultado, vazio(erro.message)));
 
   return h(
     'div',
-    { class: 'pagina' },
-    cabecalhoPagina('Orçamentos', { subtitulo: 'Todos os orçamentos, do mais novo para o mais antigo' }),
+    { class: 'pagina pagina-orcamentos' },
+    cabecalhoPagina('Orçamentos', {
+      subtitulo: h('span', {},
+        h('span', { class: 'texto-orcamentos-mobile' }, 'Acompanhe cada proposta sem perder o fio.'),
+        h('span', { class: 'texto-orcamentos-desktop' }, 'Todas as propostas, organizadas do rascunho à aprovação.'),
+      ),
+      acoes: h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario botao-novo-orcamento' }, icone('mais'), 'Novo orçamento'),
+    }),
     h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),
-    chips,
-    maisFiltros,
+    barraFiltros,
     contador,
+    cabecalhoLista,
     resultado,
   );
 }

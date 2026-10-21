@@ -623,6 +623,8 @@ test('edições seguidas (salvamento automático) viram um só registro no hist�
 });
 
 test('lista de orçamentos: grupo "perdidos", ambientes e WhatsApp do cliente', async () => {
+  const { orc } = await novaProposta({ abrir: false });
+  assert.equal((await mudarStatus(orc.id, 'recusado')).status, 200);
   const r = await chamar('GET', '/orcamentos?status=perdidos');
   assert.ok(r.dados.orcamentos.length >= 1);
   assert.ok(r.dados.orcamentos.every((o) => ['recusado', 'cancelado', 'expirado'].includes(o.status)));

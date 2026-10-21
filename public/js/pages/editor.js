@@ -37,7 +37,7 @@ import {
   menuSuspenso,
   haQuanto,
 } from '../ui.js';
-import { avatar, selo, seletorCliente, numeroWhatsApp, excluirOrcamento } from '../comum.js';
+import { avatar, selo, seletorCliente, numeroWhatsApp, excluirOrcamento, dataCompacta } from '../comum.js';
 import { abrirEnvio, linkDaProposta } from '../envio.js';
 import { aoSairDaPagina, irPara, substituirEndereco } from '../main.js';
 import { seletorParcelas } from './config.js';
@@ -255,7 +255,11 @@ export async function paginaEditor({ id, clienteId }) {
 
   // ------------------------------------------------------------ Elementos fixos
   const tituloEl = h('h1', {});
-  const subtituloEl = h('p', {});
+  const estadoTopoMobile = h('span', { class: 'editor-auto-save-text' }, 'Salvo automaticamente');
+  const estadoTopoDesktop = h('span', { class: 'editor-auto-save-text' }, 'Salvo automaticamente');
+  const seloStatusTopo = h('span', { class: 'editor-status-badge' });
+  const resumoClienteLateral = h('p', { class: 'editor-resumo-cliente' });
+  const resumoPagamentoLateral = h('div', { class: 'editor-resumo-pagamento' });
   const etapasEl = h('div', { class: 'etapas-area' });
   const blocoCliente = h('div', { class: 'bloco-cliente' });
   const validadeTexto = h('small', { class: 'dica' });
@@ -309,24 +313,38 @@ export async function paginaEditor({ id, clienteId }) {
       el.onclick = estado === 'erro' ? () => salvar() : null;
       el.setAttribute('role', 'status');
     }
+    if (estado === 'salvo') estadoSalvo.textContent = 'Alterações salvas automaticamente';
+    estadoBarra.textContent = estado === 'salvo' ? 'Alterações salvas automaticamente' : textos[estado];
+    if (!orc.id) estadoBarra.textContent = 'Adicione um móvel para salvar este orçamento.';
+    const textoTopo = !orc.id ? 'O número é gerado com o primeiro móvel.' : estado === 'salvo' ? 'Salvo automaticamente' : textos[estado];
+    estadoTopoMobile.textContent = textoTopo;
+    estadoTopoDesktop.textContent = textoTopo;
   }
 
   // --------------------------------------------------------------- Atualizações
   function atualizarCabecalho() {
-    tituloEl.textContent = orc.numero ? `Orçamento nº ${formatarNumero(orc.numero)}` : 'Novo orçamento';
-    subtituloEl.textContent = orc.id
-      ? [`Criado em ${formatarData(orc.criado_em)}`, orc.duplicado_de_numero ? `cópia do nº ${formatarNumero(orc.duplicado_de_numero)}` : '']
-          .filter(Boolean)
-          .join(' · ')
-      : 'O número é gerado quando o primeiro móvel for adicionado';
+    tituloEl.textContent = orc.numero ? `Orçamento ${formatarNumero(orc.numero)}` : 'Novo orçamento';
+    seloStatusTopo.textContent = STATUS[orc.status] || orc.status;
+    seloStatusTopo.className = `editor-status-badge selo-${orc.status}`;
+    resumoClienteLateral.textContent = orc.cliente?.nome || '';
+    const paginaAtual = blocoCliente.closest('.pagina-editor');
+    if (paginaAtual) {
+      paginaAtual.classList.toggle('editor-novo', !orc.numero);
+      paginaAtual.querySelector('.editor-eyebrow').textContent = orc.numero ? 'EDITOR DE ORÇAMENTO' : 'NOVO ORÇAMENTO · 2 DE 2';
+      paginaAtual.querySelectorAll('.editor-ver-proposta-mobile, .editor-ver-proposta-desktop, .editor-historico-topo').forEach((botao) => { botao.disabled = !orc.id; });
+    }
+    resumoPagamentoLateral.replaceChildren(
+      h('span', {}, orc.pagamento_descricao || 'Pagamento não informado'),
+      orc.prazo_entrega ? h('span', {}, `Entrega em ${orc.prazo_entrega}`) : null,
+    );
     desenharEtapas();
     const c = orc.cliente || {};
     substituir(
       blocoCliente,
-      avatar(c.nome, 'avatar-grande'),
+      !orc.numero ? avatar(c.nome, 'editor-cliente-icone') : h('span', { class: 'editor-cliente-icone' }, icone('clientes')),
       h(
         'div',
-        {},
+        { class: 'editor-cliente-dados' },
         h('strong', { class: 'cliente-nome' }, c.nome),
         h(
           'span',
@@ -334,7 +352,7 @@ export async function paginaEditor({ id, clienteId }) {
           [c.telefone, c.whatsapp && c.whatsapp !== c.telefone ? `WhatsApp ${c.whatsapp}` : ''].filter(Boolean).join(' · ') || 'Sem telefone',
         ),
       ),
-      h('button', { type: 'button', class: 'botao botao-pequeno', onclick: trocarCliente }, 'Trocar'),
+      h('button', { type: 'button', class: `${orc.numero ? 'botao-icone' : 'botao'} editor-trocar-cliente`, 'aria-label': 'Trocar cliente', onclick: trocarCliente }, orc.numero ? icone('baixo') : 'Trocar'),
     );
     const acoes = [
       ['whatsapp', 'Enviar ao cliente', enviarAoCliente],
@@ -452,10 +470,9 @@ export async function paginaEditor({ id, clienteId }) {
       orc.ambientes.length
         ? orc.ambientes.map((a) => linhaResumo(a.nome, formatarDinheiro(subtotalAmbiente(a)), `resumo-ambiente${a.itens.length ? '' : ' resumo-vazio'}`))
         : linhaResumo('Móveis', formatarDinheiro(0)),
-      t.subtotal_servicos_cents ? linhaResumo('Serviços adicionais', formatarDinheiro(t.subtotal_servicos_cents), 'resumo-ambiente') : null,
-      linhaResumo('Subtotal', formatarDinheiro(t.subtotal_cents), 'resumo-subtotal'),
+      linhaResumo('Serviços', formatarDinheiro(t.subtotal_servicos_cents || 0), 'resumo-servicos'),
       t.acrescimo_cents ? linhaResumo(orc.acrescimo_descricao || 'Acréscimo', formatarDinheiro(t.acrescimo_cents)) : null,
-      t.desconto_cents ? linhaResumo('Desconto', `- ${formatarDinheiro(t.desconto_cents)}`, 'resumo-desconto') : null,
+      linhaResumo('Desconto', formatarDinheiro(t.desconto_cents || 0), 'resumo-desconto'),
       linhaResumo('Total', formatarDinheiro(t.total_cents), 'resumo-total'),
     );
     const linhas = descreverPagamento(t.total_cents, {
@@ -464,6 +481,8 @@ export async function paginaEditor({ id, clienteId }) {
       parcelas: orc.pagamento_parcelas,
     });
     substituir(previaPagamento, linhas.length ? linhas.map((l) => h('div', {}, l)) : h('div', {}, `Total de ${formatarDinheiro(t.total_cents)} de uma vez`));
+    const resumoCondicao = secaoPagamento.querySelector('.editor-pagamento-opcoes > summary');
+    if (resumoCondicao) resumoCondicao.textContent = orc.pagamento_descricao || 'Personalizar condições';
     totalBarra.textContent = formatarDinheiro(t.total_cents);
     for (const el of listaServicos.querySelectorAll('[data-total-servico]')) {
       const s = orc.servicos[Number(el.dataset.totalServico)];
@@ -540,18 +559,10 @@ export async function paginaEditor({ id, clienteId }) {
         h(
           'div',
           { class: 'sem-ambientes' },
-          vazioIlustrado(
-            'ambiente',
-            'Comece pelos ambientes',
-            'Crie um ambiente para cada cômodo — por exemplo, “Quarto do casal” — e adicione os móveis dentro dele. Toque em uma sugestão:',
-            h(
-              'div',
-              { class: 'chips' },
-              sugestoesAmbiente().slice(0, 8).map((nome) =>
-                h('button', { type: 'button', class: 'chip', onclick: () => criarAmbiente({ nome, descricao: '' }) }, `+ ${nome}`),
-              ),
-            ),
-          ),
+          h('span', { class: 'botao-icone' }, icone('inicio')),
+          h('h3', {}, 'Seu primeiro ambiente'),
+          h('p', {}, 'Adicione um espaço para começar a incluir os móveis.'),
+          h('button', { type: 'button', class: 'botao botao-primario', onclick: () => criarAmbiente() }, 'Adicionar ambiente'),
         ),
       );
       return;
@@ -567,26 +578,20 @@ export async function paginaEditor({ id, clienteId }) {
       h(
         'div',
         { class: 'ambiente-topo' },
+        h('span', { class: 'ambiente-numero' }, String(ai + 1).padStart(2, '0')),
         h('span', { class: 'selo-icone' }, icone('ambiente')),
         h('div', { class: 'ambiente-titulo' }, h('h3', {}, ambiente.nome), h('span', {}, n ? plural(n, 'móvel', 'móveis') : 'Nenhum móvel ainda')),
         h('span', { class: 'ambiente-subtotal' }, formatarDinheiro(subtotalAmbiente(ambiente))),
-        menuSuspenso(
-          [
-            ['editar', 'Renomear e detalhes', () => editarAmbiente(ai)],
-            ['copiar', 'Duplicar ambiente', () => duplicarAmbiente(ai)],
-            ['cima', 'Mover para cima', () => moverAmbiente(ai, -1), { desativado: ai === 0 }],
-            ['baixo', 'Mover para baixo', () => moverAmbiente(ai, 1), { desativado: ai === orc.ambientes.length - 1 }],
-            '-',
-            ['lixeira', 'Remover ambiente', () => removerAmbiente(ai), { perigo: true }],
-          ],
-          { rotulo: `Opções de ${ambiente.nome}` },
-        ),
+        h('button', { type: 'button', class: 'botao-icone ambiente-editar', 'aria-label': `Editar ambiente ${ambiente.nome}`, onclick: () => editarAmbiente(ai) }, icone('editar')),
       ),
       ambiente.descricao ? h('div', { class: 'ambiente-detalhe' }, ambiente.descricao) : null,
       h(
         'div',
         { class: 'ambiente-corpo' },
-        n ? ambiente.itens.map((item, ii) => linhaItem(item, ai, ii)) : null,
+        n ? ambiente.itens.flatMap((item, ii) => [
+          ii > 0 ? h('div', { class: 'ambiente-separador', 'aria-hidden': 'true' }) : null,
+          linhaItem(item, ai, ii),
+        ].filter(Boolean)) : null,
         h(
           'button',
           { type: 'button', class: 'botao botao-tracejado botao-bloco', onclick: () => editarItem(ai) },
@@ -615,7 +620,11 @@ export async function paginaEditor({ id, clienteId }) {
           h(
             'div',
             { class: 'item-detalhes' },
-            h('span', {}, [item.tipo_nome && item.tipo_nome !== item.descricao ? item.tipo_nome : null, descreverMedida(item)].filter(Boolean).join(' · ')),
+            h('span', {}, [
+              item.tipo_nome && item.tipo_nome !== item.descricao ? item.tipo_nome : null,
+              item.metodo_calculo === 'unidade' ? null : descreverMedida(item),
+              `${item.quantidade || 1} ${(item.quantidade || 1) === 1 ? 'unidade' : 'unidades'}`,
+            ].filter(Boolean).join(' · ')),
             h('span', { class: 'item-calculo', title: 'Cálculo interno — não aparece para o cliente' }, icone('cadeado', 'icone icone-mini'), descreverCalculo(item)),
             personalizado ? h('span', { class: 'etiqueta item-calculo' }, `preço personalizado · padrão ${formatarDinheiro(item.preco_padrao_cents)}`) : null,
             item.observacoes ? h('span', { class: 'item-obs' }, item.observacoes) : null,
@@ -625,15 +634,18 @@ export async function paginaEditor({ id, clienteId }) {
       h(
         'div',
         { class: 'item-acoes' },
-        h('button', { type: 'button', class: 'botao-icone', title: 'Copiar móvel', 'aria-label': 'Copiar móvel', onclick: () => copiarItem(ai, ii) }, icone('copiar')),
-        h('button', { type: 'button', class: 'botao-icone perigo', title: 'Remover móvel', 'aria-label': 'Remover móvel', onclick: () => removerItem(ai, ii) }, icone('lixeira')),
+        h('button', { type: 'button', class: 'botao-icone item-editar', title: 'Editar móvel', 'aria-label': `Editar ${item.descricao || item.tipo_nome}`, onclick: () => editarItem(ai, ii) }, icone('editar')),
       ),
     );
   }
 
   async function criarAmbiente(inicial) {
-    const dados = inicial || (await formularioAmbiente(null, orc.ambientes));
+    const dados = inicial || (await formularioAmbiente(null, orc.ambientes, comCalculos));
     if (!dados) return;
+    if (dados.acao === 'calculos') {
+      botaoCalculos.click();
+      return;
+    }
     orc.ambientes.push({ nome: dados.nome, descricao: dados.descricao, itens: [] });
     redesenhar();
     // Já abre o formulário do primeiro móvel do ambiente.
@@ -642,8 +654,14 @@ export async function paginaEditor({ id, clienteId }) {
   }
 
   async function editarAmbiente(ai) {
-    const dados = await formularioAmbiente(orc.ambientes[ai], orc.ambientes);
+    const dados = await formularioAmbiente(orc.ambientes[ai], orc.ambientes, comCalculos);
     if (!dados) return;
+    if (dados.acao === 'calculos') return botaoCalculos.click();
+    if (dados.acao === 'novo') return criarAmbiente();
+    if (dados.acao === 'duplicar') return duplicarAmbiente(ai);
+    if (dados.acao === 'acima') return moverAmbiente(ai, -1);
+    if (dados.acao === 'abaixo') return moverAmbiente(ai, 1);
+    if (dados.acao === 'remover') return removerAmbiente(ai);
     Object.assign(orc.ambientes[ai], dados);
     redesenhar();
   }
@@ -698,6 +716,14 @@ export async function paginaEditor({ id, clienteId }) {
       const inicial = novo ? null : orc.ambientes[ai].itens[ii];
       const resultado = await formularioItem(inicial, tipos, novo, orc.ambientes, ambienteAtual);
       if (!resultado) break;
+      if (resultado.acao === 'copiar') {
+        copiarItem(ai, ii);
+        break;
+      }
+      if (resultado.acao === 'remover') {
+        await removerItem(ai, ii);
+        break;
+      }
       if (novo) {
         orc.ambientes[resultado.ambiente].itens.push(resultado.item);
       } else if (resultado.ambiente !== ai) {
@@ -807,7 +833,7 @@ export async function paginaEditor({ id, clienteId }) {
 
   // --------------------------------------------------------------- Pagamento
   // Condições cadastradas viram botões; "Personalizar" mostra entrada e parcelas.
-  const secaoPagamento = h('div', { class: 'formulario' });
+  const secaoPagamento = h('div', { class: 'formulario editor-pagamento' });
   const pagamentoAtual = () => ({
     entrada_tipo: orc.pagamento_entrada_tipo,
     entrada_valor: orc.pagamento_entrada_valor,
@@ -863,6 +889,7 @@ export async function paginaEditor({ id, clienteId }) {
     };
     entrada.addEventListener('input', aplicarEntrada);
     const parcelas = seletorParcelas(orc.pagamento_parcelas);
+    for (const opcao of parcelas.options) opcao.textContent = opcao.value;
     parcelas.id = 'parcelas-pagamento';
     parcelas.addEventListener('change', () => {
       const auto = lembrarAntes();
@@ -916,12 +943,11 @@ export async function paginaEditor({ id, clienteId }) {
       h(
         'div',
         { class: 'campo campo-metade' },
-        h('label', { for: entrada.id }, 'Entrada'),
-        h('div', { class: 'entrada-com-unidade' }, segmentado([['valor', 'R$'], ['percentual', '%']], unidade, (u) => { unidade = u; aplicarEntrada(); }, { rotulo: 'Tipo de entrada' }), entrada),
+        h('label', { for: entrada.id, class: 'editor-entrada-rotulo' }, unidade === 'percentual' ? 'Entrada (%)' : 'Entrada (R$)'),
+        h('div', { class: 'editor-entrada-valor' }, entrada, h('span', { class: 'editor-entrada-unidade' }, unidade === 'percentual' ? '%' : 'R$')),
       ),
-      campo('Restante', parcelas, { classe: 'campo-metade' }),
+      campo('Parcelas', parcelas, { classe: 'campo-metade' }),
     );
-    ajustes.hidden = !personalizando;
     function marcarBotoes() {
       const atual = ativas.find((c) => mesmaCondicao(c) && c.descricao === orc.pagamento_descricao);
       for (const b of botoes) {
@@ -936,10 +962,21 @@ export async function paginaEditor({ id, clienteId }) {
 
     substituir(
       secaoPagamento,
-      h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Condição de pagamento'), h('div', { class: 'chips' }, botoes, botaoPersonalizar)),
+      h('div', { class: 'editor-pagamento-titulo' }, h('span', { class: 'botao-icone' }, icone('pagamento')), h('h2', {}, 'Pagamento')),
       ajustes,
       previaPagamento,
-      campo('Texto que aparece para o cliente', descricao, { dica: 'Preenchido sozinho pela condição escolhida; pode editar.' }),
+      h('details', { class: 'editor-pagamento-opcoes' }, h('summary', {}, orc.pagamento_descricao || 'Personalizar condições'),
+        h('div', { class: 'formulario' },
+          h('div', { class: 'chips' }, botoes, botaoPersonalizar),
+          segmentado([['valor', 'R$'], ['percentual', '%']], unidade, (u) => {
+            unidade = u;
+            ajustes.querySelector('.editor-entrada-rotulo').textContent = u === 'percentual' ? 'Entrada (%)' : 'Entrada (R$)';
+            ajustes.querySelector('.editor-entrada-unidade').textContent = u === 'percentual' ? '%' : 'R$';
+            aplicarEntrada();
+          }, { rotulo: 'Tipo de entrada' }),
+          campo('Texto que aparece para o cliente', descricao),
+        ),
+      ),
     );
   }
 
@@ -1106,7 +1143,7 @@ export async function paginaEditor({ id, clienteId }) {
       contadorHistorico.textContent = String(eventos.length);
       substituir(
         historicoEl,
-        h(
+        eventos.length ? h(
           'ol',
           { class: 'historico' },
           eventos
@@ -1118,10 +1155,10 @@ export async function paginaEditor({ id, clienteId }) {
                 {},
                 h('span', { class: 'historico-evento' }, e.evento),
                 h('strong', {}, formatarDinheiro(e.total_cents)),
-                h('span', { class: 'historico-data' }, [formatarDataHora(e.data_hora), e.usuario_nome || (e.evento.includes('cliente') ? 'cliente' : 'sistema')].join(' · ')),
+                h('span', { class: 'historico-data' }, [dataCompacta(e.data_hora), e.usuario_nome || (e.evento.includes('cliente') ? 'cliente' : 'sistema')].join(' · ')),
               ),
             ),
-        ),
+        ) : h('div', { class: 'historico-vazio' }, icone('historico'), h('strong', {}, 'Sem alterações registradas'), h('p', {}, 'As próximas atividades deste orçamento aparecerão aqui.')),
       );
     } catch (erro) {
       substituir(historicoEl, h('p', { class: 'suave' }, erro.message));
@@ -1138,6 +1175,7 @@ export async function paginaEditor({ id, clienteId }) {
       atualizarValores();
     },
   });
+  const validadeDiasEl = entradaNumero(orc.validade_dias, (v) => { orc.validade_dias = v; atualizarValores(); }, { min: 0, max: 3650, id: 'validade-dias' });
 
   const texto = (chave, attrs = {}) =>
     h(attrs.rows ? 'textarea' : 'input', {
@@ -1176,7 +1214,7 @@ export async function paginaEditor({ id, clienteId }) {
 
   substituir(campoNomeAcrescimo, campo('Nome do acréscimo', texto('acrescimo_descricao', { placeholder: 'Ex.: Taxa de projeto', maxlength: '100' })));
 
-  const celular = window.matchMedia('(max-width: 699px)').matches;
+  const celular = window.matchMedia('(max-width: 767px)').matches;
   const fechadaNoCelular = Boolean(id) && celular;
 
   const secaoCliente = secao(
@@ -1194,12 +1232,12 @@ export async function paginaEditor({ id, clienteId }) {
           'div',
           { class: 'campo campo-metade' },
           h('label', { for: 'validade-dias' }, 'Validade (dias)'),
-          entradaNumero(orc.validade_dias, (v) => { orc.validade_dias = v; atualizarValores(); }, { min: 0, max: 3650, id: 'validade-dias' }),
-          validadeTexto,
+          h('div', { class: 'entrada-com-unidade editor-validade-input' }, validadeDiasEl, h('span', {}, 'dias')),
         ),
       ),
+      validadeTexto,
     ],
-    { aberta: !fechadaNoCelular },
+    { aberta: true },
   );
 
   const secaoAmbientes = h(
@@ -1208,11 +1246,11 @@ export async function paginaEditor({ id, clienteId }) {
     h(
       'div',
       { class: 'secao-topo secao-topo-solta' },
-      h('div', { class: 'secao-cabecalho' }, h('span', { class: 'secao-numero' }, '2'), h('span', { class: 'secao-titulos' }, h('h2', {}, 'Ambientes e móveis'), h('span', { class: 'secao-resumo' }))),
-      botaoCalculos,
+      h('div', { class: 'secao-cabecalho' }, h('span', { class: 'secao-numero' }, '2'), h('span', { class: 'secao-titulos' }, h('h2', {}, 'Ambientes'), h('span', { class: 'secao-resumo' }))),
+      h('button', { type: 'button', class: 'botao botao-secundario editor-adicionar-ambiente-topo', onclick: () => criarAmbiente() }, icone('mais'), 'Ambiente'),
     ),
     listaAmbientes,
-    h('button', { type: 'button', class: 'botao botao-secundario botao-grande botao-bloco', onclick: () => criarAmbiente() }, icone('mais'), 'Adicionar ambiente'),
+    h('button', { type: 'button', class: 'botao botao-secundario botao-grande botao-bloco editor-adicionar-ambiente', onclick: () => criarAmbiente() }, icone('mais'), 'Ambiente'),
   );
   resumoSecao.ambientes = secaoAmbientes.querySelector('.secao-resumo');
 
@@ -1247,8 +1285,8 @@ export async function paginaEditor({ id, clienteId }) {
         'div',
         { class: 'grade-formulario' },
         campo('Prazo de entrega', texto('prazo_entrega', { placeholder: 'Ex.: 30 dias úteis', maxlength: '200' }), { classe: 'campo-inteiro' }),
-        campo('Observações (aparecem para o cliente)', texto('observacoes', { rows: '5', maxlength: '5000' }), { classe: 'campo-inteiro' }),
-        campo('Observações internas (só você vê)', texto('observacoes_internas', { rows: '3', maxlength: '5000' }), { classe: 'campo-inteiro campo-interno' }),
+        campo('Observações para o cliente', texto('observacoes', { rows: '2', maxlength: '5000' }), { classe: 'campo-inteiro' }),
+        h('details', { class: 'editor-notas-internas campo-inteiro' }, h('summary', {}, 'Anotações internas', icone('baixo')), campo('Só você vê', texto('observacoes_internas', { rows: '3', maxlength: '5000' }))),
       ),
     ),
     { aberta: !fechadaNoCelular },
@@ -1257,21 +1295,31 @@ export async function paginaEditor({ id, clienteId }) {
   // Índice das seções (atalho para rolar até cada uma)
   const indice = h(
     'nav',
-    { class: 'indice-secoes', 'aria-label': 'Partes do orçamento' },
+    { class: 'indice-secoes editor-indice', 'aria-label': 'Partes do orçamento' },
     [
       [secaoCliente, '1', 'Cliente'],
       [secaoAmbientes, '2', 'Ambientes'],
-      [secaoExtras, '3', 'Serviços e descontos'],
-      [secaoCondicoes, '4', 'Pagamento'],
+      [secaoExtras, '3', 'Extras'],
+      [secaoCondicoes, '4', 'Condições'],
     ].map(([el, n, rotulo]) =>
       h(
         'button',
         {
           type: 'button',
+          'data-secao': el.id.replace('secao-', ''),
+          class: el === secaoAmbientes ? 'ativo' : '',
+          'aria-pressed': String(el === secaoAmbientes),
           onclick: () => {
             mostrarAba('orcamento');
             if (el.classList.contains('secao-editor')) abrirSecao(el, true);
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            pagina.dataset.secaoAtiva = el.id.replace('secao-', '');
+            for (const botao of indice.querySelectorAll('button')) {
+              const ativo = botao.dataset.secao === pagina.dataset.secaoAtiva;
+              botao.classList.toggle('ativo', ativo);
+              botao.setAttribute('aria-pressed', String(ativo));
+            }
+            if (window.matchMedia('(max-width: 767px)').matches) window.scrollTo({ top: 0, behavior: 'smooth' });
+            else el.scrollIntoView({ behavior: 'smooth', block: 'start' });
           },
         },
         h('span', {}, n),
@@ -1281,10 +1329,10 @@ export async function paginaEditor({ id, clienteId }) {
   );
 
   // Abas: o orçamento e o histórico
-  const painelOrcamento = h('div', { class: 'editor-principal' }, indice, secaoCliente, secaoAmbientes, secaoExtras, secaoCondicoes);
+  const painelOrcamento = h('div', { class: 'editor-principal' }, secaoCliente, secaoAmbientes, secaoExtras, secaoCondicoes);
   const painelHistorico = h(
     'div',
-    { class: 'editor-principal', hidden: true },
+    { class: 'editor-principal editor-painel-historico', hidden: true },
     h('section', { class: 'cartao' }, h('div', { class: 'cartao-titulo' }, h('h2', {}, icone('historico'), 'Histórico de alterações')), historicoEl),
   );
   const abaOrcamento = h('button', { type: 'button', role: 'tab', class: 'ativo', 'aria-selected': 'true', onclick: () => mostrarAba('orcamento') }, 'Orçamento');
@@ -1293,10 +1341,13 @@ export async function paginaEditor({ id, clienteId }) {
     const orcamento = qual === 'orcamento';
     painelOrcamento.hidden = !orcamento;
     painelHistorico.hidden = orcamento;
+    indice.setAttribute('aria-hidden', String(!orcamento));
+    indice.inert = !orcamento;
     abaOrcamento.classList.toggle('ativo', orcamento);
     abaHistorico.classList.toggle('ativo', !orcamento);
     abaOrcamento.setAttribute('aria-selected', String(orcamento));
     abaHistorico.setAttribute('aria-selected', String(!orcamento));
+    pagina.classList.toggle('editor-mostrando-historico', !orcamento);
     if (!orcamento) carregarHistorico();
   }
 
@@ -1309,15 +1360,27 @@ export async function paginaEditor({ id, clienteId }) {
 
   const pagina = h(
     'div',
-    { class: 'pagina pagina-editor' },
+    { class: `pagina pagina-editor${orc.numero ? '' : ' editor-novo'}`, 'data-secao-ativa': 'ambientes' },
     h(
       'div',
-      { class: 'cabecalho-pagina cabecalho-editor' },
-      h('a', { href: '#/orcamentos', class: 'voltar', 'aria-label': 'Voltar' }, icone('voltar')),
-      h('div', { class: 'titulos' }, tituloEl, subtituloEl),
+      { class: 'cabecalho-editor' },
+      h('div', { class: 'editor-caminho' },
+        h('a', { href: '#/orcamentos', class: 'voltar', 'aria-label': 'Voltar para orçamentos' }, icone('voltar')),
+        h('div', { class: 'editor-caminho-texto' }, h('span', {}, 'Orçamentos'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Editar orçamento')),
+        h('span', { class: 'editor-auto-save editor-auto-save-desktop' }, icone('check', 'icone icone-mini'), estadoTopoDesktop),
+        h('button', { type: 'button', class: 'botao-icone editor-historico-topo', 'aria-label': 'Abrir histórico', disabled: !orc.id, onclick: () => mostrarAba('historico') }, icone('historico')),
+      ),
+      h('div', { class: 'editor-titulo-fila' },
+        h('div', { class: 'editor-titulo-bloco' },
+          h('span', { class: 'page-eyebrow editor-eyebrow' }, orc.numero ? 'EDITOR DE ORÇAMENTO' : 'NOVO ORÇAMENTO · 2 DE 2'),
+          h('div', { class: 'editor-titulo-linha' }, tituloEl, seloStatusTopo),
+          h('span', { class: 'editor-auto-save editor-auto-save-mobile' }, icone('check', 'icone icone-mini'), estadoTopoMobile),
+        ),
+      ),
     ),
     etapasEl,
     avisoConflito,
+    indice,
     h('div', { class: 'abas-editor', role: 'tablist', 'aria-label': 'Orçamento e histórico' }, abaOrcamento, abaHistorico),
     h(
       'div',
@@ -1326,8 +1389,15 @@ export async function paginaEditor({ id, clienteId }) {
       h(
         'aside',
         { class: 'editor-lateral' },
-        h('section', { class: 'cartao' }, h('div', { class: 'cartao-titulo' }, h('h2', {}, 'Resumo'), estadoSalvo), resumo),
-        h('section', { class: 'cartao' }, acoesLateral),
+        h('section', { class: 'cartao editor-resumo-card' },
+          h('div', { class: 'cartao-titulo' }, h('h2', {}, 'Resumo')),
+          resumoClienteLateral,
+          resumo,
+          resumoPagamentoLateral,
+          h('button', { type: 'button', class: 'botao botao-primario editor-ver-proposta-desktop', disabled: !orc.id, onclick: verComoCliente }, 'Ver proposta'),
+          estadoSalvo,
+        ),
+        h('section', { class: 'cartao editor-acoes-card' }, acoesLateral),
       ),
     ),
 
@@ -1339,6 +1409,7 @@ export async function paginaEditor({ id, clienteId }) {
         'div',
         { class: 'cabecalho-acoes' },
         menuBarra,
+        h('button', { type: 'button', class: 'botao botao-primario editor-ver-proposta-mobile', disabled: !orc.id, onclick: verComoCliente }, 'Ver proposta'),
         h('button', { type: 'button', class: 'botao botao-whatsapp botao-grande', onclick: enviarAoCliente }, icone('whatsapp'), 'Enviar'),
       ),
     ),
@@ -1406,7 +1477,7 @@ function salvarSugestoesAmbiente(lista) {
   return filaSugestoes;
 }
 
-function formularioAmbiente(inicial, ambientes) {
+function formularioAmbiente(inicial, ambientes, comCalculos = false) {
   return abrirModal(inicial ? 'Editar ambiente' : 'Novo ambiente', (fechar) => {
     const nome = h('input', { type: 'text', required: true, maxlength: '100', value: inicial?.nome || '', placeholder: 'Ex.: Quarto do casal', autocomplete: 'off' });
     const descricao = h('textarea', {
@@ -1561,13 +1632,26 @@ function formularioAmbiente(inicial, ambientes) {
       ),
       campo('Detalhes do ambiente (opcional, aparece no PDF)', descricao, { dica: 'Materiais, cores, acabamentos…' }),
       h(
+        'details',
+        { class: 'mais-opcoes editor-acoes-secundarias' },
+        h('summary', {}, 'Mais ações'),
+        h('div', { class: 'editor-acoes-secundarias-lista' },
+          h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'calculos' }) }, `${comCalculos ? 'Ocultar' : 'Mostrar'} cálculos internos`),
+          h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'novo' }) }, 'Adicionar outro ambiente'),
+          inicial ? h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'duplicar' }) }, 'Duplicar ambiente') : null,
+          inicial ? h('button', { type: 'button', class: 'link-botao', disabled: ambientes.indexOf(inicial) === 0, onclick: () => fechar({ acao: 'acima' }) }, 'Mover para cima') : null,
+          inicial ? h('button', { type: 'button', class: 'link-botao', disabled: ambientes.indexOf(inicial) === ambientes.length - 1, onclick: () => fechar({ acao: 'abaixo' }) }, 'Mover para baixo') : null,
+          inicial ? h('button', { type: 'button', class: 'link-botao perigo', onclick: () => fechar({ acao: 'remover' }) }, 'Remover ambiente') : null,
+        ),
+      ),
+      h(
         'div',
         { class: 'acoes-modal' },
         h('button', { type: 'button', class: 'botao', onclick: () => fechar(undefined) }, 'Cancelar'),
         h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, inicial ? 'Salvar ambiente' : 'Criar ambiente'),
       ),
     );
-  });
+  }, { contexto: 'AMBIENTES', subtitulo: 'Organize os móveis por espaço.', classe: 'modal-ambiente' });
 }
 
 // ------------------------------------------------------------ Formulário do móvel
@@ -1605,15 +1689,16 @@ function formularioItem(inicial, tipos, novo, ambientes, ambienteIndice) {
       const preco = entradaDinheiro(item.preco_unitario_interno_cents, (v) => { item.preco_unitario_interno_cents = v; atualizar(); });
       const quantidade = entradaNumero(item.quantidade, (v) => { item.quantidade = v || 1; atualizar(); }, { min: 1 });
       const observacao = h('textarea', { rows: '2', maxlength: '1000', value: item.observacoes || '' });
-      const campoLargura = campo('Medida (metros)', largura);
-      const campoAltura = campo('Altura (metros)', altura);
+      const campoLargura = campo('Medida', h('div', { class: 'editor-campo-unidade' }, largura, h('span', {}, 'm')));
+      const campoAltura = campo('Altura', h('div', { class: 'editor-campo-unidade' }, altura, h('span', {}, 'm')));
       const rotuloPreco = h('label', { for: 'preco-item' }, '');
       preco.id = 'preco-item';
       const dicaPreco = h('small', { class: 'dica' });
+      const sufixoPreco = h('span', { class: 'editor-preco-sufixo' });
       const alertaMedida = h('small', { class: 'dica alerta' });
       const resultado = h('div', { class: 'resultado-item', 'aria-live': 'polite' });
       const metodo = segmentado(
-        Object.entries(METODOS).map(([v, m]) => [v, m.nome]),
+        Object.entries(METODOS).map(([v, m]) => [v, v === 'quadrado' ? 'm²' : v === 'unidade' ? 'Unidade' : m.nome]),
         item.metodo_calculo,
         (v) => {
           item.metodo_calculo = v;
@@ -1691,12 +1776,12 @@ function formularioItem(inicial, tipos, novo, ambientes, ambienteIndice) {
         const m = item.metodo_calculo;
         campoLargura.hidden = m === 'unidade';
         campoAltura.hidden = m !== 'quadrado';
-        campoLargura.querySelector('label').textContent = m === 'quadrado' ? 'Largura (metros)' : 'Medida (metros)';
-        rotuloPreco.textContent = `Preço interno (R$${METODOS[m].sufixo})`;
+        campoLargura.querySelector('label').textContent = m === 'quadrado' ? 'Largura' : 'Medida';
+        rotuloPreco.textContent = m === 'linear' ? 'Preço por metro' : m === 'quadrado' ? 'Preço por m²' : 'Preço por unidade';
+        sufixoPreco.textContent = METODOS[m].sufixo;
         const temPadrao = item.preco_padrao_cents !== null && item.preco_padrao_cents !== undefined;
         substituir(
           dicaPreco,
-          temPadrao ? `Padrão: ${formatarDinheiro(item.preco_padrao_cents)}${METODOS[m].sufixo}. ` : '',
           temPadrao && item.preco_padrao_cents !== item.preco_unitario_interno_cents
             ? h(
                 'button',
@@ -1712,7 +1797,7 @@ function formularioItem(inicial, tipos, novo, ambientes, ambienteIndice) {
                 'Usar preço padrão',
               )
             : null,
-          ' Só vale para este orçamento.',
+          'Este preço vale somente neste orçamento.',
         );
         const grande = [item.largura_mm, m === 'quadrado' ? item.altura_mm : 0].some((v) => v > 30000);
         alertaMedida.textContent = grande ? 'Confira: a medida deve ser informada em metros (ex.: 3,20).' : '';
@@ -1723,7 +1808,7 @@ function formularioItem(inicial, tipos, novo, ambientes, ambienteIndice) {
           resultado,
           h('span', {}, 'Valor do móvel'),
           h('strong', {}, completo ? formatarDinheiro(r.valor_total_cents) : '—'),
-          completo ? h('small', {}, `${descreverMedida(item)} · ${descreverCalculo(item)}`) : h('small', {}, 'Informe a medida para calcular.'),
+          completo ? h('small', {}, `${descreverCalculo(item)} · ${plural(item.quantidade, 'unidade', 'unidades')}`) : h('small', {}, 'Informe a medida para calcular.'),
         );
       }
 
@@ -1753,18 +1838,21 @@ function formularioItem(inicial, tipos, novo, ambientes, ambienteIndice) {
           },
         },
         ambientes.length > 1 ? campo('Ambiente', seletorAmbiente) : null,
-        h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Tipo de móvel'), gradeTipos),
-        campo('Descrição (aparece para o cliente)', descricao),
+        novo ? h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Tipo de móvel'), gradeTipos) : null,
+        campo('Descrição para o cliente', descricao),
         h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Como calcular'), metodo),
-        h('div', { class: 'grade-formulario' }, h('div', { class: 'campo-metade' }, campoLargura), h('div', { class: 'campo-metade' }, campoAltura)),
+        h('div', { class: 'editor-medidas' }, campoLargura, campoAltura, campo('Quantidade', h('div', { class: 'editor-campo-unidade' }, quantidade, h('span', {}, 'un.')))),
         alertaMedida,
         h(
           'div',
-          { class: 'grade-formulario' },
-          h('div', { class: 'campo campo-metade campo-interno' }, rotuloPreco, preco, dicaPreco),
-          campo('Quantidade', quantidade, { classe: 'campo-metade' }),
+          { class: 'campo' },
+          rotuloPreco, h('div', { class: 'editor-campo-unidade editor-campo-dinheiro' }, h('span', {}, 'R$'), preco, sufixoPreco), dicaPreco,
         ),
-        h('details', { class: 'mais-opcoes', open: Boolean(item.observacoes) }, h('summary', {}, 'Observação interna'), campo('Não aparece para o cliente', observacao)),
+        h('details', { class: 'mais-opcoes editor-observacoes-item', open: Boolean(item.observacoes) }, h('summary', {}, 'Observações internas', icone('baixo')), campo('Não aparece para o cliente', observacao),
+          !novo ? h('details', { class: 'mais-opcoes editor-acoes-secundarias' }, h('summary', {}, 'Ações do móvel'),
+            h('div', { class: 'editor-acoes-secundarias-lista' }, h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'copiar' }) }, 'Copiar móvel'), h('button', { type: 'button', class: 'link-botao perigo', onclick: () => fechar({ acao: 'remover' }) }, 'Remover móvel')), gradeTipos,
+          ) : null,
+        ),
         resultado,
         h(
           'div',
@@ -1774,7 +1862,7 @@ function formularioItem(inicial, tipos, novo, ambientes, ambienteIndice) {
         ),
       );
     },
-    { largo: true },
+    { largo: true, contexto: `${String(ambienteIndice + 1).padStart(2, '0')} · ${nomeAmbiente || 'AMBIENTE'}`, classe: 'modal-item' },
   );
 }
 

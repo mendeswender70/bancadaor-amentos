@@ -58,6 +58,7 @@ const ICONES = {
   seta: '<path d="M9 6l6 6-6 6"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   alerta: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.01"/>',
+  sino: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
   preco: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
   empresa: '<path d="M4 21V5l8-3v19M12 8h8v13M8 8v.01M8 12v.01M8 16v.01M16 12v.01M16 16v.01"/>',
   calendario: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
@@ -76,11 +77,19 @@ const ICONES = {
   serra: '<path d="M9.98 3.23 L11.06 3.05 L12.00 1.00 L12.76 3.33 L14.02 3.23 L14.63 3.39 L15.66 3.78 L17.50 2.47 L16.99 4.87 L18.14 5.42 L18.58 5.86 L19.28 6.71 L21.53 6.50 L19.88 8.32 L20.61 9.37 L20.77 9.98 L20.95 11.06 L23.00 12.00 L20.67 12.76 L20.77 14.02 L20.61 14.63 L20.22 15.66 L21.53 17.50 L19.13 16.99 L18.58 18.14 L18.14 18.58 L17.29 19.28 L17.50 21.53 L15.68 19.88 L14.63 20.61 L14.02 20.77 L12.94 20.95 L12.00 23.00 L11.24 20.67 L9.98 20.77 L9.37 20.61 L8.34 20.22 L6.50 21.53 L7.01 19.13 L5.86 18.58 L5.42 18.14 L4.72 17.29 L2.47 17.50 L4.12 15.68 L3.39 14.63 L3.23 14.02 L3.05 12.94 L1.00 12.00 L3.33 11.24 L3.23 9.98 L3.39 9.37 L3.78 8.34 L2.47 6.50 L4.87 7.01 L5.42 5.86 L5.86 5.42 L6.71 4.72 L6.50 2.47 L8.32 4.12 L9.37 3.39 Z"/><circle cx="12" cy="12" r="3.1"/>',
 };
 
+// Exportações vetoriais dos componentes aprovados no Figma. Os arquivos mantêm
+// a grade original de 24 px; a máscara preserva a cor de cada estado do controle.
+const ICONES_FIGMA = new Set(['inicio', 'orcamentos', 'clientes', 'config', 'mais', 'busca', 'seta', 'cadeado', 'empresa', 'preco', 'pagamento', 'usuario', 'voltar', 'editar', 'regua', 'check', 'historico', 'baixo', 'sino', 'olho', 'pontos', 'whatsapp']);
+
 export function icone(nome, classe = 'icone') {
   const span = document.createElement('span');
   span.className = classe;
   span.setAttribute('aria-hidden', 'true');
-  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ''}</svg>`;
+  if (ICONES_FIGMA.has(nome)) {
+    span.append(h('span', { class: `icone-vetor icone-${nome}` }));
+  } else {
+    span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ''}</svg>`;
+  }
   return span;
 }
 
@@ -108,9 +117,9 @@ export function avisoErro(erro) {
  * Abre um diálogo. `montar(fechar)` devolve o conteúdo; `fechar(valor)`
  * encerra o diálogo e resolve a Promise com `valor`.
  */
-export function abrirModal(titulo, montar, { largo = false } = {}) {
+export function abrirModal(titulo, montar, { largo = false, contexto = '', subtitulo = '', classe = '' } = {}) {
   return new Promise((resolve) => {
-    const dialogo = h('dialog', { class: `modal${largo ? ' modal-largo' : ''}` });
+    const dialogo = h('dialog', { class: `modal${largo ? ' modal-largo' : ''}${contexto ? ' modal-contextual' : ''}${classe ? ` ${classe}` : ''}` });
     let encerrado = false;
     const fechar = (valor) => {
       if (encerrado) return;
@@ -126,10 +135,12 @@ export function abrirModal(titulo, montar, { largo = false } = {}) {
     const cabecalho = h(
       'div',
       { class: 'modal-cabecalho' },
-      h('h2', {}, titulo),
+      h('div', { class: 'modal-titulos' }, contexto ? h('span', { class: 'contexto-interno' }, contexto) : null, h('h2', {}, titulo)),
       h('button', { type: 'button', class: 'botao-icone', 'aria-label': 'Fechar', onclick: () => fechar(undefined) }, '×'),
     );
-    dialogo.append(cabecalho, h('div', { class: 'modal-corpo' }, montar(fechar)));
+    dialogo.append(cabecalho);
+    if (subtitulo) dialogo.append(h('p', { class: 'modal-descricao' }, subtitulo));
+    dialogo.append(h('div', { class: 'modal-corpo' }, montar(fechar)));
     document.body.append(dialogo);
     dialogo.showModal();
     const foco = dialogo.querySelector('[autofocus]');
@@ -163,8 +174,9 @@ let contadorCampos = 0;
 
 /** Campo com rótulo. `controle` é o input/select/textarea. */
 export function campo(rotulo, controle, { dica, classe = '' } = {}) {
-  const idCampo = controle.id || `campo-${++contadorCampos}`;
-  controle.id = idCampo;
+  const alvo = controle.matches('input, select, textarea, button') ? controle : controle.querySelector('input, select, textarea, button') || controle;
+  const idCampo = alvo.id || `campo-${++contadorCampos}`;
+  alvo.id = idCampo;
   return h(
     'div',
     { class: `campo ${classe}` },
@@ -244,9 +256,12 @@ export function marcaEsquadro(classe = '') {
 export function haQuanto(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
+  const minutos = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60_000));
+  if (minutos < 1) return 'agora';
+  if (minutos < 60) return `há ${minutos} min`;
   const inicio = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const dias = Math.round((inicio(new Date()) - inicio(d)) / 86_400_000);
-  if (dias <= 0) return 'hoje';
+  if (dias <= 0) return `há ${Math.floor(minutos / 60)} h`;
   if (dias === 1) return 'ontem';
   return `há ${dias} dias`;
 }
@@ -287,16 +302,45 @@ export function iniciais(nome) {
 
 let menuAberto = null;
 document.addEventListener('click', (e) => {
-  if (menuAberto && !menuAberto.contains(e.target)) fecharMenu();
+  if (menuAberto && !menuAberto.raiz.contains(e.target) && !menuAberto.lista.contains(e.target)) fecharMenu();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') fecharMenu();
+  if (e.key === 'Escape' && menuAberto) {
+    const botao = menuAberto.botao;
+    fecharMenu();
+    botao.focus();
+  }
 });
+window.addEventListener('hashchange', fecharMenu);
 function fecharMenu() {
-  menuAberto?.querySelector('.menu-opcoes')?.remove();
-  menuAberto?.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false');
+  menuAberto?.lista.remove();
+  menuAberto?.botao.setAttribute('aria-expanded', 'false');
   menuAberto = null;
 }
+
+function posicionarMenu(lista, botao) {
+  const margem = 12;
+  const ancora = botao.getBoundingClientRect();
+  const largura = Math.min(280, window.innerWidth - margem * 2);
+  lista.style.width = `${largura}px`;
+  lista.style.maxHeight = `min(420px, calc(100dvh - ${margem * 2}px))`;
+
+  const altura = lista.getBoundingClientRect().height;
+  const abaixo = window.innerHeight - ancora.bottom - margem;
+  const acima = ancora.top - margem;
+  const top = abaixo >= Math.min(altura, 220) || abaixo >= acima
+    ? Math.min(ancora.bottom + 8, window.innerHeight - altura - margem)
+    : Math.max(margem, ancora.top - altura - 8);
+  const left = Math.max(margem, Math.min(ancora.right - largura, window.innerWidth - largura - margem));
+  Object.assign(lista.style, { top: `${top}px`, left: `${left}px` });
+}
+
+window.addEventListener('resize', () => {
+  if (menuAberto) fecharMenu();
+});
+window.addEventListener('scroll', (e) => {
+  if (menuAberto && !menuAberto.lista.contains(e.target)) fecharMenu();
+}, true);
 
 /**
  * Botão "⋯" com lista de ações.
@@ -313,12 +357,12 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
     'aria-expanded': 'false',
     onclick: (e) => {
       e.stopPropagation();
-      const estavaAberto = menuAberto === raiz;
+      const estavaAberto = menuAberto?.raiz === raiz;
       fecharMenu();
       if (estavaAberto) return;
       const lista = h(
         'div',
-        { class: 'menu-opcoes', role: 'menu' },
+        { class: 'menu-opcoes menu-flutuante', role: 'menu' },
         opcoes.map((op) =>
           op === '-'
             ? h('hr', {})
@@ -339,12 +383,10 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
               ),
         ),
       );
-      raiz.append(lista);
-      // Perto do fim da tela, abre para cima (o menu inferior do celular cobre a parte de baixo).
-      const limite = window.innerHeight - (window.innerWidth < 1024 ? 90 : 16);
-      if (lista.getBoundingClientRect().bottom > limite) lista.classList.add('para-cima');
+      document.body.append(lista);
+      posicionarMenu(lista, botao);
       botao.setAttribute('aria-expanded', 'true');
-      menuAberto = raiz;
+      menuAberto = { raiz, lista, botao };
       lista.querySelector('button:not(:disabled)')?.focus();
     },
   }, icone('pontos'));

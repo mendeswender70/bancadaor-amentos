@@ -1,12 +1,13 @@
 import { api, cache, quandoPerderSessao } from './api.js';
-import { h, anexar, icone, substituir, carregando, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
+import { h, anexar, icone, substituir, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
 import { novidades } from './novidades.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
 import { paginaEditor } from './pages/editor.js';
-import { paginaClientes, paginaCliente } from './pages/clientes.js';
+import { paginaClientes, paginaCliente, paginaEditarCliente } from './pages/clientes.js';
 import { paginaConfiguracoes } from './pages/config.js';
+import { paginaAvisos } from './pages/avisos.js';
 
 const raiz = document.getElementById('app');
 let usuario = null;
@@ -23,7 +24,9 @@ const ROTAS = [
   [/^\/orcamentos\/(\d+)$/, ([id]) => paginaEditor({ id: Number(id) })],
   [/^\/clientes$/, () => paginaClientes()],
   [/^\/clientes\/(\d+)$/, ([id]) => paginaCliente(Number(id))],
+  [/^\/clientes\/(\d+)\/editar$/, ([id]) => paginaEditarCliente(Number(id))],
   [/^\/config(?:\/(\w+))?$/, ([aba]) => paginaConfiguracoes(aba)],
+  [/^\/avisos$/, () => paginaAvisos()],
 ];
 
 // Uma página pode registrar uma verificação antes de sair (ex.: alterações não salvas).
@@ -46,7 +49,8 @@ async function rotear() {
     return;
   }
   verificarSaida = null;
-  hashAtual = location.hash;
+  const hashDaRota = location.hash;
+  hashAtual = hashDaRota;
 
   const [caminho, busca = ''] = location.hash.replace(/^#/, '').split('?');
   if (!usuario) return mostrarAcesso();
@@ -55,7 +59,9 @@ async function rotear() {
   if (!conteudo) montarLayout();
   marcarMenu(caminho);
   const alvo = document.getElementById('conteudo');
-  substituir(alvo, carregando());
+  // Mantém a tela anterior visível até a próxima página terminar de buscar os
+  // dados. O spinner em tela cheia causava uma piscada preta em cada navegação.
+  alvo.setAttribute('aria-busy', 'true');
   window.scrollTo(0, 0);
 
   for (const [padrao, pagina] of ROTAS) {
@@ -63,14 +69,17 @@ async function rotear() {
     if (!m) continue;
     try {
       const el = await pagina(m.slice(1), new URLSearchParams(busca));
-      if (hashAtual === location.hash) substituir(alvo, el);
+      if (hashDaRota === location.hash) substituir(alvo, el);
     } catch (erro) {
       if (erro.status === 401) return;
-      substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
+      if (hashDaRota === location.hash) substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
+    } finally {
+      if (hashDaRota === location.hash) alvo.removeAttribute('aria-busy');
     }
     return;
   }
   substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, 'Página não encontrada.'), h('a', { href: '#/' }, 'Voltar ao início')));
+  alvo.removeAttribute('aria-busy');
 }
 
 window.addEventListener('hashchange', rotear);
@@ -120,7 +129,6 @@ export function monograma() {
 }
 
 function montarLayout() {
-  const empresa = cache.empresa;
   const link = ([href, texto, ic, padrao], rotuloCurto) =>
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
 
@@ -135,13 +143,11 @@ function montarLayout() {
         h(
           'a',
           { href: '#/', class: 'lateral-marca' },
-          monograma(),
-          h('div', {}, h('strong', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos'), h('small', {}, 'Orçamentos de móveis')),
+          marcaEsquadro('marca-app marca-lateral'),
         ),
         h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
         h('nav', { class: 'lateral-nav' }, MENU.map((m) => link(m))),
         botaoNovidades('lateral'),
-        h('a', { href: '#/config/conta', class: 'lateral-assinatura', title: 'esquadro' }, marcaEsquadro('marca-mini')),
         h(
           'div',
           { class: 'lateral-rodape' },
@@ -149,9 +155,8 @@ function montarLayout() {
             'a',
             { href: '#/config/conta', class: 'lateral-usuario', title: 'Minha conta' },
             h('span', { class: 'avatar' }, iniciais(usuario?.nome)),
-            h('div', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, usuario?.email || '')),
+            h('div', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, 'Minha conta')),
           ),
-          h('button', { type: 'button', class: 'botao-icone', title: 'Sair', 'aria-label': 'Sair', onclick: sair }, icone('sair')),
         ),
       ),
       h(
@@ -160,7 +165,7 @@ function montarLayout() {
         h(
           'header',
           { class: 'topo' },
-          h('a', { href: '#/', class: 'topo-marca' }, monograma(), h('span', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos')),
+          h('a', { href: '#/', class: 'topo-marca' }, marcaEsquadro('marca-app marca-mobile')),
           botaoNovidades('topo'),
           h('a', { href: '#/config/conta', class: 'avatar topo-avatar', title: 'Minha conta', 'aria-label': 'Minha conta' }, iniciais(usuario?.nome)),
         ),
@@ -177,9 +182,11 @@ function montarLayout() {
       ),
     ),
   );
+  queueMicrotask(atualizarIndicadorNovidades);
 }
 
 const CHAVE_NOVIDADES_LIDAS = 'esquadro.novidades.lidas';
+const CHAVE_AVISOS_LIDAS = 'esquadro.avisos.lidas';
 
 function idsNovidadesLidas() {
   try {
@@ -193,77 +200,37 @@ function idsNovidadesLidas() {
 function botaoNovidades(posicao) {
   const botao = h(
     'button',
-    { type: 'button', class: `botao-novidades botao-novidades-${posicao}`, title: 'Ver novidades', 'aria-label': 'Ver novidades', onclick: () => abrirNovidades() },
-    icone('historico'),
-    h('span', { class: 'botao-novidades-texto' }, 'Novidades'),
+    { type: 'button', class: `botao-novidades botao-novidades-${posicao}`, title: 'Ver avisos e novidades', 'aria-label': 'Ver avisos e novidades', onclick: () => irPara('#/avisos') },
+    icone('sino'),
+    h('span', { class: 'botao-novidades-texto' }, 'Avisos'),
     h('span', { class: 'botao-novidades-ponto', 'aria-hidden': 'true', hidden: true }),
   );
-  botao.querySelector('.botao-novidades-ponto').hidden = novidades.every((n) => idsNovidadesLidas().has(n.id));
+  const badge = botao.querySelector('.botao-novidades-ponto');
+  badge.hidden = novidades.every((n) => idsNovidadesLidas().has(n.id));
   return botao;
 }
 
-function atualizarIndicadorNovidades() {
-  const lidas = idsNovidadesLidas();
-  const haNovidades = novidades.some((n) => !lidas.has(n.id));
+async function atualizarIndicadorNovidades() {
+  const novidadesPendentes = novidades.filter((n) => !idsNovidadesLidas().has(n.id)).length;
+  let avisosPendentes = 0;
+  if (usuario) {
+    try {
+      const dados = await api.get('/dashboard');
+      const lidos = new Set(JSON.parse(localStorage.getItem(CHAVE_AVISOS_LIDAS) || '[]'));
+      avisosPendentes = (dados.atencao || []).filter((a) => !lidos.has(`${a.motivo}:${a.id}:${a.quando}`)).length;
+    } catch {
+      // O indicador de avisos não deve interromper a navegação se a rede falhar.
+    }
+  }
+  const total = novidadesPendentes + avisosPendentes;
   for (const botao of document.querySelectorAll('.botao-novidades')) {
-    botao.querySelector('.botao-novidades-ponto').hidden = !haNovidades;
+    const badge = botao.querySelector('.botao-novidades-ponto');
+    badge.hidden = !total;
+    badge.textContent = total > 9 ? '9+' : String(total || '');
   }
 }
 
-async function abrirNovidades({ somenteNaoLidas = false } = {}) {
-  const lidas = idsNovidadesLidas();
-  const entradas = novidades.filter((n) => !somenteNaoLidas || !lidas.has(n.id));
-  if (!entradas.length) return;
-
-  await abrirModal('Novidades do esquadro', (fechar) =>
-    h(
-      'div',
-      { class: 'lista-novidades' },
-      entradas.map((n) =>
-        h(
-          'article',
-          { class: 'novidade' },
-          h('time', { class: 'novidade-data' }, n.data),
-          h('h3', {}, n.titulo),
-          h('ul', {}, n.itens.map((item) => h('li', {}, item))),
-        ),
-      ),
-      h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', autofocus: true, onclick: () => fechar(true) }, 'Entendi')),
-    ),
-  );
-
-  try {
-    const ids = new Set([...idsNovidadesLidas(), ...entradas.map((n) => n.id)]);
-    localStorage.setItem(CHAVE_NOVIDADES_LIDAS, JSON.stringify([...ids]));
-  } catch {
-    // Se o armazenamento local estiver bloqueado, a novidade pode reaparecer na próxima visita.
-  }
-  atualizarIndicadorNovidades();
-}
-
-export function atualizarMarca() {
-  for (const el of raiz.querySelectorAll('.marca-nome')) el.textContent = cache.empresa?.nome || 'Orçamentos';
-  for (const el of raiz.querySelectorAll('.monograma')) el.replaceWith(monograma());
-}
-
-function marcarMenu(caminho) {
-  for (const link of raiz.querySelectorAll('.menu-link')) {
-    const ativo = new RegExp(link.getAttribute('data-padrao')).test(caminho || '/');
-    link.classList.toggle('ativo', ativo);
-    if (ativo) link.setAttribute('aria-current', 'page');
-    else link.removeAttribute('aria-current');
-  }
-}
-
-export async function sair() {
-  if (verificarSaida && !(await verificarSaida())) return;
-  verificarSaida = null;
-  pararMonitorVersao();
-  await api.post('/auth/sair').catch(() => {});
-  usuario = null;
-  cache.empresa = null;
-  mostrarAcesso();
-}
+window.addEventListener('esquadro:avisos-lidos', atualizarIndicadorNovidades);
 
 function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
@@ -321,27 +288,66 @@ function iniciarMonitorVersao() {
   intervaloVersao = setInterval(conferir, 45_000);
 }
 
-// ------------------------------------------------------ Login / primeiro acesso
 
-function atualizarAparenciaAcesso(ativo) {
-  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
-    if (meta.dataset.corOriginal === undefined) meta.dataset.corOriginal = meta.content;
-    meta.content = ativo ? 'transparent' : meta.dataset.corOriginal;
+async function abrirNovidades({ somenteNaoLidas = false } = {}) {
+  const lidas = idsNovidadesLidas();
+  const entradas = novidades.filter((n) => !somenteNaoLidas || !lidas.has(n.id));
+  if (!entradas.length) return;
+
+  await abrirModal('Novidades do esquadro', (fechar) =>
+    h(
+      'div',
+      { class: 'lista-novidades' },
+      entradas.map((n) =>
+        h(
+          'article',
+          { class: 'novidade' },
+          h('time', { class: 'novidade-data' }, n.data),
+          h('h3', {}, n.titulo),
+          h('ul', {}, n.itens.map((item) => h('li', {}, item))),
+        ),
+      ),
+      h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', autofocus: true, onclick: () => fechar(true) }, 'Entendi')),
+    ),
+  );
+
+  try {
+    const ids = new Set([...idsNovidadesLidas(), ...entradas.map((n) => n.id)]);
+    localStorage.setItem(CHAVE_NOVIDADES_LIDAS, JSON.stringify([...ids]));
+  } catch {
+    // Se o armazenamento local estiver bloqueado, a novidade pode reaparecer na próxima visita.
   }
-
-  const barraIos = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-  if (barraIos) {
-    if (barraIos.dataset.valorOriginal === undefined) barraIos.dataset.valorOriginal = barraIos.content;
-    barraIos.content = ativo ? 'black-translucent' : barraIos.dataset.valorOriginal;
-  }
-
-  document.documentElement.classList.toggle('tela-acesso', ativo);
+  atualizarIndicadorNovidades();
 }
+
+export function atualizarMarca() {
+  for (const el of raiz.querySelectorAll('.monograma')) el.replaceWith(monograma());
+}
+
+function marcarMenu(caminho) {
+  for (const link of raiz.querySelectorAll('.menu-link')) {
+    const ativo = new RegExp(link.getAttribute('data-padrao')).test(caminho || '/');
+    link.classList.toggle('ativo', ativo);
+    if (ativo) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+}
+
+export async function sair() {
+  if (verificarSaida && !(await verificarSaida())) return;
+  verificarSaida = null;
+  pararMonitorVersao();
+  await api.post('/auth/sair').catch(() => {});
+  usuario = null;
+  cache.empresa = null;
+  mostrarAcesso();
+}
+
+// ------------------------------------------------------ Login / primeiro acesso
 
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
   if (estado.usuario) {
-    atualizarAparenciaAcesso(false);
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
@@ -350,122 +356,85 @@ async function mostrarAcesso() {
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
-  atualizarAparenciaAcesso(true);
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
 }
 
-function simboloAcessoAnimado() {
-  const svgNs = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNs, 'svg');
-  svg.setAttribute('viewBox', '0 0 40 40');
-  svg.setAttribute('class', 'acesso-simbolo-desenho');
-  svg.setAttribute('aria-hidden', 'true');
-  const tracos = [
-    ['M9 5V33H35', 'acesso-traco-principal'],
-    ['M9 12H16'],
-    ['M9 19H14'],
-    ['M9 26H16'],
-    ['M16 33V27'],
-    ['M23 33V29'],
-    ['M30 33V27'],
-  ];
-  for (const [d, classe] of tracos) {
-    const path = document.createElementNS(svgNs, 'path');
-    path.setAttribute('d', d);
-    path.setAttribute('pathLength', '100');
-    if (classe) path.setAttribute('class', classe);
-    svg.append(path);
-  }
-  return svg;
-}
-
 function medidorAcesso(input, controle = input, limite = 30) {
-  const linha = h('span', { class: 'acesso-medida', 'aria-hidden': 'true' });
-  const medidor = h('div', { class: 'acesso-medidor' }, controle, linha);
-  const atualizar = () => {
-    const progresso = Math.min(1, input.value.length / limite);
-    medidor.style.setProperty('--acesso-progresso', String(progresso));
-  };
-  input.addEventListener('input', atualizar);
-  input.addEventListener('change', atualizar);
-  atualizar();
-  return medidor;
+  void input;
+  void limite;
+  return controle;
 }
 
-function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO' } = {}) {
-  const serragem = h(
-    'div',
-    { class: 'acesso-serragem', 'aria-hidden': 'true' },
-    ...Array.from({ length: 7 }, () => h('span', {})),
-  );
+function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO', subtituloMobile = '', classe = '' } = {}) {
   return h(
     'div',
-    { class: 'acesso' },
-    h('img', { class: 'acesso-planta', src: '/images/login-planta.svg', alt: '', 'aria-hidden': 'true' }),
-    serragem,
-    h('header', { class: 'acesso-topo' }, marcaEsquadro('marca-clara'), h('span', {}, 'ORÇAMENTOS DE MARCENARIA')),
+    { class: `acesso${classe ? ` ${classe}` : ''}` },
     h(
-      'main',
-      { class: 'acesso-lado' },
+      'section',
+      { class: 'acesso-marca' },
+      h('header', { class: 'acesso-topo' }, marcaEsquadro('marca-clara')),
       h(
-        'section',
-        { class: 'acesso-apresentacao', 'aria-labelledby': 'acesso-apresentacao-titulo' },
-        h('span', { class: 'acesso-apresentacao-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
-        h('h1', { id: 'acesso-apresentacao-titulo' }, 'Seus projetos. Seus números. No esquadro.'),
+        'div',
+        { class: 'acesso-chamada' },
+        h('span', { class: 'acesso-chamada-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
+        h('h2', { 'aria-label': 'Seus projetos. Seus números. No esquadro.' },
+          h('span', { class: 'acesso-titulo-mobile' },
+            h('span', {}, 'Seus projetos. Seus'),
+            h('span', {}, 'números. No'),
+            h('span', {}, 'esquadro.'),
+          ),
+          h('span', { class: 'acesso-titulo-desktop' },
+            h('span', {}, 'Seus projetos.'),
+            h('span', {}, 'Seus números.'),
+            h('span', {}, 'No esquadro.'),
+          ),
+        ),
         h('p', {}, 'Sua marcenaria organizada, do primeiro cálculo ao orçamento aprovado.'),
       ),
+    ),
+    h(
+      'div',
+      { class: 'acesso-lado' },
       h(
         'div',
         { class: 'acesso-cartao' },
-        h('div', { class: 'acesso-simbolo' }, simboloAcessoAnimado()),
         h('span', { class: 'acesso-etiqueta' }, etiqueta),
-        h('h2', {}, titulo),
-        subtitulo ? h('p', { class: 'acesso-subtitulo' }, subtitulo) : null,
+        h('h1', {}, titulo),
+        subtitulo ? h('p', { class: 'acesso-subtitulo' },
+          subtituloMobile ? h('span', { class: 'acesso-subtitulo-desktop' }, subtitulo) : null,
+          h('span', { class: subtituloMobile ? 'acesso-subtitulo-mobile' : '' }, subtituloMobile || subtitulo),
+        ) : null,
         formulario,
         h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados ficam protegidos.')),
       ),
     ),
   );
 }
+
 function telaEntrar() {
-  const email = h('input', { id: 'login-email', type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
-  const senha = h('input', { id: 'login-senha', type: 'password', autocomplete: 'current-password', required: true });
+  const email = h('input', { id: 'email-acesso', type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
+  const senha = h('input', { id: 'senha-acesso', type: 'password', autocomplete: 'current-password', placeholder: '••••••••', required: true });
   const avisoCapsLock = h('small', { class: 'acesso-caps-lock', role: 'status', 'aria-live': 'polite' }, 'Caps Lock ativado');
   avisoCapsLock.hidden = true;
-  const atualizarAvisoCapsLock = (evento) => {
-    avisoCapsLock.hidden = !evento.getModifierState?.('CapsLock');
-  };
-  senha.addEventListener('keydown', atualizarAvisoCapsLock);
-  senha.addEventListener('keyup', atualizarAvisoCapsLock);
-  senha.addEventListener('blur', () => {
-    avisoCapsLock.hidden = true;
-  });
-  const alternarSenha = h(
-    'button',
-    {
-      type: 'button',
-      class: 'acesso-senha-alternar',
-      'aria-controls': 'login-senha',
-      'aria-label': 'Mostrar senha',
-      'aria-pressed': 'false',
-      onclick: () => {
-        const mostrar = senha.type === 'password';
-        senha.type = mostrar ? 'text' : 'password';
-        alternarSenha.textContent = mostrar ? 'Ocultar' : 'Mostrar';
-        alternarSenha.setAttribute('aria-label', mostrar ? 'Ocultar senha' : 'Mostrar senha');
-        alternarSenha.setAttribute('aria-pressed', String(mostrar));
-      },
+  const atualizarCapsLock = (evento) => { avisoCapsLock.hidden = !evento.getModifierState?.('CapsLock'); };
+  senha.addEventListener('keydown', atualizarCapsLock);
+  senha.addEventListener('keyup', atualizarCapsLock);
+  senha.addEventListener('blur', () => { avisoCapsLock.hidden = true; });
+  const mostrarSenha = h('button', {
+    type: 'button',
+    class: 'mostrar-senha acesso-senha-alternar',
+    'aria-label': 'Mostrar senha',
+    'aria-controls': senha.id,
+    'aria-pressed': 'false',
+    onclick: () => {
+      const visivel = senha.type === 'password';
+      senha.type = visivel ? 'text' : 'password';
+      mostrarSenha.textContent = visivel ? 'Ocultar' : 'Mostrar';
+      mostrarSenha.setAttribute('aria-label', visivel ? 'Ocultar senha' : 'Mostrar senha');
+      mostrarSenha.setAttribute('aria-pressed', String(visivel));
     },
-    'Mostrar',
-  );
-  const campoSenha = h(
-    'div',
-    { class: 'campo' },
-    h('label', { for: 'login-senha' }, 'Senha'),
-    medidorAcesso(senha, h('div', { class: 'acesso-senha-controle' }, senha, alternarSenha), 20),
-    avisoCapsLock,
-  );
-  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, h('span', {}, 'Entrar'));
+  }, 'Mostrar');
+  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Entrar');
   const form = h(
     'form',
     {
@@ -482,24 +451,26 @@ function telaEntrar() {
           avisoErro(erro);
           botao.disabled = false;
           botao.removeAttribute('aria-busy');
-          botao.replaceChildren(h('span', {}, 'Entrar'));
+          botao.replaceChildren('Entrar');
         }
       },
     },
-    h('div', { class: 'campo' }, h('label', { for: 'login-email' }, 'E-mail'), medidorAcesso(email, email, 36)),
-    campoSenha,
+    h('div', { class: 'campo' }, h('label', { for: email.id }, 'E-mail'), medidorAcesso(email, email, 36)),
+    h('div', { class: 'campo' }, h('label', { for: senha.id }, 'Senha'), medidorAcesso(senha, h('div', { class: 'campo-controle-senha acesso-senha-controle' }, senha, mostrarSenha), 20), avisoCapsLock),
     botao,
   );
-  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos.', form);
+  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form, {
+    subtituloMobile: 'Entre para acompanhar seus orçamentos.',
+  });
 }
 
 function telaConfigurar() {
-  const empresa = h('input', { type: 'text', autocomplete: 'organization', placeholder: 'Ex.: Marcenaria Silva' });
-  const nome = h('input', { type: 'text', autocomplete: 'name', required: true });
-  const email = h('input', { type: 'email', autocomplete: 'username', required: true });
-  const senha = h('input', { type: 'password', autocomplete: 'new-password', required: true, minlength: '6' });
-  const confirmar = h('input', { type: 'password', autocomplete: 'new-password', required: true, minlength: '6' });
-  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Começar');
+  const empresa = h('input', { type: 'text', autocomplete: 'organization', placeholder: 'Nome da marcenaria' });
+  const nome = h('input', { type: 'text', autocomplete: 'name', placeholder: 'Seu nome completo', required: true });
+  const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
+  const senha = h('input', { type: 'password', autocomplete: 'new-password', placeholder: '••••••••', required: true, minlength: '6' });
+  const confirmar = h('input', { type: 'password', autocomplete: 'new-password', placeholder: '••••••••', required: true, minlength: '6' });
+  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Criar acesso');
   const form = h(
     'form',
     {
@@ -508,7 +479,6 @@ function telaConfigurar() {
         e.preventDefault();
         if (senha.value !== confirmar.value) return aviso('As senhas não conferem.', 'erro');
         botao.disabled = true;
-        botao.textContent = 'Preparando…';
         try {
           await api.post('/auth/configurar', {
             empresa: empresa.value,
@@ -522,18 +492,17 @@ function telaConfigurar() {
         } catch (erro) {
           avisoErro(erro);
           botao.disabled = false;
-          botao.textContent = 'Começar';
         }
       },
     },
-    campo('Nome da empresa', empresa),
+    campo('Empresa', empresa),
     campo('Seu nome', nome),
-    campo('E-mail (para entrar no sistema)', email),
-    campo('Senha', senha, { dica: 'Pelo menos 6 caracteres.' }),
+    campo('E-mail', email),
+    campo('Senha', senha),
     campo('Confirme a senha', confirmar),
     botao,
   );
-  return cartaoAcesso('Vamos começar', 'Crie o acesso da sua empresa e prepare seu primeiro orçamento.', form, { etiqueta: 'PRIMEIRO ACESSO' });
+  return cartaoAcesso('Vamos começar', 'Configure sua empresa e comece a criar orçamentos.', form, { etiqueta: 'PRIMEIRO ACESSO', classe: 'acesso-configuracao' });
 }
 
 quandoPerderSessao(() => {

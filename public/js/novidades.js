@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-figma-proposta-madeira',
+    data: '21 de outubro de 2026',
+    titulo: 'Novo visual do Esquadro e das propostas',
+    itens: [
+      'Login, painel, orçamentos, clientes, avisos e ajustes seguem a identidade aprovada, com novos ícones e botões de vidro.',
+      'O PDF e o link de aprovação compartilham o fundo de madeira e a mesma apresentação do projeto.',
+      'As abas do editor, os formulários e os menus se adaptam ao celular sem cortar os móveis ou sobrepor as ações.',
+    ],
+  },
+  {
     id: '2026-10-login-vidro-escuro',
     data: '20 de outubro de 2026',
     titulo: 'Tema escuro e vidro líquido no acesso',
