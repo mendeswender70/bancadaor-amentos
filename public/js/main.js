@@ -7,6 +7,7 @@ import { paginaNovoOrcamento } from './pages/novo.js';
 import { paginaEditor } from './pages/editor.js';
 import { paginaClientes, paginaCliente } from './pages/clientes.js';
 import { paginaConfiguracoes } from './pages/config.js';
+import { paginaAvisos } from './pages/avisos.js';
 
 const raiz = document.getElementById('app');
 let usuario = null;
@@ -22,6 +23,7 @@ const ROTAS = [
   [/^\/clientes$/, () => paginaClientes()],
   [/^\/clientes\/(\d+)$/, ([id]) => paginaCliente(Number(id))],
   [/^\/config(?:\/(\w+))?$/, ([aba]) => paginaConfiguracoes(aba)],
+  [/^\/avisos$/, () => paginaAvisos()],
 ];
 
 // Uma página pode registrar uma verificação antes de sair (ex.: alterações não salvas).
@@ -175,9 +177,11 @@ function montarLayout() {
       ),
     ),
   );
+  queueMicrotask(atualizarIndicadorNovidades);
 }
 
 const CHAVE_NOVIDADES_LIDAS = 'esquadro.novidades.lidas';
+const CHAVE_AVISOS_LIDAS = 'esquadro.avisos.lidas';
 
 function idsNovidadesLidas() {
   try {
@@ -191,22 +195,37 @@ function idsNovidadesLidas() {
 function botaoNovidades(posicao) {
   const botao = h(
     'button',
-    { type: 'button', class: `botao-novidades botao-novidades-${posicao}`, title: 'Ver novidades', 'aria-label': 'Ver novidades', onclick: () => abrirNovidades() },
-    icone('historico'),
-    h('span', { class: 'botao-novidades-texto' }, 'Novidades'),
+    { type: 'button', class: `botao-novidades botao-novidades-${posicao}`, title: 'Ver avisos e novidades', 'aria-label': 'Ver avisos e novidades', onclick: () => irPara('#/avisos') },
+    icone('sino'),
+    h('span', { class: 'botao-novidades-texto' }, 'Avisos'),
     h('span', { class: 'botao-novidades-ponto', 'aria-hidden': 'true', hidden: true }),
   );
-  botao.querySelector('.botao-novidades-ponto').hidden = novidades.every((n) => idsNovidadesLidas().has(n.id));
+  const badge = botao.querySelector('.botao-novidades-ponto');
+  badge.hidden = novidades.every((n) => idsNovidadesLidas().has(n.id));
   return botao;
 }
 
-function atualizarIndicadorNovidades() {
-  const lidas = idsNovidadesLidas();
-  const haNovidades = novidades.some((n) => !lidas.has(n.id));
+async function atualizarIndicadorNovidades() {
+  const novidadesPendentes = novidades.filter((n) => !idsNovidadesLidas().has(n.id)).length;
+  let avisosPendentes = 0;
+  if (usuario) {
+    try {
+      const dados = await api.get('/dashboard');
+      const lidos = new Set(JSON.parse(localStorage.getItem(CHAVE_AVISOS_LIDAS) || '[]'));
+      avisosPendentes = (dados.atencao || []).filter((a) => !lidos.has(`${a.motivo}:${a.id}:${a.quando}`)).length;
+    } catch {
+      // O indicador de avisos não deve interromper a navegação se a rede falhar.
+    }
+  }
+  const total = novidadesPendentes + avisosPendentes;
   for (const botao of document.querySelectorAll('.botao-novidades')) {
-    botao.querySelector('.botao-novidades-ponto').hidden = !haNovidades;
+    const badge = botao.querySelector('.botao-novidades-ponto');
+    badge.hidden = !total;
+    badge.textContent = total > 9 ? '9+' : String(total || '');
   }
 }
+
+window.addEventListener('esquadro:avisos-lidos', atualizarIndicadorNovidades);
 
 async function abrirNovidades({ somenteNaoLidas = false } = {}) {
   const lidas = idsNovidadesLidas();
@@ -264,66 +283,33 @@ export async function sair() {
 
 // ------------------------------------------------------ Login / primeiro acesso
 
-// Cena 3D da tela de entrada (carregada só aqui, em arquivo separado).
-let cenaAtual = null;
-function pararCena() {
-  cenaAtual?.parar();
-  cenaAtual = null;
-}
-async function iniciarCena() {
-  const palco = raiz.querySelector('.acesso-cena');
-  if (!palco) return;
-  try {
-    const { montarCena } = await import('./cena-login.js');
-    if (!palco.isConnected) return;
-    pararCena();
-    cenaAtual = montarCena(palco, { aoMontar: () => palco.classList.add('montado') });
-    palco.classList.add('com-3d');
-  } catch (erro) {
-    // Sem WebGL (ou falha ao carregar): fica o fundo em degradê.
-    console.warn('Cena 3D indisponível:', erro?.message || erro);
-  }
-}
-
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
   if (estado.usuario) {
-    pararCena();
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
-  pararCena();
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
-  iniciarCena();
 }
 
-function cartaoAcesso(titulo, subtitulo, formulario) {
-  const vantagem = (texto) => h('li', {}, icone('check'), texto);
+function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO' } = {}) {
   return h(
     'div',
     { class: 'acesso' },
     h(
       'section',
       { class: 'acesso-marca' },
-      h('div', { class: 'acesso-cena' }),
-      marcaEsquadro('marca-clara'),
+      h('header', { class: 'acesso-topo' }, marcaEsquadro('marca-clara')),
       h(
         'div',
         { class: 'acesso-chamada' },
-        h('h2', {}, 'Orçamentos de móveis planejados em poucos minutos.'),
-        h(
-          'ul',
-          {},
-          vantagem('Cálculo automático por metro linear, m² ou unidade'),
-          vantagem('Móveis organizados por ambiente'),
-          vantagem('PDF profissional sem mostrar seu preço por metro'),
-          vantagem('Envio direto pelo WhatsApp'),
-        ),
+        h('span', { class: 'acesso-chamada-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
+        h('h2', {}, 'Seus projetos. Seus números. No esquadro.'),
+        h('p', {}, 'Sua marcenaria organizada, do primeiro cálculo ao orçamento aprovado.'),
       ),
-      h('small', {}, 'esquadro · orçamentos de marcenaria no esquadro'),
     ),
     h(
       'div',
@@ -331,18 +317,30 @@ function cartaoAcesso(titulo, subtitulo, formulario) {
       h(
         'div',
         { class: 'acesso-cartao' },
-        marcaEsquadro('marca-acesso'),
+        h('span', { class: 'acesso-etiqueta' }, etiqueta),
         h('h1', {}, titulo),
-        subtitulo ? h('p', { class: 'suave' }, subtitulo) : null,
+        subtitulo ? h('p', { class: 'acesso-subtitulo' }, subtitulo) : null,
         formulario,
+        h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados e orçamentos ficam protegidos.')),
       ),
     ),
   );
 }
 
 function telaEntrar() {
-  const email = h('input', { type: 'email', autocomplete: 'username', required: true, autofocus: true });
-  const senha = h('input', { type: 'password', autocomplete: 'current-password', required: true });
+  const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
+  const senha = h('input', { id: 'senha-acesso', type: 'password', autocomplete: 'current-password', required: true });
+  const mostrarSenha = h('button', {
+    type: 'button',
+    class: 'mostrar-senha',
+    'aria-pressed': 'false',
+    onclick: () => {
+      const visivel = senha.type === 'password';
+      senha.type = visivel ? 'text' : 'password';
+      mostrarSenha.textContent = visivel ? 'Ocultar' : 'Mostrar';
+      mostrarSenha.setAttribute('aria-pressed', String(visivel));
+    },
+  }, 'Mostrar');
   const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Entrar');
   const form = h(
     'form',
@@ -361,11 +359,10 @@ function telaEntrar() {
       },
     },
     campo('E-mail', email),
-    campo('Senha', senha),
+    h('div', { class: 'campo' }, h('label', { for: senha.id }, 'Senha'), h('div', { class: 'campo-controle-senha' }, senha, mostrarSenha)),
     botao,
   );
-  setTimeout(() => email.focus());
-  return cartaoAcesso('Entrar', 'Que bom ter você de volta. Entre para ver seus orçamentos.', form);
+  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form);
 }
 
 function telaConfigurar() {
@@ -406,8 +403,7 @@ function telaConfigurar() {
     campo('Confirme a senha', confirmar),
     botao,
   );
-  setTimeout(() => empresa.focus());
-  return cartaoAcesso('Bem-vindo ao esquadro!', 'Crie o acesso do administrador para começar a fazer seus orçamentos.', form);
+  return cartaoAcesso('Vamos começar', 'Configure sua empresa e prepare seu primeiro orçamento.', form, { etiqueta: 'PRIMEIRO ACESSO' });
 }
 
 quandoPerderSessao(() => {

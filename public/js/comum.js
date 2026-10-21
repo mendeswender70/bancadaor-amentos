@@ -24,11 +24,12 @@ export function selo(status) {
 }
 
 export function cabecalhoPagina(titulo, { voltar, acoes, subtitulo } = {}) {
+  const etiqueta = { Orçamentos: 'PROPOSTAS', Clientes: 'SEUS CONTATOS', Ajustes: 'PREFERÊNCIAS' }[titulo];
   return h(
     'div',
     { class: 'cabecalho-pagina' },
     voltar ? h('a', { href: voltar, class: 'voltar', 'aria-label': 'Voltar' }, icone('voltar')) : null,
-    h('div', { class: 'titulos' }, h('h1', {}, titulo), subtitulo ? h('p', {}, subtitulo) : null),
+    h('div', { class: 'titulos' }, etiqueta ? h('span', { class: 'page-eyebrow' }, etiqueta) : null, h('h1', {}, titulo), subtitulo ? h('p', {}, subtitulo) : null),
     acoes ? h('div', { class: 'cabecalho-acoes' }, acoes) : null,
   );
 }
@@ -112,31 +113,61 @@ async function acaoCopiarLink(o) {
  * Lista de orçamentos: a linha abre o orçamento; à direita ficam os atalhos
  * (WhatsApp e o menu com duplicar, PDF e link).
  */
-export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar } = {}) {
+export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, variante = 'compacta' } = {}) {
   return h(
     'div',
-    { class: 'lista' },
-    orcamentos.map((o) =>
-      h(
+    { class: `lista${variante === 'tabela' ? ' lista-orcamentos-tabela' : ''}` },
+    orcamentos.map((o) => {
+      const atividade = o.status === 'aprovado'
+        ? o.aprovado_pelo_link ? 'Aprovado pelo cliente' : 'Proposta aprovada'
+        : o.status === 'visto' || (o.visualizacoes && ['enviado', 'negociacao'].includes(o.status))
+          ? `Cliente abriu a proposta ${haQuanto(o.ultima_visualizacao_em)}`
+          : o.status === 'enviado'
+            ? 'Proposta enviada ao cliente'
+            : o.status === 'negociacao'
+              ? 'Em negociação'
+              : o.status === 'expirado'
+                ? 'Validade da proposta encerrada'
+                : o.status === 'recusado'
+                  ? 'Proposta recusada pelo cliente'
+                  : o.status === 'cancelado'
+                    ? 'Proposta cancelada'
+                    : 'Rascunho aguardando envio';
+      const tags = h(
+        'span',
+        { class: 'etiquetas' },
+        etiquetasOrcamento(o).map(([tipo, texto]) => h('span', { class: `etiqueta-linha ${tipo}` }, texto)),
+      );
+      const link = variante === 'tabela' && mostrarCliente
+        ? h('a', { href: `#/orcamentos/${o.id}`, class: 'linha-link orcamento-link-tabela' },
+            h('span', { class: 'orcamento-cliente' }, avatar(o.cliente_nome, 'avatar-linha'),
+              h('span', { class: 'orcamento-cliente-texto' }, h('strong', {}, o.cliente_nome), h('small', {}, `Nº ${formatarNumero(o.numero)}`)),
+            ),
+            h('span', { class: 'orcamento-atividade' },
+              h('strong', {}, atividade),
+              o.data_validade && ['enviado', 'negociacao'].includes(o.status) ? h('small', {}, `Válida até ${formatarData(o.data_validade)}`) : null,
+            ),
+            h('time', { class: 'orcamento-data', datetime: o.data }, formatarData(o.data)),
+            h('span', { class: 'orcamento-status' }, selo(o.status)),
+            h('strong', { class: 'orcamento-total valor' }, formatarDinheiro(o.total_cents)),
+          )
+        : h(
+            'a',
+            { href: `#/orcamentos/${o.id}`, class: 'linha-link' },
+            mostrarCliente ? avatar(o.cliente_nome, 'avatar-linha') : h('span', { class: 'selo-icone avatar-linha' }, icone('orcamentos')),
+            h(
+              'div',
+              { class: 'linha-principal' },
+              h('strong', {}, mostrarCliente ? o.cliente_nome : `Orçamento nº ${formatarNumero(o.numero)}`),
+              h('span', { class: 'suave' }, mostrarCliente ? `nº ${formatarNumero(o.numero)} · ` : '', formatarData(o.data)),
+            ),
+            h('div', { class: 'linha-valor' }, h('strong', {}, formatarDinheiro(o.total_cents)), selo(o.status)),
+            tags,
+          );
+      return h(
         'div',
-        { class: 'linha-orcamento linha-com-acoes' },
-        h(
-          'a',
-          { href: `#/orcamentos/${o.id}`, class: 'linha-link' },
-          mostrarCliente ? avatar(o.cliente_nome, 'avatar-linha') : h('span', { class: 'selo-icone avatar-linha' }, icone('orcamentos')),
-          h(
-            'div',
-            { class: 'linha-principal' },
-            h('strong', {}, mostrarCliente ? o.cliente_nome : `Orçamento nº ${formatarNumero(o.numero)}`),
-            h('span', { class: 'suave' }, mostrarCliente ? `nº ${formatarNumero(o.numero)} · ` : '', formatarData(o.data)),
-          ),
-          h('div', { class: 'linha-valor' }, h('strong', {}, formatarDinheiro(o.total_cents)), selo(o.status)),
-          h(
-            'span',
-            { class: 'etiquetas' },
-            etiquetasOrcamento(o).map(([tipo, texto]) => h('span', { class: `etiqueta-linha ${tipo}` }, texto)),
-          ),
-        ),
+        { class: `linha-orcamento linha-com-acoes${variante === 'tabela' ? ' linha-orcamento-tabela' : ''}` },
+        link,
         h(
           'div',
           { class: 'linha-acoes' },
@@ -161,8 +192,8 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar } =
             { rotulo: `Ações do orçamento nº ${formatarNumero(o.numero)}` },
           ),
         ),
-      ),
-    ),
+      );
+    }),
   );
 }
 

@@ -9,7 +9,7 @@ export async function paginaClientes() {
   const busca = h('input', {
     type: 'search',
     class: 'busca',
-    placeholder: 'Procurar por nome, telefone ou WhatsApp',
+    placeholder: 'Nome ou telefone',
     'aria-label': 'Procurar cliente',
   });
 
@@ -30,30 +30,24 @@ export async function paginaClientes() {
         lista,
         h(
           'div',
-          { class: 'lista' },
+          { class: 'lista lista-clientes' },
           clientes.map((c) => {
             const whats = numeroWhatsApp(c.whatsapp || c.telefone);
             const primeiro = c.nome.trim().split(/\s+/)[0];
+            const resumo = c.aprovado_cents
+              ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · ${formatarDinheiro(c.aprovado_cents)} aprovados`
+              : c.ultimo_orcamento
+                ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · último em ${formatarData(c.ultimo_orcamento)}`
+                : `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`}`;
             return h(
               'div',
-              { class: 'linha-orcamento linha-com-acoes' },
+              { class: 'linha-orcamento linha-com-acoes linha-cliente-ui' },
               h(
                 'a',
-                { href: `#/clientes/${c.id}`, class: 'linha-link' },
-                avatar(c.nome, 'avatar-linha'),
-                h(
-                  'div',
-                  { class: 'linha-principal' },
-                  h('strong', {}, c.nome),
-                  h('span', { class: 'suave' }, [c.whatsapp || c.telefone, c.cidade].filter(Boolean).join(' · ') || 'Sem telefone'),
-                ),
-                h(
-                  'span',
-                  { class: 'etiquetas' },
-                  h('span', { class: 'etiqueta-linha' }, c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`),
-                  c.ultimo_orcamento ? h('span', { class: 'etiqueta-linha' }, `último em ${formatarData(c.ultimo_orcamento)}`) : null,
-                  c.aprovado_cents ? h('span', { class: 'etiqueta-linha sucesso' }, `${formatarDinheiro(c.aprovado_cents)} aprovados`) : null,
-                ),
+                { href: `#/clientes/${c.id}`, class: 'linha-link cliente-link' },
+                avatar(c.nome, 'avatar-linha cliente-avatar'),
+                h('div', { class: 'linha-principal' }, h('strong', {}, c.nome), h('span', { class: 'suave' }, resumo)),
+                icone('seta', 'icone linha-seta'),
               ),
               h(
                 'div',
@@ -62,7 +56,7 @@ export async function paginaClientes() {
                   ? h(
                       'a',
                       {
-                        class: 'botao-icone botao-icone-whatsapp',
+                        class: 'botao-icone botao-icone-whatsapp so-computador',
                         href: `https://wa.me/${whats}?text=${encodeURIComponent(`Olá, ${primeiro}!`)}`,
                         target: '_blank',
                         rel: 'noopener',
@@ -93,7 +87,7 @@ export async function paginaClientes() {
     'div',
     { class: 'pagina' },
     cabecalhoPagina('Clientes', {
-      subtitulo: 'Cadastro e histórico de cada cliente',
+      subtitulo: 'Histórico e propostas em um lugar.',
       acoes: h('button', { type: 'button', class: 'botao botao-primario', onclick: novo }, icone('usuarioMais'), 'Novo cliente'),
     }),
     h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),

@@ -4,12 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="esquadro — orçamentos de móveis planejados em poucos minutos." />
-    <meta name="theme-color" content="#f6f4f1" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#131210" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#100d0b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="esquadro" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>esquadro · Orçamentos de marcenaria</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
@@ -21,7 +20,12 @@
   </head>
   <body>
     <div id="app">
-      <div class="carregando"><img src="/icons/esquadro.svg" alt="" width="36" height="36" /><span class="spinner"></span></div>
+      <div class="carregando inicial">
+        <span class="spinner-serra" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><path d="M24 3.5 27.2 8l5.4-1.8 1.5 5.5 5.7.5-.5 5.7 5.5 1.5-1.8 5.4 4.5 3.2-3.2 4.5 1.8 5.4-5.5 1.5.5 5.7-5.7.5-1.5 5.5-5.4-1.8-3.2 4.5-4.5-3.2-4.5 3.2-3.2-4.5-5.4 1.8-1.5-5.5-5.7-.5.5-5.7-5.5-1.5 1.8-5.4-4.5-3.2 3.2-4.5-1.8-5.4 5.5-1.5-.5-5.7 5.7-.5 1.5-5.5 5.4 1.8z" transform="translate(-4 -4)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="24" cy="24" r="7.5" stroke="currentColor" stroke-width="2"/><circle cx="24" cy="24" r="2" fill="currentColor"/></svg>
+        </span>
+        <span>Preparando seus projetos…</span>
+      </div>
     </div>
     <noscript>Ative o JavaScript para usar o esquadro.</noscript>
   </body>

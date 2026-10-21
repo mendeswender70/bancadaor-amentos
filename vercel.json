@@ -18,7 +18,11 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "node_modules/pdfkit/js/**",
+      "includeFiles": [
+        "node_modules/pdfkit/js/**",
+        "server/fontes/**",
+        "public/images/madeira-esquadro.jpg"
+      ],
       "maxDuration": 30,
       "excludeFiles": "node_modules/@electric-sql/**"
     }

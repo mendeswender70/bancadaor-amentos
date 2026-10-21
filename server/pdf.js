@@ -3,15 +3,15 @@ import { readFileSync } from 'node:fs';
 import { formatarData, formatarDinheiro } from '../public/shared/calc.js';
 
 const COR = {
-  tinta: '#1c1917',
-  texto: '#3b3531',
-  suave: '#8b8179',
-  linha: '#e8e2da',
-  acento: '#9a6b3f',
-  painel: '#1f1a16',
-  painelTexto: '#e9e1d7',
-  dourado: '#d8bb8f',
-  desconto: '#2f7a47',
+  tinta: '#f5efe6',
+  texto: '#e0d4c6',
+  suave: '#b9ad9e',
+  linha: '#514031',
+  acento: '#c39a69',
+  painel: '#1c1713',
+  painelTexto: '#f5efe6',
+  dourado: '#e2c397',
+  desconto: '#92cba5',
 };
 
 const MARGEM = 52;
@@ -27,6 +27,7 @@ const FONTES = {
   sansForte: fonte('inter-latin-600-normal.woff'),
   sansItalica: fonte('inter-latin-400-italic.woff'),
 };
+const MADEIRA = readFileSync(new URL('../public/images/madeira-esquadro.jpg', import.meta.url));
 
 /**
  * Gera o PDF do cliente a partir da visão do cliente (ver visaoCliente.js).
@@ -56,9 +57,27 @@ export function gerarPdf(v, logo) {
   const esq = MARGEM;
   const dir = MARGEM + largura;
   const limite = () => doc.page.height - MARGEM - RODAPE;
+  const desenharFundo = () => {
+    const imagem = doc.openImage(MADEIRA);
+    const escala = Math.max(doc.page.width / imagem.width, doc.page.height / imagem.height);
+    const larguraImagem = imagem.width * escala;
+    const alturaImagem = imagem.height * escala;
+    doc.save();
+    doc.image(imagem, (doc.page.width - larguraImagem) / 2, (doc.page.height - alturaImagem) / 2, { width: larguraImagem, height: alturaImagem });
+    doc.fillOpacity(0.44).rect(0, 0, doc.page.width, doc.page.height).fill('#080604');
+    doc.restore();
+    doc.roundedRect(14, 14, doc.page.width - 28, doc.page.height - 28, 11).lineWidth(0.7).strokeColor('#6a5138').stroke();
+  };
+  const painel = (x, y, w, h, raio = 12, opacidade = 0.84) => {
+    doc.save();
+    doc.roundedRect(x, y, w, h, raio).fillOpacity(opacidade).fill(COR.painel);
+    doc.roundedRect(x, y, w, h, raio).lineWidth(0.6).strokeColor(COR.linha).stroke();
+    doc.restore();
+  };
   // Páginas seguintes ganham um cabeçalho discreto.
   const novaPagina = () => {
     doc.addPage();
+    desenharFundo();
     const yC = MARGEM - 14;
     escrever(v.empresa.nome || '', MARGEM, yC, { f: 'serif', t: 10, cor: COR.tinta, width: largura * 0.6, lineBreak: false });
     escrever(`Orçamento Nº ${v.numero}`, MARGEM + largura * 0.4, yC + 1.5, {
@@ -85,6 +104,8 @@ export function gerarPdf(v, logo) {
   const fio = (y, x1 = esq, x2 = dir, cor = COR.linha, espessura = 0.6) => {
     doc.moveTo(x1, y).lineTo(x2, y).lineWidth(espessura).strokeColor(cor).stroke();
   };
+
+  desenharFundo();
 
   const empresa = v.empresa;
   const c = v.cliente;
@@ -150,6 +171,11 @@ export function gerarPdf(v, logo) {
     { titulo: 'Válido até', principal: formatarData(v.data_validade), linhas: [`${v.validade_dias} dias a partir da emissão`], peso: 0.27 },
     { titulo: 'Prazo de entrega', principal: v.prazo_entrega || 'A combinar', linhas: [], peso: 0.27 },
   ];
+  const alturasColunas = colunas.map((col, i) => {
+    const w = largura * col.peso - (i < colunas.length - 1 ? 18 : 0);
+    return 13 + altura(col.principal, w, { f: 'serifMedia', t: 12.5 }) + col.linhas.reduce((soma, linha) => soma + altura(linha, w, { t: 8.5 }), 0);
+  });
+  painel(esq, y - 12, largura, Math.max(75, Math.max(...alturasColunas) + 25), 14, 0.82);
   let x = esq;
   let yMax = y;
   colunas.forEach((col, i) => {
@@ -175,7 +201,25 @@ export function gerarPdf(v, logo) {
     y,
     { t: 9.5, cor: COR.texto, width: largura * 0.86, lineGap: 2.5 },
   );
-  doc.y = y + 24;
+  doc.y = y + 26;
+
+  // A capa apresenta o investimento e os dados principais antes dos itens.
+  const capaY = doc.y;
+  const capaAltura = 78;
+  painel(esq, capaY, largura, capaAltura, 13, 0.86);
+  rotulo('Investimento total', esq + 18, capaY + 16, { cor: COR.dourado, characterSpacing: 1.5 });
+  escrever(formatarDinheiro(v.total_cents), esq + 18, capaY + 31, { f: 'serif', t: 22, cor: COR.tinta, width: largura * 0.56, features: ['lnum'] });
+  escrever(`${v.ambientes.length} ${v.ambientes.length === 1 ? 'ambiente' : 'ambientes'} · ${v.ambientes.reduce((soma, a) => soma + a.itens.length, 0)} móveis`, dir - 190, capaY + 43, {
+    t: 8,
+    cor: COR.suave,
+    width: 172,
+    align: 'right',
+  });
+
+  // A proposta do cliente começa os detalhes em uma página dedicada.
+  novaPagina();
+  rotulo('O que está incluído', esq, doc.y, { cor: COR.acento, characterSpacing: 1.8 });
+  doc.y += 17;
 
   // ================================================================ Grupos
   const grupos = v.ambientes
@@ -266,7 +310,7 @@ export function gerarPdf(v, logo) {
   if (ajustes.length) doc.y += 6;
 
   const yP = doc.y;
-  doc.roundedRect(esq, yP, largura, alturaPainel, 10).fill(COR.painel);
+  painel(esq, yP, largura, alturaPainel, 12, 0.9);
   rotulo('Investimento total', esq + 22, yP + 20, { cor: COR.dourado, characterSpacing: 2 });
   if (v.pagamento.descricao) {
     escrever(v.pagamento.descricao, esq + 22, yP + 36, { t: 9, cor: COR.painelTexto, width: largura * 0.48 });
@@ -274,7 +318,7 @@ export function gerarPdf(v, logo) {
   escrever(formatarDinheiro(v.total_cents), esq + largura * 0.42, yP + 21, {
     f: 'serif',
     t: 26,
-    cor: '#ffffff',
+    cor: COR.tinta,
     features: ['lnum'],
     width: largura * 0.58 - 22,
     align: 'right',

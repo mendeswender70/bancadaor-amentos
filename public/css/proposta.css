@@ -1,4 +1,4 @@
-/* Página da proposta enviada ao cliente (sempre em tema claro, como papel). */
+/* Página pública da proposta: tema escuro do esquadro. */
 
 @font-face {
   font-family: 'Inter';
@@ -37,22 +37,22 @@
 }
 
 :root {
-  --papel: #f7f4ef;
-  --folha: #ffffff;
-  --tinta: #1f1a16;
-  --tinta-2: #4a423b;
-  --suave: #6b625a;
-  --linha: #e8e1d8;
-  --madeira: #7c4a1d;
-  --madeira-clara: #b07a44;
-  --escuro: #221c17;
-  --ok: #15803d;
-  --ok-fundo: #e8f6ed;
-  --alerta: #9a5400;
-  --alerta-fundo: #fff4e0;
-  --whatsapp: #128c4a;
-  --foco: #2f6fdf;
-  color-scheme: light;
+  --papel: #100d0b;
+  --folha: #1c1713;
+  --tinta: #f5efe6;
+  --tinta-2: #d6c9b8;
+  --suave: #b9ad9e;
+  --linha: #514031;
+  --madeira: #c39a69;
+  --madeira-clara: #e2c397;
+  --escuro: #1b1511;
+  --ok: #92cba5;
+  --ok-fundo: #1b2b20;
+  --alerta: #e5b77b;
+  --alerta-fundo: #332619;
+  --whatsapp: #68c897;
+  --foco: #d8b386;
+  color-scheme: dark;
 }
 
 *,
@@ -72,6 +72,7 @@ body {
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 16px;
   line-height: 1.55;
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -143,9 +144,9 @@ p {
 
 /* --------------------------------------------------------------------- Página */
 .p-pagina {
-  max-width: 760px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 0 18px calc(110px + env(safe-area-inset-bottom));
+  padding: 0 clamp(18px, 8.33vw, 120px) calc(110px + env(safe-area-inset-bottom));
 }
 
 .p-topo {
@@ -371,7 +372,7 @@ p {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 20px 14px 62px;
-  background: #faf7f3;
+  background: rgb(195 154 105 / 6%);
   border-top: 1px solid var(--linha);
   font-size: 0.92rem;
   color: var(--tinta-2);
@@ -490,19 +491,21 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px max(16px, calc((100vw - 760px) / 2 + 18px));
+  padding: 12px max(16px, calc((100vw - 1200px) / 2 + 18px));
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--folha) 92%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--linha);
-  box-shadow: 0 -8px 24px rgb(31 26 22 / 6%);
+  box-shadow: 0 -8px 28px rgb(0 0 0 / 35%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.3);
 }
 
 .p-barra-total {
   display: flex;
   flex-direction: column;
   line-height: 1.2;
-  min-width: 0;
+  min-width: 110px;
   flex: 1;
 }
 
@@ -513,7 +516,9 @@ p {
 }
 
 .p-barra-total strong {
-  font-size: 1.15rem;
+  color: var(--tinta);
+  font-size: clamp(0.9rem, 4.2vw, 1.15rem);
+  white-space: nowrap;
 }
 
 .p-barra-botoes {
@@ -539,13 +544,14 @@ p {
 }
 
 .p-botao-principal {
-  background: var(--madeira);
-  color: #fff;
-  box-shadow: 0 6px 18px rgb(124 74 29 / 30%);
+  border-color: rgb(255 242 216 / 58%);
+  background: linear-gradient(150deg, rgb(206 165 111 / 52%), rgb(174 119 65 / 35%) 56%, rgb(113 80 47 / 28%)), linear-gradient(145deg, rgb(255 245 223 / 15%), rgb(255 255 255 / 2%));
+  color: var(--tinta);
+  box-shadow: inset 0 1px rgb(255 255 255 / 20%), 0 6px 18px rgb(0 0 0 / 27%);
 }
 
 .p-botao-principal:hover {
-  background: #653b15;
+  background: linear-gradient(150deg, rgb(216 174 120 / 62%), rgb(182 127 72 / 43%) 56%, rgb(133 91 50 / 33%)), linear-gradient(145deg, rgb(255 245 223 / 18%), rgb(255 255 255 / 3%));
 }
 
 .p-botao-principal:disabled {
@@ -554,9 +560,10 @@ p {
 }
 
 .p-botao-sec {
-  background: var(--folha);
-  border-color: var(--linha);
+  background: linear-gradient(145deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 1%)), rgb(28 23 19 / 82%);
+  border-color: rgb(226 195 151 / 22%);
   color: var(--tinta);
+  box-shadow: inset 0 1px rgb(255 255 255 / 9%), 0 4px 14px rgb(0 0 0 / 20%);
 }
 
 .p-botao-sec .icone {
@@ -572,6 +579,36 @@ p {
 }
 
 @media (max-width: 480px) {
+  .p-pagina {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .p-barra {
+    gap: 8px;
+    padding: 10px 12px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .p-barra-total {
+    min-width: 0;
+  }
+
+  .p-barra-botoes {
+    gap: 6px;
+  }
+
+  .p-barra-botoes .p-botao-principal {
+    min-width: 142px;
+    padding: 0 12px;
+  }
+
+  .p-barra-botoes .p-botao-sec {
+    width: 46px;
+    min-width: 46px;
+    padding: 0;
+  }
+
   .p-barra-botoes .p-texto-botao {
     display: none;
   }
@@ -779,4 +816,139 @@ p {
   .p-investimento {
     box-shadow: none;
   }
+}
+
+/* Acabamento do redesign do Figma e contraste confortável em todas as telas. */
+.p-topo {
+  border-bottom-color: rgb(81 64 49 / 62%);
+}
+
+.p-capa h1,
+.p-titulo-secao,
+.p-ambiente h3,
+.p-condicoes dd {
+  color: var(--tinta);
+}
+
+.p-meta,
+.p-ambiente,
+.p-condicoes {
+  border-color: rgb(81 64 49 / 76%);
+  border-radius: 18px;
+  background: var(--folha);
+  box-shadow: inset 0 1px rgb(255 255 255 / 3%);
+}
+
+.p-ambiente > header {
+  border-bottom: 1px solid rgb(81 64 49 / 45%);
+}
+
+.p-ambiente > footer {
+  border-top-color: rgb(81 64 49 / 50%);
+  color: var(--tinta-2);
+}
+
+.p-faixa {
+  border: 1px solid rgb(195 154 105 / 20%);
+  background: linear-gradient(145deg, rgb(195 154 105 / 10%), rgb(255 255 255 / 2%));
+}
+
+.p-faixa-ok {
+  border-color: rgb(146 203 165 / 24%);
+  background: rgb(146 203 165 / 8%);
+}
+
+.p-faixa-alerta {
+  border-color: rgb(229 183 123 / 24%);
+  background: rgb(229 183 123 / 8%);
+}
+
+.p-faixa div span {
+  color: var(--tinta-2);
+}
+
+.p-investimento {
+  border: 1px solid rgb(226 195 151 / 24%);
+  background: linear-gradient(145deg, rgb(195 154 105 / 9%), transparent 65%), var(--escuro);
+  box-shadow: inset 0 1px rgb(255 255 255 / 5%), 0 18px 40px rgb(0 0 0 / 25%);
+}
+
+.p-linha {
+  color: var(--tinta-2);
+}
+
+.p-total strong {
+  color: #f5efe6;
+}
+
+.p-pagamento strong {
+  color: var(--madeira-clara);
+}
+
+.p-barra {
+  border-top-color: rgb(81 64 49 / 75%);
+  background: rgb(28 23 19 / 92%);
+}
+
+.p-botao {
+  border-radius: 15px;
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+}
+
+.p-modal {
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(27 23 19 / 96%);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 56%), inset 0 1px rgb(255 255 255 / 7%);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(24px) saturate(1.3);
+}
+
+.p-modal::backdrop {
+  background: rgb(0 0 0 / 65%);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+.p-modal-topo h2 {
+  color: var(--tinta);
+  font-weight: 500;
+}
+
+.p-modal-total {
+  border: 1px solid rgb(81 64 49 / 68%);
+  background: rgb(16 13 11 / 75%);
+}
+
+.p-modal-total strong {
+  color: var(--madeira-clara);
+}
+
+.p-modal input[type='text'] {
+  border-color: rgb(129 107 83 / 52%);
+  background: rgb(23 21 19 / 90%);
+  color: var(--tinta);
+}
+
+.p-modal input[type='text']:focus {
+  outline: 0;
+  border-color: var(--madeira-clara);
+  box-shadow: 0 0 0 3px rgb(226 195 151 / 15%);
+}
+
+.p-erro {
+  color: #f0a39a;
+}
+
+.p-obrigado-selo {
+  box-shadow: 0 0 0 7px rgb(146 203 165 / 10%);
+}
+
+.p-feito {
+  color: var(--madeira-clara);
+}
+
+:focus-visible {
+  outline: 3px solid rgb(226 195 151 / 74%);
+  outline-offset: 3px;
 }
