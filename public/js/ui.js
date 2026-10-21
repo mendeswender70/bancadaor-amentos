@@ -77,11 +77,19 @@ const ICONES = {
   serra: '<path d="M9.98 3.23 L11.06 3.05 L12.00 1.00 L12.76 3.33 L14.02 3.23 L14.63 3.39 L15.66 3.78 L17.50 2.47 L16.99 4.87 L18.14 5.42 L18.58 5.86 L19.28 6.71 L21.53 6.50 L19.88 8.32 L20.61 9.37 L20.77 9.98 L20.95 11.06 L23.00 12.00 L20.67 12.76 L20.77 14.02 L20.61 14.63 L20.22 15.66 L21.53 17.50 L19.13 16.99 L18.58 18.14 L18.14 18.58 L17.29 19.28 L17.50 21.53 L15.68 19.88 L14.63 20.61 L14.02 20.77 L12.94 20.95 L12.00 23.00 L11.24 20.67 L9.98 20.77 L9.37 20.61 L8.34 20.22 L6.50 21.53 L7.01 19.13 L5.86 18.58 L5.42 18.14 L4.72 17.29 L2.47 17.50 L4.12 15.68 L3.39 14.63 L3.23 14.02 L3.05 12.94 L1.00 12.00 L3.33 11.24 L3.23 9.98 L3.39 9.37 L3.78 8.34 L2.47 6.50 L4.87 7.01 L5.42 5.86 L5.86 5.42 L6.71 4.72 L6.50 2.47 L8.32 4.12 L9.37 3.39 Z"/><circle cx="12" cy="12" r="3.1"/>',
 };
 
+// Exportações vetoriais dos componentes aprovados no Figma. Os arquivos mantêm
+// a grade original de 24 px; a máscara preserva a cor de cada estado do controle.
+const ICONES_FIGMA = new Set(['inicio', 'orcamentos', 'clientes', 'config', 'mais', 'busca', 'seta', 'cadeado', 'empresa', 'preco', 'pagamento', 'usuario', 'voltar', 'editar', 'regua', 'check', 'historico', 'baixo', 'sino', 'olho', 'pontos', 'whatsapp']);
+
 export function icone(nome, classe = 'icone') {
   const span = document.createElement('span');
   span.className = classe;
   span.setAttribute('aria-hidden', 'true');
-  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ''}</svg>`;
+  if (ICONES_FIGMA.has(nome)) {
+    span.append(h('span', { class: `icone-vetor icone-${nome}` }));
+  } else {
+    span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ''}</svg>`;
+  }
   return span;
 }
 
@@ -109,9 +117,9 @@ export function avisoErro(erro) {
  * Abre um diálogo. `montar(fechar)` devolve o conteúdo; `fechar(valor)`
  * encerra o diálogo e resolve a Promise com `valor`.
  */
-export function abrirModal(titulo, montar, { largo = false } = {}) {
+export function abrirModal(titulo, montar, { largo = false, contexto = '', subtitulo = '', classe = '' } = {}) {
   return new Promise((resolve) => {
-    const dialogo = h('dialog', { class: `modal${largo ? ' modal-largo' : ''}` });
+    const dialogo = h('dialog', { class: `modal${largo ? ' modal-largo' : ''}${contexto ? ' modal-contextual' : ''}${classe ? ` ${classe}` : ''}` });
     let encerrado = false;
     const fechar = (valor) => {
       if (encerrado) return;
@@ -127,10 +135,12 @@ export function abrirModal(titulo, montar, { largo = false } = {}) {
     const cabecalho = h(
       'div',
       { class: 'modal-cabecalho' },
-      h('h2', {}, titulo),
+      h('div', { class: 'modal-titulos' }, contexto ? h('span', { class: 'contexto-interno' }, contexto) : null, h('h2', {}, titulo)),
       h('button', { type: 'button', class: 'botao-icone', 'aria-label': 'Fechar', onclick: () => fechar(undefined) }, '×'),
     );
-    dialogo.append(cabecalho, h('div', { class: 'modal-corpo' }, montar(fechar)));
+    dialogo.append(cabecalho);
+    if (subtitulo) dialogo.append(h('p', { class: 'modal-descricao' }, subtitulo));
+    dialogo.append(h('div', { class: 'modal-corpo' }, montar(fechar)));
     document.body.append(dialogo);
     dialogo.showModal();
     const foco = dialogo.querySelector('[autofocus]');
@@ -164,8 +174,9 @@ let contadorCampos = 0;
 
 /** Campo com rótulo. `controle` é o input/select/textarea. */
 export function campo(rotulo, controle, { dica, classe = '' } = {}) {
-  const idCampo = controle.id || `campo-${++contadorCampos}`;
-  controle.id = idCampo;
+  const alvo = controle.matches('input, select, textarea, button') ? controle : controle.querySelector('input, select, textarea, button') || controle;
+  const idCampo = alvo.id || `campo-${++contadorCampos}`;
+  alvo.id = idCampo;
   return h(
     'div',
     { class: `campo ${classe}` },
@@ -245,9 +256,12 @@ export function marcaEsquadro(classe = '') {
 export function haQuanto(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
+  const minutos = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60_000));
+  if (minutos < 1) return 'agora';
+  if (minutos < 60) return `há ${minutos} min`;
   const inicio = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const dias = Math.round((inicio(new Date()) - inicio(d)) / 86_400_000);
-  if (dias <= 0) return 'hoje';
+  if (dias <= 0) return `há ${Math.floor(minutos / 60)} h`;
   if (dias === 1) return 'ontem';
   return `há ${dias} dias`;
 }

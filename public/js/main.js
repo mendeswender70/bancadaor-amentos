@@ -5,7 +5,7 @@ import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
 import { paginaEditor } from './pages/editor.js';
-import { paginaClientes, paginaCliente } from './pages/clientes.js';
+import { paginaClientes, paginaCliente, paginaEditarCliente } from './pages/clientes.js';
 import { paginaConfiguracoes } from './pages/config.js';
 import { paginaAvisos } from './pages/avisos.js';
 
@@ -24,6 +24,7 @@ const ROTAS = [
   [/^\/orcamentos\/(\d+)$/, ([id]) => paginaEditor({ id: Number(id) })],
   [/^\/clientes$/, () => paginaClientes()],
   [/^\/clientes\/(\d+)$/, ([id]) => paginaCliente(Number(id))],
+  [/^\/clientes\/(\d+)\/editar$/, ([id]) => paginaEditarCliente(Number(id))],
   [/^\/config(?:\/(\w+))?$/, ([aba]) => paginaConfiguracoes(aba)],
   [/^\/avisos$/, () => paginaAvisos()],
 ];
@@ -48,7 +49,8 @@ async function rotear() {
     return;
   }
   verificarSaida = null;
-  hashAtual = location.hash;
+  const hashDaRota = location.hash;
+  hashAtual = hashDaRota;
 
   const [caminho, busca = ''] = location.hash.replace(/^#/, '').split('?');
   if (!usuario) return mostrarAcesso();
@@ -67,12 +69,12 @@ async function rotear() {
     if (!m) continue;
     try {
       const el = await pagina(m.slice(1), new URLSearchParams(busca));
-      if (hashAtual === location.hash) substituir(alvo, el);
+      if (hashDaRota === location.hash) substituir(alvo, el);
     } catch (erro) {
       if (erro.status === 401) return;
-      if (hashAtual === location.hash) substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
+      if (hashDaRota === location.hash) substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
     } finally {
-      if (hashAtual === location.hash) alvo.removeAttribute('aria-busy');
+      if (hashDaRota === location.hash) alvo.removeAttribute('aria-busy');
     }
     return;
   }
@@ -153,9 +155,8 @@ function montarLayout() {
             'a',
             { href: '#/config/conta', class: 'lateral-usuario', title: 'Minha conta' },
             h('span', { class: 'avatar' }, iniciais(usuario?.nome)),
-            h('div', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, usuario?.email || '')),
+            h('div', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, 'Minha conta')),
           ),
-          h('button', { type: 'button', class: 'botao-icone', title: 'Sair', 'aria-label': 'Sair', onclick: sair }, icone('sair')),
         ),
       ),
       h(
@@ -364,10 +365,10 @@ function medidorAcesso(input, controle = input, limite = 30) {
   return controle;
 }
 
-function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO', subtituloMobile = '' } = {}) {
+function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO', subtituloMobile = '', classe = '' } = {}) {
   return h(
     'div',
-    { class: 'acesso' },
+    { class: `acesso${classe ? ` ${classe}` : ''}` },
     h(
       'section',
       { class: 'acesso-marca' },
@@ -464,12 +465,12 @@ function telaEntrar() {
 }
 
 function telaConfigurar() {
-  const empresa = h('input', { type: 'text', autocomplete: 'organization', placeholder: 'Ex.: Marcenaria Silva' });
-  const nome = h('input', { type: 'text', autocomplete: 'name', required: true });
-  const email = h('input', { type: 'email', autocomplete: 'username', required: true });
-  const senha = h('input', { type: 'password', autocomplete: 'new-password', required: true, minlength: '6' });
-  const confirmar = h('input', { type: 'password', autocomplete: 'new-password', required: true, minlength: '6' });
-  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Começar');
+  const empresa = h('input', { type: 'text', autocomplete: 'organization', placeholder: 'Nome da marcenaria' });
+  const nome = h('input', { type: 'text', autocomplete: 'name', placeholder: 'Seu nome completo', required: true });
+  const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
+  const senha = h('input', { type: 'password', autocomplete: 'new-password', placeholder: '••••••••', required: true, minlength: '6' });
+  const confirmar = h('input', { type: 'password', autocomplete: 'new-password', placeholder: '••••••••', required: true, minlength: '6' });
+  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Criar acesso');
   const form = h(
     'form',
     {
@@ -494,14 +495,14 @@ function telaConfigurar() {
         }
       },
     },
-    campo('Nome da empresa', empresa),
+    campo('Empresa', empresa),
     campo('Seu nome', nome),
-    campo('E-mail (para entrar no sistema)', email),
-    campo('Senha', senha, { dica: 'Pelo menos 6 caracteres.' }),
+    campo('E-mail', email),
+    campo('Senha', senha),
     campo('Confirme a senha', confirmar),
     botao,
   );
-  return cartaoAcesso('Vamos começar', 'Configure sua empresa e prepare seu primeiro orçamento.', form, { etiqueta: 'PRIMEIRO ACESSO' });
+  return cartaoAcesso('Vamos começar', 'Configure sua empresa e comece a criar orçamentos.', form, { etiqueta: 'PRIMEIRO ACESSO', classe: 'acesso-configuracao' });
 }
 
 quandoPerderSessao(() => {

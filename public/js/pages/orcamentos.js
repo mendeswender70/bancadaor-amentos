@@ -47,7 +47,7 @@ export async function paginaOrcamentos(query) {
       substituir(resultado, carregando());
     }
     const r = await api.get(`/orcamentos?${montarBusca()}`);
-    contador.textContent = r.total === 1 ? '1 orçamento' : `${r.total} orçamentos`;
+    contador.textContent = r.total === 1 ? '1 proposta' : `${r.total} propostas`;
     const lista = listaOrcamentos(r.orcamentos, { aoMudar: () => carregar(), variante: 'tabela' });
     if (!acrescentar) substituir(resultado);
     resultado.querySelector('.carregar-mais')?.remove();

@@ -21,12 +21,12 @@ const idAviso = (a) => `${a.motivo}:${a.id}:${a.quando}`;
 function detalheAviso(a) {
   switch (a.motivo) {
     case 'aprovado':
-      return ['aprovado', 'Proposta aprovada', `${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`];
+      return ['check', 'Proposta aprovada', `${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`];
     case 'visto':
-      return ['olho', 'Cliente abriu sua proposta', `${a.cliente_nome} · Nº ${formatarNumero(a.numero)} · ${haQuanto(a.quando)}`];
+      return ['olho', 'Cliente abriu sua proposta', `${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`];
     case 'vence': {
       const dias = diasAte(a.data_validade);
-      return ['relogio', `Proposta vence ${dias <= 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`}`, `${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`];
+      return ['historico', `Proposta vence ${dias <= 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`}`, `${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`];
     }
     case 'sem_resposta':
       return ['historico', 'Lembrete de acompanhamento', `${a.cliente_nome} · Nº ${formatarNumero(a.numero)} · enviado há pelo menos 5 dias`];
@@ -43,7 +43,6 @@ export async function paginaAvisos() {
   const avisosLidos = lerIds(CHAVE_AVISOS_LIDAS);
   const novidadesLidas = lerIds(CHAVE_NOVIDADES_LIDAS);
   let naoLidos = avisos.filter((a) => !avisosLidos.has(idAviso(a))).length;
-  const naoLidas = novidades.filter((n) => !novidadesLidas.has(n.id)).length;
   const conteudo = h('div', { class: 'central-avisos-conteudo' });
   let aba = 'avisos';
   let novidadeAberta = null;
@@ -57,17 +56,18 @@ export async function paginaAvisos() {
     const novos = avisos.filter((a) => !avisosLidos.has(idAviso(a)));
     const anteriores = avisos.filter((a) => avisosLidos.has(idAviso(a)));
     const grupo = (titulo, linhas) => linhas.length
-      ? h('section', { class: 'grupo-avisos' }, h('h2', {}, `${titulo} · ${linhas.length}`), h('div', { class: 'lista-avisos' }, linhas.map((a) => {
+      ? h('section', { class: 'grupo-avisos' }, h('h2', {}, titulo === 'Novos' ? `${titulo} · ${linhas.length}` : titulo), h('div', { class: 'lista-avisos' }, linhas.map((a) => {
           const [iconeNome, tituloAviso, detalhe] = detalheAviso(a);
           const id = idAviso(a);
+          const tempo = haQuanto(a.quando);
           return h(
             'a',
             { href: `#/orcamentos/${a.id}`, class: `cartao-aviso-feed${avisosLidos.has(id) ? '' : ' nao-lido'}`, onclick: () => marcarUm(id) },
-            h('span', { class: `aviso-feed-icone${a.motivo === 'aprovado' ? ' sucesso' : ''}` }, icone(iconeNome)),
+            h('span', { class: 'aviso-feed-icone' }, icone(iconeNome)),
             h('span', { class: 'aviso-feed-texto' },
               h('strong', {}, tituloAviso),
               h('span', { class: 'aviso-feed-detalhe' }, detalhe),
-              h('span', { class: 'aviso-feed-link' }, 'Ver proposta ', icone('seta', 'icone icone-mini')),
+              h('span', { class: 'aviso-feed-link' }, `${tempo.charAt(0).toUpperCase()}${tempo.slice(1)} · Ver proposta →`),
             ),
             avisosLidos.has(id) ? null : h('span', { class: 'aviso-feed-ponto', 'aria-label': 'Não lido' }),
           );
@@ -96,17 +96,23 @@ export async function paginaAvisos() {
       );
       return;
     }
-    substituir(conteudo,
-      novidades.length
-        ? h('div', { class: 'lista-novidades pagina-novidades' }, novidades.map((n) =>
-            h('article', { class: 'novidade' },
-              h('time', { class: 'novidade-data' }, n.data),
-              h('h3', {}, n.titulo),
-              h('p', {}, n.itens[0] || ''),
-              h('button', { type: 'button', class: 'link-botao', onclick: () => { novidadeAberta = n; marcarNovidade(n.id); renderNovidades(); } }, 'Ver os detalhes →'),
-            ),
-          ))
-        : vazioIlustrado('sino', 'Tudo em dia', 'As melhorias do esquadro aparecem aqui.'),
+    const grupos = new Map();
+    for (const n of novidades) {
+      if (!grupos.has(n.data)) grupos.set(n.data, []);
+      grupos.get(n.data).push(n);
+    }
+    const dataCurta = (data) => data.replace(/^(\d+) de (\S+) de (\d+)$/, (_, dia, mes, ano) => `${dia} ${mes.slice(0, 3)} ${ano}`).toLocaleUpperCase('pt-BR');
+    substituir(conteudo, novidades.length
+      ? h('div', { class: 'lista-novidades pagina-novidades' }, [...grupos].map(([data, lista]) =>
+        h('section', { class: 'novidades-grupo' }, h('h2', {}, data),
+          lista.map((n) => h('article', { class: 'novidade' },
+            h('time', { class: 'novidade-data' }, `${dataCurta(n.data)}${novidadesLidas.has(n.id) ? '' : ' · NOVO'}`),
+            h('h3', {}, n.titulo), h('p', {}, n.itens[0] || ''),
+            h('button', { type: 'button', class: 'link-botao', onclick: () => { novidadeAberta = n; marcarNovidade(n.id); renderNovidades(); } }, 'Ver os detalhes →'),
+          )),
+        ),
+      ))
+      : vazioIlustrado('sino', 'Tudo em dia', 'As melhorias do esquadro aparecem aqui.'),
     );
   }
 
@@ -122,6 +128,10 @@ export async function paginaAvisos() {
   function trocarAba(nova) {
     aba = nova;
     novidadeAberta = null;
+    const pagina = conteudo.closest('.pagina-avisos');
+    pagina?.classList.toggle('pagina-avisos--novidades', aba === 'novidades');
+    cabecalho.querySelector('.avisos-titulo-mobile').textContent = aba === 'novidades' ? 'Novidades' : 'Avisos';
+    cabecalho.querySelector('.avisos-subtitulo-mobile').textContent = aba === 'novidades' ? 'Pequenas melhorias para acompanhar sua marcenaria.' : 'Acompanhe o que mudou nos seus orçamentos.';
     atualizarAbas();
     if (aba === 'avisos') renderAvisos();
     else renderNovidades();

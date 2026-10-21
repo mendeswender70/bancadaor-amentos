@@ -52,10 +52,37 @@ function marcaEmpresa(p) {
   return h(
     'div',
     { class: 'p-marca' },
-    p.tem_logo
-      ? h('img', { class: 'p-logo', src: `${base}/logo`, alt: nome })
-      : h('img', { class: 'p-monograma', src: '/icons/esquadro.svg', alt: '' }),
+    p.tem_logo ? h('img', { class: 'p-logo', src: `${base}/logo`, alt: nome }) : null,
     p.tem_logo ? null : h('span', { class: 'p-marca-nome' }, h('strong', {}, nomePrincipal), h('small', {}, 'PLANEJADOS')),
+  );
+}
+
+function capa(p) {
+  const quantidade = p.ambientes.reduce((total, ambiente) => total + ambiente.itens.length, 0);
+  return h('section', { class: 'p-folha p-folha-capa', 'aria-labelledby': 'titulo-proposta' },
+    h('header', { class: 'p-topo' }, marcaEmpresa(p),
+      h('div', { class: 'p-identificacao' }, h('span', {}, 'Proposta'), h('strong', {}, `Nº ${p.numero}`)),
+    ),
+    h('div', { class: 'p-apresentacao' },
+      h('span', { class: 'p-sobre' }, 'Móveis feitos para o seu espaço'),
+      h('h1', { id: 'titulo-proposta' }, 'Seu projeto,', h('br'), 'em cada detalhe.'),
+      h('span', { class: 'p-assinatura', 'aria-hidden': 'true' }),
+      h('p', { class: 'p-intro' }, 'Uma proposta de móveis planejados', h('br'), 'feita sob medida para o seu espaço.'),
+    ),
+    h('div', { class: 'p-capa-resumo p-vidro' },
+      h('span', { class: 'p-sobre' }, 'Preparado para'),
+      h('p', { class: 'p-cliente-nome' }, p.cliente.nome || 'Cliente'),
+      h('dl', { class: 'p-meta' },
+        h('div', {}, h('dt', {}, 'Emissão'), h('dd', {}, formatarData(p.data))),
+        h('div', {}, h('dt', {}, 'Válida até'), h('dd', {}, formatarData(p.data_validade))),
+        h('div', {}, h('dt', {}, 'Entrega'), h('dd', {}, p.prazo_entrega || 'A combinar')),
+      ),
+      h('div', { class: 'p-capa-investimento' },
+        h('div', {}, h('span', { class: 'p-sobre' }, 'Investimento total'), h('strong', { class: 'p-valor' }, formatarDinheiro(p.total_cents))),
+        h('span', { class: 'p-escopo' }, `${p.ambientes.length} ${p.ambientes.length === 1 ? 'ambiente' : 'ambientes'} · ${quantidade} ${quantidade === 1 ? 'móvel' : 'móveis'}`),
+      ),
+    ),
+    h('a', { class: 'p-link-pdf', href: `${base}/pdf` }, icone('baixar'), 'Baixar PDF'),
   );
 }
 
@@ -97,7 +124,8 @@ function ambientes(p) {
   return h(
     'section',
     { class: 'p-secao', 'aria-labelledby': 'titulo-ambientes' },
-    h('h2', { id: 'titulo-ambientes', class: 'p-titulo-secao' }, 'O que está incluído'),
+    h('span', { class: 'p-sobre' }, 'O que está incluído'),
+    h('h2', { id: 'titulo-ambientes', class: 'p-titulo-secao' }, 'O seu projeto'),
     p.ambientes.map((a, i) =>
       h(
         'article',
@@ -116,13 +144,13 @@ function ambientes(p) {
                 h(
                   'li',
                   {},
-                  h('span', { class: 'p-item-nome' }, item.descricao, item.quantidade > 1 ? h('small', {}, ` × ${item.quantidade}`) : null),
+                  h('span', { class: 'p-item-nome' }, h('span', {}, item.descricao), h('small', {}, `${item.quantidade || 1} ${(item.quantidade || 1) === 1 ? 'unidade' : 'unidades'}`)),
                   h('span', { class: 'p-valor' }, formatarDinheiro(item.valor_cents)),
                 ),
               )
             : h('li', { class: 'p-vazio' }, 'Itens a definir'),
         ),
-        h('footer', {}, h('span', {}, `Subtotal ${a.nome}`), h('strong', { class: 'p-valor' }, formatarDinheiro(a.subtotal_cents))),
+        h('footer', {}, h('span', {}, 'Total do ambiente'), h('strong', { class: 'p-valor' }, formatarDinheiro(a.subtotal_cents))),
       ),
     ),
     p.servicos.length
@@ -137,7 +165,7 @@ function ambientes(p) {
               h(
                 'li',
                 {},
-                h('span', { class: 'p-item-nome' }, s.descricao, s.quantidade > 1 ? h('small', {}, ` × ${s.quantidade}`) : null),
+                h('span', { class: 'p-item-nome' }, h('span', {}, s.descricao), h('small', {}, `${s.quantidade || 1} ${(s.quantidade || 1) === 1 ? 'unidade' : 'unidades'}`)),
                 h('span', { class: 'p-valor' }, formatarDinheiro(s.valor_cents)),
               ),
             ),
@@ -156,37 +184,32 @@ function investimento(p) {
     ajustes ? linha('Subtotal', formatarDinheiro(p.subtotal_cents)) : null,
     p.acrescimo ? linha(p.acrescimo.descricao, formatarDinheiro(p.acrescimo.valor_cents)) : null,
     p.desconto_cents ? linha('Desconto', `− ${formatarDinheiro(p.desconto_cents)}`, 'p-desconto') : null,
-    h('div', { class: 'p-total' }, h('span', {}, 'Investimento total'), h('strong', { class: 'p-valor' }, formatarDinheiro(p.total_cents))),
-    p.pagamento.descricao || p.pagamento.linhas.length
-      ? h(
-          'div',
-          { class: 'p-pagamento' },
-          p.pagamento.descricao ? h('strong', {}, p.pagamento.descricao) : null,
-          p.pagamento.linhas.map((l) => h('span', {}, l)),
-        )
-      : null,
+    h('div', { class: 'p-total p-vidro' }, h('span', { class: 'p-sobre' }, 'Investimento total'), h('strong', { class: 'p-valor' }, formatarDinheiro(p.total_cents))),
   );
 }
 
 function condicoes(p) {
   const par = (rotulo, valor) => (valor ? h('div', { class: 'p-par' }, h('dt', {}, rotulo), h('dd', {}, valor)) : null);
+  const entrada = p.pagamento.linhas.find((linha) => /^entrada\s*:/i.test(linha));
+  const restante = p.pagamento.linhas.filter((linha) => !/^entrada\s*:/i.test(linha));
+  const percentual = p.pagamento.descricao.match(/(\d{1,3}%)\s*(?:de entrada)?/i)?.[1];
   const observacoes = String(p.observacoes || '')
     .split('\n')
     .map((l) => l.replace(/^[-•*]\s*/, '').trim())
     .filter(Boolean);
   return h(
     'section',
-    { class: 'p-secao', 'aria-labelledby': 'titulo-condicoes' },
-    h('h2', { id: 'titulo-condicoes', class: 'p-titulo-secao' }, 'Condições'),
-    h(
-      'dl',
-      { class: 'p-condicoes' },
-      par('Pagamento', p.pagamento.descricao),
-      par('Prazo de entrega', p.prazo_entrega),
-      par('Validade', `${formatarData(p.data_validade)} (${p.validade_dias} dias)`),
-      par('Data da proposta', formatarData(p.data)),
+    { class: 'p-secao p-secao-condicoes', 'aria-labelledby': 'titulo-condicoes' },
+    h('div', { class: 'p-condicoes-painel' },
+      h('h2', { id: 'titulo-condicoes' }, 'Pagamento e prazo'),
+      h('dl', { class: 'p-condicoes' },
+        par(percentual ? `Entrada · ${percentual}` : 'Pagamento', entrada ? entrada.replace(/^entrada\s*:\s*/i, '') : p.pagamento.descricao || 'Conforme combinado'),
+        par('Restante', restante.join(' · ') || 'Conforme combinado'),
+        par('Entrega', p.prazo_entrega || 'A combinar'),
+        par('Validade', `Até ${formatarData(p.data_validade)}`),
+      ),
     ),
-    observacoes.length ? h('ul', { class: 'p-observacoes' }, observacoes.map((o) => h('li', {}, o))) : null,
+    observacoes.length ? h('div', { class: 'p-observacoes' }, h('span', { class: 'p-sobre' }, 'Observações'), observacoes.map((o) => h('p', {}, o))) : null,
   );
 }
 
@@ -298,34 +321,17 @@ function mostrar(p, { acabouDeAprovar = false } = {}) {
   document.title = `Proposta nº ${p.numero} · ${p.empresa.nome || 'Móveis planejados'}`;
   raiz.className = 'p-pagina';
   raiz.removeAttribute('aria-busy');
-  const nome = primeiroNome(p.cliente.nome);
   substituir(
     raiz,
-    h('header', { class: 'p-topo' }, marcaEmpresa(p), h('a', { class: 'p-link-pdf', href: `${base}/pdf` }, icone('baixar'), h('span', {}, 'PDF'))),
-    h(
-      'section',
-      { class: 'p-capa' },
-      h('span', { class: 'p-sobre' }, `Proposta nº ${p.numero}`),
-      h('h1', {}, nome ? `Olá, ${nome}.` : 'Sua proposta'),
-      h(
-        'p',
-        { class: 'p-intro' },
-        'Preparamos esta proposta de móveis planejados sob medida para você.',
-      ),
-      h(
-        'dl',
-        { class: 'p-meta' },
-        h('div', {}, h('dt', {}, 'Data'), h('dd', {}, formatarData(p.data))),
-        h('div', {}, h('dt', {}, 'Válida até'), h('dd', {}, formatarData(p.data_validade))),
-        p.prazo_entrega ? h('div', {}, h('dt', {}, 'Prazo de entrega'), h('dd', {}, p.prazo_entrega)) : null,
-      ),
-      acabouDeAprovar ? null : faixaSituacao(p),
+    capa(p),
+    h('div', { class: 'p-folha p-folha-detalhes' },
+      h('header', { class: 'p-cabecalho-detalhes' }, h('span', {}, p.empresa.nome), h('span', {}, `Proposta nº ${p.numero}`)),
+      acabouDeAprovar ? agradecimento(p) : faixaSituacao(p),
+      ambientes(p),
+      investimento(p),
+      condicoes(p),
+      rodape(p),
     ),
-    acabouDeAprovar ? agradecimento(p) : null,
-    ambientes(p),
-    investimento(p),
-    condicoes(p),
-    rodape(p),
     barraAcoes(p),
   );
   if (acabouDeAprovar) window.scrollTo({ top: 0, behavior: 'smooth' });

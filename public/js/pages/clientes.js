@@ -1,7 +1,7 @@
 import { formatarData, formatarDinheiro } from '/shared/calc.js';
 import { api } from '../api.js';
 import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, confirmar, aviso, avisoErro } from '../ui.js';
-import { avatar, cabecalhoPagina, formularioCliente, listaOrcamentos, modalNovoCliente, numeroWhatsApp } from '../comum.js';
+import { avatar, cabecalhoPagina, cabecalhoInterno, formularioCliente, listaOrcamentos, modalNovoCliente, numeroWhatsApp } from '../comum.js';
 import { irPara } from '../main.js';
 
 export async function paginaClientes() {
@@ -37,9 +37,9 @@ export async function paginaClientes() {
             const whats = numeroWhatsApp(c.whatsapp || c.telefone);
             const primeiro = c.nome.trim().split(/\s+/)[0];
             const resumo = c.aprovado_cents
-              ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · ${formatarDinheiro(c.aprovado_cents)} aprovados`
+              ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(c.aprovado_cents / 100)} aprovados`
               : c.ultimo_orcamento
-                ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · último em ${formatarData(c.ultimo_orcamento)}`
+                ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · último em ${formatarData(c.ultimo_orcamento).slice(0, 5)}`
                 : `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`}`;
             return h(
               'div',
@@ -100,7 +100,13 @@ export async function paginaClientes() {
 
 export async function paginaCliente(id) {
   const cliente = await api.get(`/clientes/${id}`);
-  const orcamentos = cliente.lista_orcamentos;
+  const orcamentos = cliente.lista_orcamentos || [];
+  const telefone = cliente.whatsapp || cliente.telefone;
+  const cidade = [cliente.cidade, cliente.estado].filter(Boolean).join(' · ');
+  const whats = numeroWhatsApp(telefone);
+  const novo = h('a', { href: `#/orcamentos/novo/${id}`, class: 'botao botao-primario' }, 'Novo orçamento');
+  const editar = h('a', { href: `#/clientes/${id}/editar`, class: 'botao-icone cliente-editar', 'aria-label': 'Editar dados do cliente' }, icone('editar'));
+  const contato = (rotulo, valor, classe = '') => valor ? h('div', { class: `ficha-dado ${classe}` }, h('small', {}, rotulo), h('span', {}, valor)) : null;
 
   const excluir = async () => {
     if (!(await confirmar(`Excluir o cliente “${cliente.nome}”?`, { sim: 'Excluir', perigo: true }))) return;
@@ -115,40 +121,39 @@ export async function paginaCliente(id) {
 
   return h(
     'div',
-    { class: 'pagina pagina-cliente' },
-    cabecalhoPagina(cliente.nome, {
-      voltar: '#/clientes',
-      subtitulo: [cliente.whatsapp || cliente.telefone, cliente.cidade].filter(Boolean).join(' · ') || 'Cliente',
-      acoes: h('a', { href: `#/orcamentos/novo/${id}`, class: 'botao botao-primario' }, icone('mais'), 'Novo orçamento'),
+    { class: 'pagina pagina-interna pagina-cliente' },
+    cabecalhoInterno(cliente.nome, {
+      voltar: '#/clientes', retorno: 'Clientes', contexto: 'FICHA DO CLIENTE', contextoDesktop: 'CLIENTES',
+      subtitulo: 'Cadastro e histórico de propostas.', acoes: [editar, novo],
     }),
-    h(
-      'div',
-      { class: 'colunas' },
-      h(
-        'section',
-        { class: 'cartao' },
-        h('h2', {}, 'Dados do cliente'),
-        formularioCliente(cliente, async (salvo) => {
-          Object.assign(cliente, salvo);
-          document.querySelector('.cabecalho-pagina h1').textContent = salvo.nome;
-        }),
-        orcamentos.length
-          ? null
-          : h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: excluir }, icone('lixeira'), 'Excluir cliente'),
+    h('div', { class: 'cliente-colunas' },
+      h('section', { class: 'cliente-contato' },
+        h('div', { class: 'ficha-contato' },
+          avatar(cliente.nome, 'ficha-avatar'),
+          h('div', { class: 'ficha-identidade' }, h('strong', {}, cliente.nome), h('small', {}, 'DADOS DO CLIENTE')),
+          contato('TELEFONE / WHATSAPP', telefone || 'Sem telefone', 'ficha-telefone'),
+          contato('E-MAIL', cliente.email), contato('CIDADE', cidade),
+        ),
+        whats ? h('a', { class: 'botao ficha-whatsapp', href: `https://wa.me/${whats}`, target: '_blank', rel: 'noopener' }, 'Conversar no WhatsApp') : null,
+        h('a', { href: `#/clientes/${id}/editar`, class: 'botao ficha-editar' }, 'Editar dados'),
+        !orcamentos.length ? h('button', { type: 'button', class: 'botao botao-perigo-texto ficha-excluir', onclick: excluir }, 'Excluir cliente') : null,
       ),
-      h(
-        'section',
-        { class: 'cartao' },
-        h('h2', {}, 'Orçamentos'),
+      h('section', { class: 'cliente-historico' },
+        h('div', { class: 'cliente-historico-titulo' }, h('h2', {}, 'Orçamentos'), h('span', {}, orcamentos.length)),
+        h('p', { class: 'cliente-historico-descricao' }, `${orcamentos.length} ${orcamentos.length === 1 ? 'proposta' : 'propostas'} neste cadastro`),
         orcamentos.length
           ? listaOrcamentos(orcamentos, { mostrarCliente: false })
-          : vazioIlustrado(
-              'orcamentos',
-              'Nenhum orçamento ainda',
-              null,
-              h('a', { href: `#/orcamentos/novo/${id}`, class: 'botao botao-primario' }, icone('mais'), 'Criar orçamento'),
-            ),
+          : vazioIlustrado('orcamentos', 'Nenhum orçamento ainda', 'Crie a primeira proposta para este cliente.'),
       ),
     ),
+    h('div', { class: 'acao-interna-fixa cliente-novo-fixo' }, h('a', { href: `#/orcamentos/novo/${id}`, class: 'botao botao-primario' }, 'Novo orçamento')),
+  );
+}
+
+export async function paginaEditarCliente(id) {
+  const cliente = await api.get(`/clientes/${id}`);
+  return h('div', { class: 'pagina pagina-interna pagina-editar-cliente' },
+    cabecalhoInterno('Dados do cliente', { voltar: `#/clientes/${id}`, retorno: cliente.nome, contexto: cliente.nome.toLocaleUpperCase('pt-BR'), subtitulo: 'Atualize os contatos e as informações.' }),
+    formularioCliente(cliente, () => irPara(`#/clientes/${id}`)),
   );
 }

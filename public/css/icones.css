@@ -1,0 +1,23 @@
+/* Ícones originais do Figma; as cores seguem o estado do componente. */
+.icone-inicio { --icone-imagem: url('/icons/figma/inicio.svg'); }
+.icone-orcamentos { --icone-imagem: url('/icons/figma/orcamentos.svg'); }
+.icone-clientes { --icone-imagem: url('/icons/figma/clientes.svg'); }
+.icone-config { --icone-imagem: url('/icons/figma/config.svg'); }
+.icone-mais { --icone-imagem: url('/icons/figma/mais.svg'); }
+.icone-busca { --icone-imagem: url('/icons/figma/busca.svg'); }
+.icone-seta { --icone-imagem: url('/icons/figma/seta.svg'); }
+.icone-cadeado { --icone-imagem: url('/icons/figma/cadeado.svg'); }
+.icone-empresa { --icone-imagem: url('/icons/figma/empresa.svg'); }
+.icone-preco { --icone-imagem: url('/icons/figma/preco.svg'); }
+.icone-pagamento { --icone-imagem: url('/icons/figma/pagamento.svg'); }
+.icone-usuario { --icone-imagem: url('/icons/figma/usuario.svg'); }
+.icone-voltar { --icone-imagem: url('/icons/figma/voltar.svg'); }
+.icone-editar { --icone-imagem: url('/icons/figma/editar.svg'); }
+.icone-regua { --icone-imagem: url('/icons/figma/regua.svg'); }
+.icone-check { --icone-imagem: url('/icons/figma/check.svg'); }
+.icone-historico { --icone-imagem: url('/icons/figma/historico.svg'); }
+.icone-baixo { --icone-imagem: url('/icons/figma/baixo.svg'); }
+.icone-sino { --icone-imagem: url('/icons/figma/sino.svg'); }
+.icone-olho { --icone-imagem: url('/icons/figma/olho.svg'); }
+.icone-pontos { --icone-imagem: url('/icons/figma/pontos.svg'); }
+.icone-whatsapp { --icone-imagem: url('/icons/figma/whatsapp.svg'); }

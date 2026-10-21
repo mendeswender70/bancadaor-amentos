@@ -1,14 +1,14 @@
 import { METODOS, dinheiroParaCampo, formatarDinheiro, formatarPercentual, lerDinheiro, lerPercentual } from '/shared/calc.js';
 import { api, cache } from '../api.js';
 import { h, icone, campo, segmentado, abrirModal, confirmar, aviso, avisoErro, substituir, vazio } from '../ui.js';
-import { cabecalhoPagina } from '../comum.js';
+import { cabecalhoPagina, cabecalhoInterno } from '../comum.js';
 import { atualizarMarca, irPara, sair } from '../main.js';
 
 const ABAS = [
   ['empresa', 'Empresa', 'empresa'],
-  ['moveis', 'Móveis e preços', 'preco'],
+  ['moveis', 'Móveis', 'preco'],
   ['pagamento', 'Pagamento', 'pagamento'],
-  ['conta', 'Minha conta', 'usuario'],
+  ['conta', 'Conta', 'usuario'],
 ];
 // Endereços antigos continuam funcionando.
 const APELIDOS = { tipos: 'moveis', precos: 'moveis' };
@@ -23,8 +23,8 @@ export async function paginaConfiguracoes(aba) {
   const mostrarVisao = !aba;
   aba ||= 'empresa';
   aba = APELIDOS[aba] || aba;
-  if (!ABAS.some(([a]) => a === aba)) aba = 'empresa';
-  const montar = { empresa: abaEmpresa, moveis: abaMoveis, pagamento: abaPagamento, conta: abaConta }[aba];
+  if (!ABAS.some(([a]) => a === aba) && !['padroes', 'senha'].includes(aba)) aba = 'empresa';
+  const montar = { empresa: abaEmpresa, moveis: abaMoveis, pagamento: abaPagamento, conta: abaConta, padroes: () => abaEmpresa({ padroes: true }), senha: () => abaConta({ soSenha: true }) }[aba];
   const formulario = await montar();
   const resumoEmpresa = h('section', { class: 'config-empresa-resumo' },
     h('span', { class: 'config-logo-resumo', 'aria-hidden': 'true' },
@@ -47,21 +47,40 @@ export async function paginaConfiguracoes(aba) {
     h('span', { class: 'config-titulo-mobile' }, 'Ajustes'),
     h('span', { class: 'config-titulo-desktop' }, 'Empresa'),
   );
-  const cabecalho = cabecalhoPagina(titulo, {
+  const cabecalhoVisao = cabecalhoPagina(titulo, {
     subtitulo: h('span', {},
       h('span', { class: 'config-subtitulo-mobile' }, 'Sua empresa, do seu jeito.'),
       h('span', { class: 'config-subtitulo-desktop' }, 'Os dados e a identidade que acompanham suas propostas.'),
     ),
     acoes: aba === 'empresa' ? h('button', { type: 'submit', form: 'config-empresa-form', class: 'botao botao-primario config-salvar-topo' }, 'Salvar empresa') : null,
   });
-  cabecalho.querySelector('.titulos').prepend(h('span', { class: 'page-eyebrow config-eyebrow' },
+  cabecalhoVisao.classList.add('config-cabecalho-visao');
+  cabecalhoVisao.querySelector('.titulos').prepend(h('span', { class: 'page-eyebrow config-eyebrow' },
     h('span', { class: 'config-eyebrow-mobile' }, 'ESQUADRO'),
     h('span', { class: 'config-eyebrow-desktop' }, 'AJUSTES / EMPRESA'),
   ));
+  const textos = {
+    empresa: ['Empresa', 'IDENTIDADE E CONTATOS', 'Os dados que aparecem na proposta.', 'AJUSTES / EMPRESA', 'Os dados e a identidade que acompanham suas propostas.'],
+    moveis: ['Móveis e preços', 'CATÁLOGO', 'Seu catálogo e os valores de referência.', 'AJUSTES / MÓVEIS', 'Seu catálogo de móveis e os valores usados nos próximos orçamentos.'],
+    pagamento: ['Pagamento', 'CONDIÇÕES DE PAGAMENTO', 'Condições prontas para suas propostas.', 'AJUSTES / PAGAMENTO', 'Condições que você pode reutilizar nas propostas.'],
+    conta: ['Minha conta', 'CONTA', 'Seu acesso e os avisos deste dispositivo.', 'AJUSTES / CONTA', 'Dados de acesso, senha e avisos deste dispositivo.'],
+    padroes: ['Novos orçamentos', 'PADRÕES DA EMPRESA', 'Defina os valores iniciais das propostas.', 'AJUSTES / PADRÕES'],
+    senha: ['Alterar senha', 'SEGURANÇA', 'Use pelo menos 6 caracteres na nova senha.', 'AJUSTES / CONTA'],
+  }[aba];
+  const acaoNova = formulario.querySelector('.config-acao-nova');
+  if (acaoNova) acaoNova.remove();
+  const cabecalho = cabecalhoInterno(textos[0], {
+    voltar: aba === 'padroes' ? '#/config/empresa' : aba === 'senha' ? '#/config/conta' : '#/config',
+    retorno: aba === 'padroes' ? 'Empresa' : aba === 'senha' ? 'Minha conta' : 'Ajustes',
+    contexto: textos[1], subtitulo: textos[2], contextoDesktop: textos[3], subtituloDesktop: textos[4],
+    acoes: acaoNova || (aba === 'empresa' ? h('button', { type: 'submit', form: 'config-empresa-form', class: 'botao botao-primario config-salvar-topo' }, 'Salvar empresa') : null),
+  });
+  cabecalho.classList.add('config-cabecalho-interno');
 
   return h(
     'div',
-    { class: `pagina pagina-config${mostrarVisao ? ' config-visao' : ''}` },
+    { class: `pagina pagina-config config-aba-${aba}${mostrarVisao ? ' config-visao' : ' pagina-interna'}` },
+    mostrarVisao ? cabecalhoVisao : null,
     cabecalho,
     h('div', { class: 'config-overview' },
       resumoEmpresa,
@@ -89,8 +108,9 @@ export async function paginaConfiguracoes(aba) {
 
 // ------------------------------------------------------------------- Empresa
 
-async function abaEmpresa() {
+async function abaEmpresa({ padroes = false } = {}) {
   const [empresa, condicoes] = await Promise.all([cache.carregarEmpresa(true), api.get('/condicoes-pagamento')]);
+  const desktop = window.matchMedia('(min-width: 768px)').matches;
   const entradas = {};
   const texto = (chave, rotulo, attrs = {}, opcoes = {}) => {
     entradas[chave] = h(attrs.rows ? 'textarea' : 'input', { type: 'text', ...attrs, value: empresa[chave] ?? '' });
@@ -152,11 +172,11 @@ async function abaEmpresa() {
     },
   });
 
-  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Salvar dados da empresa');
+  const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, padroes ? 'Salvar padrões' : 'Salvar empresa');
   return h(
     'form',
     {
-      class: 'formulario config-form-empresa',
+      class: `formulario config-form-empresa${padroes ? ' config-so-padroes' : ''}`,
       id: 'config-empresa-form',
       onsubmit: async (e) => {
         e.preventDefault();
@@ -167,7 +187,7 @@ async function abaEmpresa() {
           dados.validade_padrao_dias = Number(dados.validade_padrao_dias) || 0;
           cache.empresa = await api.put('/empresa', dados);
           atualizarMarca();
-          aviso('Dados da empresa salvos.');
+          aviso(padroes ? 'Padrões salvos.' : 'Dados da empresa salvos.');
         } catch (erro) {
           avisoErro(erro);
         } finally {
@@ -178,13 +198,13 @@ async function abaEmpresa() {
     h(
       'section',
       { class: 'cartao' },
-      h('h2', {}, 'Dados que aparecem no orçamento'),
+      h('h2', {}, 'Dados da empresa'),
       h('div', { class: 'grade-formulario config-grade-empresa' },
         texto('nome', 'Nome da empresa', { maxlength: '200' }, { classe: 'campo-inteiro' }),
-        texto('cnpj', 'CNPJ', { maxlength: '30' }, { classe: 'campo-metade' }),
+        texto('cnpj', 'CNPJ', { maxlength: '30', placeholder: 'Informe o CNPJ' }, { classe: 'campo-metade' }),
         texto('email', 'E-mail', { type: 'email', maxlength: '200', placeholder: 'E-mail da empresa' }, { classe: 'campo-metade' }),
-        texto('telefone', 'Telefone', { type: 'tel', maxlength: '40', placeholder: 'Adicionar telefone' }, { classe: 'campo-metade' }),
-        texto('whatsapp', 'WhatsApp', { type: 'tel', maxlength: '40', placeholder: 'Adicionar WhatsApp' }, { classe: 'campo-metade' }),
+        texto('telefone', 'Telefone', { type: 'tel', maxlength: '40', placeholder: desktop ? 'Adicionar telefone' : 'DDD + número' }, { classe: 'campo-metade' }),
+        texto('whatsapp', 'WhatsApp', { type: 'tel', maxlength: '40', placeholder: desktop ? 'Adicionar WhatsApp' : 'DDD + número' }, { classe: 'campo-metade' }),
         texto('endereco', 'Endereço', { maxlength: '300', placeholder: 'Rua, número e complemento' }, { classe: 'campo-inteiro' }),
         texto('cidade', 'Cidade', { maxlength: '100', placeholder: 'Informe a cidade' }, { classe: 'campo-cidade' }),
         texto('estado', 'Estado', { maxlength: '50', placeholder: 'UF' }, { classe: 'campo-estado' }),
@@ -204,18 +224,19 @@ async function abaEmpresa() {
         h('div', { class: 'grade-formulario config-grade-padroes' },
           texto('validade_padrao_dias', 'Validade (dias)', { type: 'number', min: '0', max: '3650', inputmode: 'numeric' }, { classe: 'campo-metade' }),
           texto('prazo_padrao', 'Prazo de entrega', { maxlength: '200', placeholder: '30 dias úteis' }, { classe: 'campo-metade' }),
-          campo('Pagamento', entradas.condicao_pagamento_padrao_id, { classe: 'campo-inteiro' }),
+          campo('Condição de pagamento', entradas.condicao_pagamento_padrao_id, { classe: 'campo-inteiro' }),
         ),
         h('p', { class: 'config-ajuda-padroes' }, 'Os padrões preenchem os novos orçamentos automaticamente.'),
-        h('details', { class: 'config-padroes-avancados' },
+        h('details', { class: 'config-padroes-avancados', open: padroes },
           h('summary', { class: 'botao' }, 'Editar padrões'),
           h('div', { class: 'grade-formulario' },
-            texto('texto_padrao', 'Texto padrão do orçamento (observações)', { rows: '5', maxlength: '5000' }, { classe: 'campo-inteiro' }),
-            texto('mensagem_whatsapp', 'Mensagem do WhatsApp', { rows: '3', maxlength: '1000' }, { classe: 'campo-inteiro', dica: 'Use {cliente} para o primeiro nome do cliente e {link} para o link da proposta (se não usar, o link vai no final).' }),
+            texto('texto_padrao', 'Observações da proposta', { rows: '5', maxlength: '5000' }, { classe: 'campo-inteiro' }),
+            texto('mensagem_whatsapp', 'Mensagem do WhatsApp', { rows: '3', maxlength: '1000' }, { classe: 'campo-inteiro', dica: 'Use {cliente} e {link} para personalizar a mensagem.' }),
           ),
         ),
       ),
     ),
+    padroes ? null : h('a', { href: '#/config/padroes', class: 'botao config-padroes-mobile' }, 'Padrões para novos orçamentos'),
     h('div', { class: 'acoes-formulario config-salvar-inferior' }, botao),
   );
 }
@@ -228,10 +249,16 @@ async function abaMoveis() {
   const entradas = new Map();
   const botaoSalvar = h('button', { type: 'submit', class: 'botao botao-primario', disabled: true }, icone('salvar'), 'Salvar preços');
   const alterados = () => [...entradas].filter(([t, el]) => lerDinheiro(el.value) !== t.preco_padrao_cents);
+  const contador = h('span', { class: 'config-precos-alterados', 'aria-live': 'polite' }, 'Nenhum preço alterado');
+  const atualizarAlterados = () => {
+    const n = alterados().length;
+    botaoSalvar.disabled = !n;
+    contador.textContent = n ? `${n} ${n === 1 ? 'preço alterado' : 'preços alterados'}` : 'Nenhum preço alterado';
+  };
 
   const editar = async (tipo) => {
     if (alterados().length && !(await confirmar('Há preços alterados que ainda não foram salvos. Continuar sem salvar?', { sim: 'Continuar' }))) return;
-    const salvo = await abrirModal(tipo ? 'Editar móvel' : 'Novo tipo de móvel', (fechar) => formularioTipo(tipo, fechar), { largo: true });
+    const salvo = await abrirModal(tipo ? 'Editar móvel' : 'Novo tipo de móvel', (fechar) => formularioTipo(tipo, fechar), { largo: true, contexto: 'CATÁLOGO', classe: 'modal-tipo-movel' });
     if (salvo) recarregar();
   };
 
@@ -245,7 +272,7 @@ async function abaMoveis() {
     });
     el.addEventListener('input', () => {
       el.classList.toggle('invalido', lerDinheiro(el.value) === null);
-      botaoSalvar.disabled = !alterados().length;
+      atualizarAlterados();
     });
     el.addEventListener('blur', () => {
       const v = lerDinheiro(el.value);
@@ -259,7 +286,7 @@ async function abaMoveis() {
         'button',
         { type: 'button', class: 'linha-movel-nome', onclick: () => editar(t), title: 'Editar nome, cálculo e situação' },
         h('strong', {}, t.nome, t.ativo ? '' : ' (inativo)'),
-        h('span', { class: 'suave' }, `${METODOS[t.metodo_calculo].nome}${t.nome_cliente && t.nome_cliente !== t.nome ? ` · no orçamento: “${t.nome_cliente}”` : ''}`),
+        h('span', { class: 'suave' }, `${t.metodo_calculo === 'unidade' ? 'Unidade' : METODOS[t.metodo_calculo].nome}${t.nome_cliente && t.nome_cliente !== t.nome ? ` · no orçamento: “${t.nome_cliente}”` : ''}`),
       ),
       h('label', { class: 'preco-com-unidade' }, h('span', {}, 'R$'), el, h('span', {}, METODOS[t.metodo_calculo].sufixo)),
       h('button', { type: 'button', class: 'botao-icone', 'aria-label': `Editar ${t.nome}`, title: 'Editar', onclick: () => editar(t) }, icone('editar')),
@@ -269,7 +296,7 @@ async function abaMoveis() {
   return h(
     'form',
     {
-      class: 'cartao',
+      class: 'config-catalogo',
       onsubmit: async (e) => {
         e.preventDefault();
         const precos = [];
@@ -282,6 +309,7 @@ async function abaMoveis() {
         try {
           const atualizados = await api.put('/precos', { precos });
           for (const [t] of entradas) t.preco_padrao_cents = atualizados.find((x) => x.id === t.id)?.preco_padrao_cents ?? t.preco_padrao_cents;
+          atualizarAlterados();
           aviso('Preços salvos. Os próximos orçamentos já usam os novos valores.');
         } catch (erro) {
           avisoErro(erro);
@@ -293,16 +321,16 @@ async function abaMoveis() {
       'div',
       { class: 'cartao-titulo' },
       h('h2', {}, 'Móveis e preços'),
-      h('button', { type: 'button', class: 'botao botao-secundario', onclick: () => editar(null) }, icone('mais'), 'Novo tipo'),
+      h('button', { type: 'button', class: 'botao botao-primario config-acao-nova', 'aria-label': 'Novo tipo de móvel', onclick: () => editar(null) }, icone('mais'), h('span', {}, 'Novo tipo')),
     ),
     h(
       'p',
-      { class: 'aviso-caixa' },
-      icone('cadeado', 'icone icone-mini'),
-      'Preços internos: o cliente nunca vê. Mudar um preço vale para os próximos orçamentos — os já feitos mantêm o valor da época.',
+      { class: 'config-informacao' },
+      h('span', { class: 'config-info-icone' }, icone('cadeado')),
+      'Só você vê estes preços. Alterações valem para novos orçamentos; os anteriores mantêm seus valores.',
     ),
     tipos.length ? h('div', { class: 'lista-moveis' }, tipos.map(linha)) : vazio('Nenhum tipo cadastrado.'),
-    tipos.length ? h('div', { class: 'acoes-formulario acoes-fixas' }, botaoSalvar) : null,
+    tipos.length ? h('div', { class: 'acao-interna-fixa config-salvar-precos' }, contador, botaoSalvar) : null,
   );
 }
 
@@ -314,10 +342,10 @@ function formularioTipo(tipo, fechar) {
   const preco = h('input', { id: 'preco-tipo', type: 'text', inputmode: 'decimal', required: true, value: dinheiroParaCampo(dados.preco_padrao_cents) });
   const ativo = h('input', { type: 'checkbox', checked: Boolean(dados.ativo) });
   const atualizarRotulo = () => {
-    precoRotulo.textContent = `Preço padrão (R$${METODOS[dados.metodo_calculo].sufixo})`;
+    precoRotulo.textContent = { linear: 'Preço interno por metro (R$)', quadrado: 'Preço interno por m² (R$)', unidade: 'Preço interno por unidade (R$)' }[dados.metodo_calculo];
   };
   const metodo = segmentado(
-    Object.entries(METODOS).map(([v, m]) => [v, m.nome]),
+    Object.entries(METODOS).map(([v, m]) => [v, v === 'quadrado' ? 'm²' : v === 'unidade' ? 'Unidade' : m.nome]),
     dados.metodo_calculo,
     (v) => {
       dados.metodo_calculo = v;
@@ -357,16 +385,16 @@ function formularioTipo(tipo, fechar) {
         }
       },
     },
-    campo('Nome', nome),
-    campo('Nome que aparece para o cliente', nomeCliente, { dica: 'Opcional. Se vazio, usa o nome acima.' }),
+    campo('Nome interno', nome),
+    campo('Nome que aparece para o cliente', nomeCliente),
     h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Como calcular'), metodo),
-    h('div', { class: 'campo campo-interno' }, precoRotulo, preco, h('small', { class: 'dica' }, 'Preço interno: nunca aparece para o cliente.')),
-    h('label', { class: 'caixa-marcar' }, ativo, ' Ativo (aparece ao adicionar móveis)'),
+    h('div', { class: 'campo' }, precoRotulo, preco, h('small', { class: 'dica' }, 'Este preço não aparece para o cliente.')),
+    h('label', { class: 'caixa-marcar' }, ativo, ' Ativo ao adicionar móveis'),
     h(
       'div',
       { class: 'acoes-modal' },
       tipo ? h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: excluir }, 'Excluir') : null,
-      h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Salvar'),
+      h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Salvar móvel'),
     ),
   );
 }
@@ -399,31 +427,34 @@ async function abaPagamento() {
   const condicoes = await api.get('/condicoes-pagamento');
   const recarregar = () => irPara(`#/config/pagamento?${Date.now()}`);
   const editar = async (c) => {
-    const salvo = await abrirModal(c ? 'Editar condição' : 'Nova condição de pagamento', (fechar) => formularioCondicao(c, fechar), { largo: true });
+    const salvo = await abrirModal(c ? 'Editar condição' : 'Nova condição de pagamento', (fechar) => formularioCondicao(c, fechar), { largo: true, contexto: 'PAGAMENTO', classe: 'modal-condicao' });
     if (salvo) recarregar();
   };
   return h(
     'section',
-    { class: 'cartao' },
+    { class: 'config-pagamentos' },
     h(
       'div',
       { class: 'cartao-titulo' },
       h('h2', {}, 'Condições de pagamento'),
-      h('button', { type: 'button', class: 'botao botao-primario', onclick: () => editar(null) }, icone('mais'), 'Nova condição'),
+      h('button', { type: 'button', class: 'botao botao-primario config-acao-nova config-nova-condicao-topo', onclick: () => editar(null) }, 'Nova condição'),
     ),
+    h('p', { class: 'config-informacao' }, h('span', { class: 'config-info-icone' }, icone('pagamento')), 'Editar uma condição não altera os orçamentos já criados.'),
     condicoes.length
       ? h(
           'div',
-          { class: 'lista' },
+          { class: 'lista lista-condicoes' },
           condicoes.map((c) =>
             h(
               'button',
               { type: 'button', class: `linha-orcamento${c.ativo ? '' : ' inativo'}`, onclick: () => editar(c) },
-              h('div', { class: 'linha-principal' }, h('strong', {}, c.descricao, c.ativo ? '' : ' (inativa)'), h('span', { class: 'suave' }, descreverCondicao(c))),
+              h('div', { class: 'linha-principal' }, h('strong', {}, c.descricao), h('span', { class: 'suave' }, descreverCondicao(c)), h('small', { class: c.ativo ? 'condicao-ativa' : 'suave' }, c.ativo ? 'Ativa' : 'Inativa')),
+              h('span', { class: 'botao-icone' }, icone('editar')),
             ),
           ),
         )
       : vazio('Nenhuma condição cadastrada.'),
+    h('div', { class: 'acao-interna-fixa config-nova-condicao' }, h('button', { type: 'button', class: 'botao botao-primario', onclick: () => editar(null) }, 'Nova condição')),
   );
 }
 
@@ -501,13 +532,14 @@ function formularioCondicao(c, fechar) {
 
 // --------------------------------------------------------------- Minha conta
 
-async function abaConta() {
+async function abaConta({ soSenha = false } = {}) {
   const { usuario } = await api.get('/auth/estado');
   const pushInfo = await api.get('/notificacoes/config');
   const suportaPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   let inscricaoPush = null;
   let pushAtivo = false;
-  const statusPush = h('p', { class: 'suave pequeno' });
+  const estadoPush = h('p', { class: 'config-push-estado' });
+  const statusPush = h('p', { class: 'suave pequeno config-push-ajuda' });
   const botaoPush = h('button', { type: 'button', class: 'botao botao-secundario', onclick: alternarPush });
   const desenharPush = () => {
     if (!suportaPush) {
@@ -531,6 +563,8 @@ async function abaConta() {
       botaoPush.disabled = false;
       botaoPush.textContent = 'Ativar neste dispositivo';
     }
+    estadoPush.textContent = pushAtivo ? 'Ativas neste dispositivo' : 'Não ativas neste dispositivo';
+    estadoPush.classList.toggle('config-push-ativo', pushAtivo);
   };
   async function alternarPush() {
     botaoPush.disabled = true;
@@ -588,18 +622,19 @@ async function abaConta() {
 
   return h(
     'div',
-    { class: 'colunas' },
+    { class: `config-conta${soSenha ? ' config-so-senha' : ''}` },
     h(
       'section',
       { class: 'cartao notificacoes-conta' },
-      h('h2', {}, 'Avisos no PWA'),
+      h('h2', {}, 'Notificações no PWA'),
+      estadoPush,
       statusPush,
       botaoPush,
     ),
     h(
       'form',
       {
-        class: 'cartao formulario',
+        class: 'cartao formulario config-meus-dados',
         onsubmit: async (e) => {
           e.preventDefault();
           try {
@@ -613,12 +648,12 @@ async function abaConta() {
       h('h2', {}, 'Meus dados'),
       campo('Nome', nome),
       campo('E-mail de acesso', email),
-      h('div', { class: 'acoes-formulario' }, h('button', { type: 'submit', class: 'botao botao-primario' }, 'Salvar')),
+      h('div', { class: 'acoes-formulario' }, h('button', { type: 'submit', class: 'botao botao-primario' }, 'Salvar dados')),
     ),
     h(
       'form',
       {
-        class: 'cartao formulario',
+        class: 'cartao formulario config-form-senha',
         onsubmit: async (e) => {
           e.preventDefault();
           if (nova.value !== confirmacao.value) return aviso('As senhas não conferem.', 'erro');
@@ -632,9 +667,9 @@ async function abaConta() {
         },
       },
       h('h2', {}, 'Alterar senha'),
-      campo('Senha atual', atual),
-      campo('Nova senha', nova, { dica: 'Pelo menos 6 caracteres.' }),
-      campo('Confirme a nova senha', confirmacao),
+      h('p', { class: 'config-informacao config-senha-informacao' }, h('span', { class: 'config-info-icone' }, icone('cadeado')), 'Confirme sua senha atual para cadastrar uma nova.'),
+      h('div', { class: 'config-campos-senha' }, campo('Senha atual', atual), campo('Nova senha', nova), campo('Confirmar nova senha', confirmacao)),
+      h('p', { class: 'dica' }, soSenha ? 'A nova senha e a confirmação precisam ser iguais.' : 'A nova senha deve ter pelo menos 6 caracteres.'),
       h('div', { class: 'acoes-formulario' }, h('button', { type: 'submit', class: 'botao botao-primario' }, 'Alterar senha')),
     ),
     h(
@@ -642,7 +677,8 @@ async function abaConta() {
       { class: 'cartao cartao-sair' },
       h('h2', {}, 'Sair da conta'),
       h('p', { class: 'suave' }, 'Para entrar de novo, use seu e-mail e senha.'),
-      h('div', { class: 'acoes-formulario' }, h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: sair }, icone('sair'), 'Sair')),
+      h('div', { class: 'acoes-formulario' }, h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: sair }, 'Sair da conta')),
     ),
+    h('a', { href: '#/config/senha', class: 'botao config-abrir-senha' }, 'Alterar senha'),
   );
 }

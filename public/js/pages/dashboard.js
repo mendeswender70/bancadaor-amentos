@@ -1,8 +1,8 @@
 import { formatarDinheiro, formatarNumero } from '/shared/calc.js';
 import { api, cache } from '../api.js';
-import { h, icone, vazioIlustrado, haQuanto, diasAte } from '../ui.js';
-import { listaOrcamentos } from '../comum.js';
-import { usuarioAtual } from '../main.js';
+import { h, icone, vazioIlustrado, haQuanto, diasAte, iniciais } from '../ui.js';
+import { listaOrcamentos, modalNovoCliente } from '../comum.js';
+import { usuarioAtual, irPara } from '../main.js';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const formatarIndicador = (centavos) => new Intl.NumberFormat('pt-BR', {
@@ -62,13 +62,16 @@ const MOTIVOS = {
 };
 
 function blocoAtencao(d) {
-  const linhas = d.atencao.map((a) => {
+  const linhas = d.atencao.slice(0, 2).map((a) => {
     const [ic, cor, titulo, detalhe] = MOTIVOS[a.motivo](a);
     return h(
       'a',
       { href: `#/orcamentos/${a.id}`, class: 'atencao-linha' },
       h('span', { class: `selo-icone ${cor}` }, icone(ic)),
-      h('div', { class: 'linha-principal' }, h('strong', {}, titulo), a.motivo === 'vence' ? null : h('span', { class: 'suave' }, a.motivo === 'aprovado' ? detalhe : `nº ${formatarNumero(a.numero)} · ${detalhe}`)),
+      h('div', { class: 'linha-principal' }, h('strong', {},
+        h('span', { class: 'atencao-titulo-mobile' }, titulo),
+        h('span', { class: 'atencao-titulo-desktop' }, a.motivo === 'aprovado' ? `${titulo} nº ${formatarNumero(a.numero)}` : a.motivo === 'vence' ? `A ${titulo.charAt(0).toLowerCase()}${titulo.slice(1)}` : titulo),
+      ), a.motivo === 'vence' ? null : h('span', { class: 'suave' }, a.motivo === 'aprovado' ? detalhe : `nº ${formatarNumero(a.numero)} · ${detalhe}`)),
       h('strong', { class: 'valor atencao-valor' }, formatarDinheiro(a.total_cents)),
       icone('seta', 'icone linha-seta'),
     );
@@ -81,7 +84,7 @@ function blocoAtencao(d) {
       { class: 'cartao-titulo' },
       h('h2', {}, 'Acompanhar hoje'),
       d.em_aberto
-        ? h('a', { href: '#/orcamentos?status=abertos' }, d.em_aberto === 1 ? '1 orçamento em aberto' : `${d.em_aberto} orçamentos em aberto`)
+        ? h('a', { href: '#/avisos' }, 'Ver todas →')
         : null,
     ),
     linhas.length
@@ -96,7 +99,7 @@ function blocoAtencao(d) {
 }
 
 export async function paginaDashboard() {
-  const d = await api.get('/dashboard');
+  const [d, empresa] = await Promise.all([api.get('/dashboard'), cache.carregarEmpresa()]);
   const agora = new Date();
   const mes = MESES[agora.getMonth()];
   const mesAnterior = MESES[(agora.getMonth() + 11) % 12];
@@ -106,6 +109,12 @@ export async function paginaDashboard() {
   const recarregar = () => {
     location.hash = `#/?${Date.now()}`;
   };
+  const novoCliente = async () => {
+    const cliente = await modalNovoCliente();
+    if (cliente) irPara(`#/clientes/${cliente.id}`);
+  };
+  const proximos = [...d.atencao.filter((a) => a.motivo !== 'aprovado'), ...d.recentes.filter((o) => o.status === 'rascunho').map((o) => ({ ...o, motivo: 'rascunho' }))]
+    .filter((a, i, lista) => lista.findIndex((b) => b.id === a.id) === i).slice(0, 3);
 
   return h(
     'div',
@@ -113,11 +122,21 @@ export async function paginaDashboard() {
     h(
       'div',
       { class: 'saudacao' },
-      h('span', { class: 'page-eyebrow' }, `${dataHoje.charAt(0).toUpperCase()}${dataHoje.slice(1)}`),
+      h('span', { class: 'page-eyebrow' },
+        h('span', { class: 'dashboard-texto-mobile' }, `${dataHoje.charAt(0).toUpperCase()}${dataHoje.slice(1)}`),
+        h('span', { class: 'dashboard-texto-desktop' }, 'Painel de controle'),
+      ),
       h('h1', {}, saudacao()),
-      h('p', {}, 'Veja o que precisa da sua atenção hoje.'),
+      h('p', {}, h('span', { class: 'dashboard-texto-mobile' }, 'Veja o que precisa da sua atenção hoje.'), h('span', { class: 'dashboard-texto-desktop' }, `${dataHoje.charAt(0).toUpperCase()}${dataHoje.slice(1)}${empresa?.nome ? ` · ${empresa.nome}` : ''}`)),
     ),
-    blocoAtencao(d),
+    h('a', { class: 'dashboard-usuario', href: '#/config/conta', 'aria-label': 'Minha conta' }, iniciais(usuarioAtual()?.nome)),
+    h('div', { class: 'dashboard-destaques' },
+      blocoAtencao(d),
+      h('section', { class: 'cartao dashboard-atalhos' }, h('h2', {}, 'Atalhos'),
+        h('div', { class: 'dashboard-atalho' }, h('span', { class: 'dashboard-atalho-icone' }, icone('mais')), h('button', { type: 'button', class: 'botao', onclick: novoCliente }, 'Novo cliente')),
+        h('div', { class: 'dashboard-atalho' }, h('span', { class: 'dashboard-atalho-icone' }, icone('busca')), h('a', { href: '#/orcamentos', class: 'botao' }, 'Consultar orçamento')),
+      ),
+    ),
     h(
       'div',
       { class: 'indicadores' },
@@ -135,7 +154,7 @@ export async function paginaDashboard() {
         'Aprovado',
         formatarIndicador(d.mes.aprovados_cents),
         '#/orcamentos?status=aprovado',
-        d.mes.aprovados === 1 ? '1 aprovado' : `${d.mes.aprovados} aprovados`,
+        d.mes.aprovados === 1 ? '1 proposta' : `${d.mes.aprovados} propostas`,
       ),
       indicador(
         'check',
@@ -155,7 +174,7 @@ export async function paginaDashboard() {
         { class: 'cartao' },
         h('div', { class: 'cartao-titulo' }, h('h2', {}, 'Orçamentos recentes'), h('a', { href: '#/orcamentos' }, 'Ver todos')),
         d.recentes.length
-          ? listaOrcamentos(d.recentes, { aoMudar: recarregar })
+          ? listaOrcamentos(d.recentes.slice(0, 3), { aoMudar: recarregar })
           : vazioIlustrado(
               'orcamentos',
               'Nenhum orçamento ainda',
@@ -165,16 +184,9 @@ export async function paginaDashboard() {
       ),
       h(
         'section',
-        { class: 'cartao' },
-        h('h2', {}, 'Atalhos'),
-        h(
-          'div',
-          { class: 'atalhos' },
-          atalho('clientes', 'Clientes', 'Cadastrar e procurar clientes', '#/clientes'),
-          atalho('preco', 'Móveis e preços', 'Guarda-roupa, cozinha, painel…', '#/config/moveis'),
-          atalho('pagamento', 'Condições de pagamento', 'À vista, entrada, parcelas', '#/config/pagamento'),
-          atalho('empresa', 'Dados da empresa', 'Logo e informações da proposta', '#/config/empresa'),
-        ),
+        { class: 'cartao dashboard-proximos' },
+        h('h2', {}, 'Próximos passos'),
+        proximos.length ? h('ol', {}, proximos.map((a, i) => h('li', {}, h('a', { href: `#/orcamentos/${a.id}` }, h('span', {}, String(i + 1).padStart(2, '0')), `${a.motivo === 'rascunho' ? 'Retomar rascunho' : 'Revisar proposta'} de ${a.cliente_nome.split(/\s+/)[0]}`)))) : h('p', { class: 'suave' }, 'Tudo em dia por aqui.'),
       ),
     ),
   );

@@ -27,7 +27,8 @@ const FONTES = {
   sansForte: fonte('inter-latin-600-normal.woff'),
   sansItalica: fonte('inter-latin-400-italic.woff'),
 };
-const MADEIRA = readFileSync(new URL('../public/images/login-fundo.jpg', import.meta.url));
+const MADEIRA = readFileSync(new URL('../public/images/figma-madeira-original.jpg', import.meta.url));
+const MADEIRA_VIDRO = readFileSync(new URL('../public/images/figma-madeira-vidro.jpg', import.meta.url));
 
 /**
  * Gera o PDF do cliente a partir da visão do cliente (ver visaoCliente.js).
@@ -59,9 +60,21 @@ export function gerarPdf(v, logo) {
   const empresa = v.empresa || {};
   const cliente = v.cliente || {};
   const quantidadeMoveis = (v.ambientes || []).reduce((soma, a) => soma + (a.itens || []).length, 0);
+  let opacidadeFundoAtual;
+  const sombraFundo = (opacidade) => {
+    if (opacidade === undefined) {
+      const sombra = doc.linearGradient(0, 0, doc.page.width, doc.page.height * 0.36);
+      sombra.stop(0, '#080706', 0.22).stop(0.42, '#080706', 0.18).stop(1, '#080706', 0.63);
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill(sombra);
+    } else doc.rect(0, 0, doc.page.width, doc.page.height).fillOpacity(opacidade).fill(COR.fundo);
+  };
 
   const escrever = (texto, x, y, { f = 'sans', t = 9, cor = COR.texto, ...opcoes } = {}) => {
     if (texto === undefined || texto === null || texto === '') return y;
+    if (opcoes.lineBreak === false && opcoes.width) {
+      const medida = doc.font(f).fontSize(t).widthOfString(String(texto));
+      if (medida > opcoes.width) t *= opcoes.width / medida;
+    }
     doc.font(f).fontSize(t).fillColor(cor).text(String(texto), x, y, { lineGap: 1.5, ...opcoes });
     return doc.y;
   };
@@ -69,7 +82,7 @@ export function gerarPdf(v, logo) {
     doc.font(f).fontSize(t).heightOfString(String(texto || ' '), { width: w, lineGap: 1.5, ...opcoes });
   const rotulo = (texto, x, y, { cor = COR.suave, t = 6.5, espacamento = 1.1, ...opcoes } = {}) =>
     escrever(String(texto || '').toUpperCase(), x, y, {
-      f: 'sansForte', t, cor, characterSpacing: espacamento, lineBreak: false, ...opcoes,
+      f: 'sansForte', t, cor, characterSpacing: 0, lineBreak: false, ...opcoes,
     });
   const fio = (y, x1 = esq, x2 = dir, cor = COR.linha, espessura = 0.65) => {
     doc.save();
@@ -83,11 +96,23 @@ export function gerarPdf(v, logo) {
   };
   const painel = (x, y, w, h, raio = 13, opacidade = 0.72) => {
     doc.save();
-    doc.roundedRect(x, y, w, h, raio).fillOpacity(opacidade).fill('#1c1713');
-    doc.roundedRect(x, y, w, h, raio).lineWidth(0.65).strokeColor(COR.linha).stroke();
+    if (opacidade < 0.7) {
+      doc.save().roundedRect(x, y, w, h, raio).clip();
+      doc.image(MADEIRA_VIDRO, 0, 0, { width: doc.page.width, height: doc.page.height });
+      sombraFundo(opacidadeFundoAtual);
+      doc.restore();
+    }
+    doc.roundedRect(x, y, w, h, raio).fillOpacity(opacidade).fill('#17130f');
+    const brilho = doc.linearGradient(x, y, x + w, y + h);
+    brilho.stop(0, '#ffffff', opacidade < 0.7 ? 0.012 : 0.03).stop(0.5, '#ffffff', 0.008).stop(1, '#dec6a4', 0.025);
+    doc.roundedRect(x, y, w, h, raio).fillOpacity(1).fill(brilho);
+    const aro = doc.linearGradient(x, y, x + w, y + h);
+    aro.stop(0, '#fff0d8', opacidade < 0.7 ? 0.42 : 0.25).stop(0.35, '#bda17f', 0.12).stop(0.7, '#e2c397', 0.08).stop(1, '#f6e4cc', 0.28);
+    doc.roundedRect(x + 0.5, y + 0.5, w - 1, h - 1, raio).lineWidth(1).strokeOpacity(1).strokeColor(aro).stroke();
     doc.restore();
   };
-  const fundo = (opacidade = 0.43) => {
+  const fundo = (opacidade) => {
+    opacidadeFundoAtual = opacidade;
     const imagem = doc.openImage(MADEIRA);
     const escala = Math.max(doc.page.width / imagem.width, doc.page.height / imagem.height);
     const larguraImagem = imagem.width * escala;
@@ -98,7 +123,7 @@ export function gerarPdf(v, logo) {
       width: larguraImagem,
       height: alturaImagem,
     });
-    doc.rect(0, 0, doc.page.width, doc.page.height).fillOpacity(opacidade).fill(COR.fundo);
+    sombraFundo(opacidade);
     doc.restore();
   };
   const marca = (x, y, maxW = 320, { tamanho = 23, comSubtitulo = true } = {}) => {
@@ -129,10 +154,10 @@ export function gerarPdf(v, logo) {
   const rodape = (pagina, total) => {
     fio(RODAPE_Y - 11, esq, dir, 'rgba(226,195,151,0.28)', 0.65);
     escrever(String(empresa.nome || '').toLocaleUpperCase('pt-BR'), esq, RODAPE_Y, {
-      t: 5.7, cor: COR.suave, width: largura * 0.55, lineBreak: false,
+      t: 8, cor: COR.suave, width: largura * 0.55, lineBreak: false,
     });
-    escrever(`Nº ${v.numero}  ·  ${String(pagina).padStart(2, '0')} / ${String(total).padStart(2, '0')}`, dir - 112, RODAPE_Y, {
-      t: 5.7, cor: COR.suave, width: 112, align: 'right', lineBreak: false,
+    escrever(`Nº ${v.numero}  ·  ${String(pagina).padStart(2, '0')} / ${String(total).padStart(2, '0')}`, dir - 184, RODAPE_Y, {
+      t: 8, cor: COR.dourado, width: 184, align: 'right', lineBreak: false,
     });
   };
   const novaPaginaDetalhes = () => {
@@ -149,14 +174,13 @@ export function gerarPdf(v, logo) {
 
   // Capa editorial: marca, apresentação do projeto e um resumo em vidro.
   marca(esq + 12, 47, 320, { tamanho: 23 });
-  rotulo('Proposta', dir - 52 - 124, 52, { t: 10, cor: COR.dourado, espacamento: 0.8, width: 124, align: 'right' });
-  escrever(`Nº ${v.numero}`, dir - 52 - 124, 69, {
-    f: 'serifMedia', t: 13, cor: COR.tinta, width: 124, align: 'right', lineBreak: false,
+  escrever(`PROPOSTA\nNº ${v.numero}`, dir - 12 - 124, 52, {
+    f: 'sans', t: 10, cor: COR.dourado, width: 124, align: 'right', lineGap: 5,
   });
 
-  rotulo('Móveis feitos para o seu espaço', esq + 12, 216, { t: 9, cor: COR.dourado, espacamento: 0.8 });
+  rotulo('Móveis feitos para o seu espaço', esq + 12, 216, { t: 8.5, cor: COR.dourado });
   escrever('Seu projeto,\nem cada detalhe.', esq + 12, 246, {
-    f: 'serif', t: 43, cor: COR.tinta, width: 491, lineGap: -1.5,
+    f: 'serifMedia', t: 43, cor: COR.tinta, width: 491, lineGap: -1.5,
   });
   fio(377, esq + 12, esq + 57, COR.acento, 2);
   escrever('Uma proposta de móveis planejados\nfeita sob medida para o seu espaço.', esq + 12, 400, {
@@ -196,7 +220,7 @@ export function gerarPdf(v, logo) {
   // Segunda página: ambientes, investimento, forma de pagamento e observações.
   novaPaginaDetalhes();
   rotulo('O que está incluído', esq, 100, { t: 8.5, cor: COR.dourado, espacamento: 0.9 });
-  escrever('O seu projeto', esq, 121, { f: 'serif', t: 31, cor: COR.tinta, lineBreak: false });
+  escrever('O seu projeto', esq, 121, { f: 'serifMedia', t: 31, cor: COR.tinta, lineBreak: false });
   doc.y = 180;
 
   const grupos = (v.ambientes || [])
@@ -212,7 +236,7 @@ export function gerarPdf(v, logo) {
 
   let indiceGrupo = 0;
   const prepararGrupo = (grupo) => {
-    const larguraTexto = largura - 170;
+    const larguraTexto = largura - 184;
     const itens = (grupo.itens || []).map((item) => {
       const quantidade = item.quantidade || 1;
       const nome = item.descricao;
@@ -230,7 +254,7 @@ export function gerarPdf(v, logo) {
     const descricao = String(grupo.descricao || '').trim();
     const tituloAltura = alturaTexto(grupo.titulo, largura - 90, { f: 'serifMedia', t: 19 });
     const descricaoAltura = descricao ? alturaTexto(descricao, largura - 90, { t: 9.5 }) : 0;
-    const alturaCabecalho = Math.max(66, 17 + tituloAltura + (descricao ? 5 + descricaoAltura : 0) + 14);
+    const alturaCabecalho = Math.max(68, 23 + tituloAltura + (descricao ? 5 + descricaoAltura : 0) + 14);
     return { ...grupo, itens, descricao, tituloAltura, descricaoAltura, alturaCabecalho };
   };
 
@@ -238,17 +262,17 @@ export function gerarPdf(v, logo) {
     const y = doc.y;
     const titulo = `${grupo.titulo}${continua ? ' · continuação' : ''}`;
     const alturaTitulo = alturaTexto(titulo, largura - 90, { f: 'serifMedia', t: 19 });
-    const alturaRodape = final ? 32 : 0;
+    const alturaRodape = final ? 34 : 0;
     const alturaGrupo = alturaCabecalho + itens.reduce((soma, item) => soma + item.altura, 0) + alturaRodape;
     painel(esq, y, largura, alturaGrupo, 20, 0.86);
-    escrever(String(indiceGrupo).padStart(2, '0'), esq + 23, y + 17, {
-      f: 'sansForte', t: 10, cor: COR.dourado, width: 25, lineBreak: false,
+    escrever(String(indiceGrupo).padStart(2, '0'), esq + 24, y + 28.5, {
+      f: 'sansMedia', t: 10, cor: COR.dourado, width: 25, lineBreak: false,
     });
-    escrever(titulo, esq + 60, y + 17, {
+    escrever(titulo, esq + 61, y + 22.5, {
       f: 'serifMedia', t: 19, cor: COR.tinta, width: largura - 90,
     });
     if (grupo.descricao && !continua) {
-      escrever(grupo.descricao, esq + 60, y + 17 + alturaTitulo + 5, {
+      escrever(grupo.descricao, esq + 61, y + 23 + alturaTitulo + 5, {
         f: 'sans', t: 9.5, cor: COR.suave, width: largura - 90,
       });
     }
@@ -257,23 +281,24 @@ export function gerarPdf(v, logo) {
 
     let yItem = divisorY + 7;
     for (const linha of itens) {
-      escrever(linha.nome, esq + 23, yItem + 2, {
-        f: 'sansMedia', t: 12, cor: COR.tinta, width: largura - 170,
+      const alturaBloco = Math.max(48, linha.nomeAltura + 4 + linha.quantidadeAltura);
+      const topoTexto = yItem + (linha.altura - alturaBloco) / 2;
+      escrever(linha.nome, esq + 24, topoTexto, {
+        f: 'sansMedia', t: 12, cor: COR.tinta, width: largura - 184,
       });
-      const yQuantidade = yItem + 5 + linha.nomeAltura;
-      escrever(`${linha.quantidade} ${linha.quantidade === 1 ? 'unidade' : 'unidades'}`, esq + 23, yQuantidade, {
-        f: 'sans', t: 9.5, cor: COR.suave, width: largura - 170,
+      const yQuantidade = topoTexto + 4 + Math.max(17, linha.nomeAltura);
+      escrever(`${linha.quantidade} ${linha.quantidade === 1 ? 'unidade' : 'unidades'}`, esq + 24, yQuantidade, {
+        f: 'sans', t: 9.5, cor: COR.suave, width: largura - 184,
       });
-      escrever(formatarDinheiro(linha.item.valor_cents), dir - 145, yItem + Math.max(12, (linha.altura - 13) / 2), {
+      escrever(formatarDinheiro(linha.item.valor_cents), dir - 144, yItem + (linha.altura - 18) / 2, {
         f: 'sansForte', t: 12.5, cor: COR.dourado, width: 120, align: 'right', lineBreak: false,
       });
       yItem += linha.altura;
-      if (yItem < y + alturaGrupo - alturaRodape) fio(yItem, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.55);
     }
 
     if (final) {
-      const yTotal = y + alturaGrupo - 22;
-      fio(y + alturaGrupo - 32, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.65);
+      const yTotal = y + alturaGrupo - 21;
+      fio(y + alturaGrupo - 31, esq + 24, dir - 24, 'rgba(226,195,151,0.18)', 0.65);
       rotulo('Total do ambiente', esq + 23, yTotal, { t: 8, espacamento: 0.65, width: 250 });
       escrever(formatarDinheiro(grupo.subtotal), dir - 230, yTotal - 1, {
         f: 'sansForte', t: 10.5, cor: COR.dourado, width: 205, align: 'right', lineBreak: false,
@@ -285,7 +310,7 @@ export function gerarPdf(v, logo) {
   for (const bruto of grupos) {
     indiceGrupo += 1;
     const grupo = prepararGrupo(bruto);
-    const alturaCompleta = grupo.alturaCabecalho + grupo.itens.reduce((soma, item) => soma + item.altura, 0) + 32;
+    const alturaCompleta = grupo.alturaCabecalho + grupo.itens.reduce((soma, item) => soma + item.altura, 0) + 34;
     if (doc.y + alturaCompleta > LIMITE_CONTEUDO && doc.y > 180) novaPaginaDetalhes();
 
     let restantes = [...grupo.itens];
@@ -293,10 +318,10 @@ export function gerarPdf(v, logo) {
     do {
       const disponivel = LIMITE_CONTEUDO - doc.y;
       const alturaTituloContinua = alturaTexto(`${grupo.titulo} · continuação`, largura - 90, { f: 'serifMedia', t: 19 });
-      const cabecalho = continua ? Math.max(66, 17 + alturaTituloContinua + 14) : grupo.alturaCabecalho;
+      const cabecalho = continua ? Math.max(68, 23 + alturaTituloContinua + 14) : grupo.alturaCabecalho;
       const alturaTotalItens = restantes.reduce((soma, item) => soma + item.altura, 0);
-      const cabeTudo = cabecalho + alturaTotalItens + 32 <= disponivel;
-      if (!cabeTudo && disponivel < cabecalho + restantes[0].altura + 32 && doc.y > 180) {
+      const cabeTudo = cabecalho + alturaTotalItens + 34 <= disponivel;
+      if (!cabeTudo && disponivel < cabecalho + restantes[0].altura + 34 && doc.y > 180) {
         novaPaginaDetalhes();
         continua = true;
         continue;
@@ -304,7 +329,7 @@ export function gerarPdf(v, logo) {
 
       let quantidadeItens = 0;
       let alturaItens = 0;
-      const limiteItens = disponivel - cabecalho - (cabeTudo ? 32 : 0);
+      const limiteItens = disponivel - cabecalho - (cabeTudo ? 34 : 0);
       while (quantidadeItens < restantes.length && alturaItens + restantes[quantidadeItens].altura <= limiteItens) {
         alturaItens += restantes[quantidadeItens].altura;
         quantidadeItens += 1;
@@ -348,8 +373,8 @@ export function gerarPdf(v, logo) {
   garantir(85);
   const totalY = doc.y;
   painel(esq, totalY, largura, 72, 20, 0.48);
-  rotulo('Investimento total', esq + 23, totalY + 16, { t: 9, cor: COR.dourado, espacamento: 0.65 });
-  escrever(formatarDinheiro(v.total_cents), dir - 258, totalY + 16, {
+  rotulo('Investimento total', esq + 23, totalY + 29.5, { t: 9, cor: COR.dourado, espacamento: 0.65 });
+  escrever(formatarDinheiro(v.total_cents), dir - 258, totalY + 21, {
     f: 'sansForte', t: 27, cor: COR.tinta, width: 235, align: 'right', lineBreak: false, features: ['lnum'],
   });
   doc.y = totalY + 92;
@@ -360,35 +385,40 @@ export function gerarPdf(v, logo) {
   const entradaValor = entrada ? entrada.replace(/^entrada\s*:\s*/i, '') : pagamentoLabel;
   const validade = v.data_validade ? `Até ${formatarData(v.data_validade)}` : `${v.validade_dias} dias`;
 
-  garantir(190);
-  const pagamentoY = doc.y;
-  const pagamentoH = 170;
-  painel(esq, pagamentoY, largura, pagamentoH, 20, 0.86);
-  escrever('Pagamento e prazo', esq + 23, pagamentoY + 15, { f: 'serifMedia', t: 19, cor: COR.tinta });
   const colunaGap = 24;
   const metade = (largura - 46 - colunaGap) / 2;
+  const primeiraLinhaH = Math.max(54, 16 + alturaTexto(entradaValor, metade, { f: 'sansMedia', t: 12 }) + 15,
+    16 + alturaTexto(restante || 'Conforme combinado', metade, { f: 'sansMedia', t: 12 }) + 15);
+  const segundaLinhaH = Math.max(34, 16 + alturaTexto(v.prazo_entrega || 'A combinar', metade, { f: 'sansMedia', t: 12 }),
+    16 + alturaTexto(validade, metade, { f: 'sansMedia', t: 12 }));
+  const pagamentoH = 62 + primeiraLinhaH + segundaLinhaH + 20;
+  garantir(pagamentoH + 20);
+  const pagamentoY = doc.y;
+  painel(esq, pagamentoY, largura, pagamentoH, 20, 0.86);
+  escrever('Pagamento e prazo', esq + 24, pagamentoY + 17, { f: 'serifMedia', t: 19, cor: COR.tinta });
   const x1 = esq + 23;
   const x2 = x1 + metade + colunaGap;
   const campoResumo = (label, valor, x, y) => {
     rotulo(label, x, y, { t: 8.5, espacamento: 0.35, width: metade });
-    escrever(valor || 'A combinar', x, y + 16, { f: 'sansMedia', t: 12, cor: COR.tinta, width: metade, lineBreak: false });
+    escrever(valor || 'A combinar', x, y + 16, { f: 'sansMedia', t: 12, cor: COR.tinta, width: metade });
   };
-  const percentualEntrada = pagamentoLabel.match(/(\d{1,3}%)(?=\s+de entrada)/i)?.[1];
+  const percentualEntrada = pagamentoLabel.match(/\d{1,3}%/)?.[0];
   const entradaRotulo = percentualEntrada ? `Entrada · ${percentualEntrada}` : 'Entrada';
-  campoResumo(entradaRotulo, entradaValor, x1, pagamentoY + 60);
-  campoResumo('Restante', restante || 'Conforme combinado', x2, pagamentoY + 60);
-  campoResumo('Entrega', v.prazo_entrega || 'A combinar', x1, pagamentoY + 114);
-  campoResumo('Validade', validade, x2, pagamentoY + 114);
+  campoResumo(entradaRotulo, entradaValor, x1, pagamentoY + 62);
+  campoResumo('Restante', restante || 'Conforme combinado', x2, pagamentoY + 62);
+  campoResumo('Entrega', v.prazo_entrega || 'A combinar', x1, pagamentoY + 62 + primeiraLinhaH);
+  campoResumo('Validade', validade, x2, pagamentoY + 62 + primeiraLinhaH);
   doc.y = pagamentoY + pagamentoH + 23;
 
   const observacoes = String(v.observacoes || '').split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
   if (observacoes.length) {
     const textoObs = observacoes.join('\n');
-    const alturaObs = alturaTexto(textoObs, largura - 8, { t: 7.2 }) + 28;
+    const alturaObs = alturaTexto(textoObs, largura, { t: 11 }) + 22;
     garantir(alturaObs);
-    rotulo('Observações', esq, doc.y, { t: 5.5, cor: COR.dourado, espacamento: 1 });
-    escrever(textoObs, esq, doc.y + 21, { t: 7.2, cor: COR.texto, width: largura - 8 });
-    doc.y += alturaObs;
+    const observacoesY = doc.y;
+    rotulo('Observações', esq, observacoesY, { t: 8.5, cor: COR.dourado });
+    escrever(textoObs, esq, observacoesY + 17, { t: 11, cor: COR.tinta, width: largura });
+    doc.y = observacoesY + alturaObs;
   }
 
   // Numeração e rodapé são desenhados depois que todas as páginas existem.

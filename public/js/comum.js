@@ -35,13 +35,29 @@ export function cabecalhoPagina(titulo, { voltar, acoes, subtitulo } = {}) {
   );
 }
 
+/** Cabeçalho dos fluxos internos, com retorno no celular e contexto no desktop. */
+export function cabecalhoInterno(titulo, { voltar, retorno, contexto, subtitulo, acoes, tituloDesktop, contextoDesktop, subtituloDesktop } = {}) {
+  const textoResponsivo = (mobile, desktop) => desktop
+    ? h('span', {}, h('span', { class: 'interno-mobile' }, mobile), h('span', { class: 'interno-desktop' }, desktop))
+    : mobile;
+  return h('header', { class: 'cabecalho-interno' },
+    h('a', { href: voltar, class: 'retorno-interno' }, h('span', { class: 'botao-icone' }, icone('voltar')), h('span', {}, retorno)),
+    h('div', { class: 'titulos-internos' },
+      h('span', { class: 'contexto-interno' }, textoResponsivo(contexto, contextoDesktop)),
+      h('h1', {}, textoResponsivo(titulo, tituloDesktop)),
+      h('p', {}, textoResponsivo(subtitulo, subtituloDesktop)),
+    ),
+    acoes ? h('div', { class: 'acoes-internas' }, acoes) : null,
+  );
+}
+
 export function avatar(nome, classe = '') {
   return h('span', { class: `avatar ${classe}`, 'aria-hidden': 'true' }, iniciais(nome));
 }
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 
-function dataCompacta(iso) {
+export function dataCompacta(iso) {
   if (!iso) return '';
   const valor = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
   if (Number.isNaN(valor.getTime())) return '';
@@ -177,7 +193,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
             h('span', { class: 'orcamento-cliente' }, avatar(o.cliente_nome, 'avatar-linha'),
               h('span', { class: 'orcamento-cliente-texto' }, h('strong', {}, o.cliente_nome), h('small', { 'data-data': dataCompacta(o.data) }, `Nº ${formatarNumero(o.numero)}`)),
             ),
-            h('span', { class: 'orcamento-atividade' },
+            h('span', { class: 'orcamento-atividade', 'data-status': o.status },
               h('strong', {}, atividade),
               o.data_validade && ['enviado', 'negociacao'].includes(o.status) ? h('small', {}, `Válida até ${formatarData(o.data_validade)}`) : null,
             ),
@@ -189,13 +205,16 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
             'a',
             { href: `#/orcamentos/${o.id}`, class: 'linha-link' },
             mostrarCliente ? avatar(o.cliente_nome, 'avatar-linha') : h('span', { class: 'selo-icone avatar-linha' }, icone('orcamentos')),
+            h('span', { class: 'recente-documento' }, icone('orcamentos')),
             h(
               'div',
               { class: 'linha-principal' },
-              h('strong', {}, mostrarCliente ? o.cliente_nome : `Orçamento nº ${formatarNumero(o.numero)}`),
-              h('span', { class: 'suave' }, mostrarCliente ? `nº ${formatarNumero(o.numero)} · ` : '', formatarData(o.data)),
+              h('strong', {}, mostrarCliente ? o.cliente_nome : `Nº ${formatarNumero(o.numero)}`),
+              h('span', { class: 'suave' }, mostrarCliente ? [`Nº ${formatarNumero(o.numero)}`, h('span', { class: 'recente-data-mobile' }, ` · ${diaMesCompacto(o.data)}`)] : dataCompacta(o.data)),
             ),
             h('div', { class: 'linha-valor' }, h('strong', {}, formatarDinheiro(o.total_cents)), selo(o.status)),
+            h('span', { class: 'recente-atualizacao' }, h('small', {}, 'Atualizado'), h('time', { datetime: o.data }, dataCompacta(o.data))),
+            h('span', { class: 'recente-seta' }, icone('seta')),
             tags,
           );
       return h(
@@ -236,7 +255,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
 // ------------------------------------------------------------------ Clientes
 
 const CAMPOS_CLIENTE = [
-  ['nome', 'Nome completo', { required: true, autocomplete: 'off' }],
+  ['nome', 'Nome completo *', { required: true, autocomplete: 'off' }],
   ['telefone', 'Telefone', { type: 'tel', inputmode: 'tel' }],
   ['whatsapp', 'WhatsApp', { type: 'tel', inputmode: 'tel' }],
   ['email', 'E-mail', { type: 'email' }],
@@ -247,29 +266,30 @@ const CAMPOS_CLIENTE = [
 ];
 
 /** Formulário de cliente. `aoSalvar(cliente)` recebe o registro salvo. */
-export function formularioCliente(cliente = {}, aoSalvar, { textoBotao = 'Salvar cliente' } = {}) {
+export function formularioCliente(cliente = {}, aoSalvar, { textoBotao = 'Salvar cliente', modal = false, aoCancelar } = {}) {
   const entradas = {};
   const campos = CAMPOS_CLIENTE.map(([chave, rotulo, attrs]) => {
     entradas[chave] = h('input', { type: 'text', ...attrs, value: cliente[chave] ?? '' });
-    return campo(rotulo, entradas[chave], { classe: ['cidade', 'estado'].includes(chave) ? 'campo-metade' : '' });
+    entradas[chave].placeholder = { nome: 'Nome do cliente', telefone: 'DDD + número', whatsapp: 'DDD + número', email: 'E-mail do cliente' }[chave] || '';
+    return campo(rotulo, entradas[chave], { classe: `cliente-campo-${chave}${['cidade', 'estado'].includes(chave) ? ' campo-metade' : ''}` });
   });
   entradas.observacoes = h('textarea', { rows: '3', value: cliente.observacoes ?? '' });
   const copiarWhats = h(
     'button',
     {
       type: 'button',
-      class: 'link-botao',
+      class: 'botao cliente-copiar-whats',
       onclick: () => {
         entradas.whatsapp.value = entradas.telefone.value;
       },
     },
-    'Mesmo número do telefone',
+    'Usar telefone no WhatsApp',
   );
   const botao = h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, textoBotao);
   const form = h(
     'form',
     {
-      class: 'formulario grade-formulario',
+      class: 'formulario formulario-cliente',
       onsubmit: async (e) => {
         e.preventDefault();
         botao.disabled = true;
@@ -285,18 +305,22 @@ export function formularioCliente(cliente = {}, aoSalvar, { textoBotao = 'Salvar
         }
       },
     },
-    campos.slice(0, 3),
+    h('div', { class: 'cliente-campos-principais' }, campos.slice(0, 3)),
     copiarWhats,
-    campos.slice(3),
-    campo('Observações', entradas.observacoes, { classe: 'campo-inteiro' }),
-    h('div', { class: 'acoes-formulario' }, botao),
+    campos[3],
+    h('details', { class: 'cliente-campos-adicionais' },
+      h('summary', { class: 'botao' }, modal ? 'Endereço, documento e observações' : 'Endereço e documento', modal ? null : icone('baixo')),
+      h('div', { class: 'grade-formulario' }, campos.slice(4), modal ? campo('Observações', entradas.observacoes, { classe: 'campo-inteiro' }) : null),
+    ),
+    modal ? null : campo('Observações', entradas.observacoes, { classe: 'campo-inteiro' }),
+    h('div', { class: modal ? 'acoes-modal' : 'acoes-formulario' }, aoCancelar ? h('button', { type: 'button', class: 'botao', onclick: aoCancelar }, 'Cancelar') : null, botao),
   );
-  setTimeout(() => entradas.nome.focus());
+  if (modal) setTimeout(() => entradas.nome.focus());
   return form;
 }
 
 export function modalNovoCliente(inicial = {}) {
-  return abrirModal('Novo cliente', (fechar) => formularioCliente(inicial, (c) => fechar(c)), { largo: true });
+  return abrirModal('Novo cliente', (fechar) => formularioCliente(inicial, (c) => fechar(c), { modal: true, aoCancelar: () => fechar() }), { largo: true, contexto: 'CLIENTES', subtitulo: 'Comece pelo nome e pelos contatos.', classe: 'modal-cliente' });
 }
 
 /** Busca de clientes com lista clicável. */
@@ -305,7 +329,7 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
   const busca = h('input', {
     type: 'search',
     class: 'busca',
-    placeholder: 'Procurar por nome, telefone ou WhatsApp',
+    placeholder: 'Nome, telefone ou WhatsApp',
     value: textoBusca,
     'aria-label': 'Procurar cliente',
   });
@@ -351,18 +375,16 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
   };
   busca.addEventListener('input', debounce(procurar));
   procurar();
-  setTimeout(() => busca.focus());
   return h(
     'div',
     { class: 'seletor-cliente' },
     h(
       'button',
       { type: 'button', class: 'botao botao-primario botao-grande botao-bloco', onclick: novo },
-      icone('usuarioMais'),
       'Novo cliente',
     ),
     h('div', { class: 'separador' }, h('span', {}, 'ou selecione um cliente existente')),
-    busca,
+    h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),
     lista,
   );
 }
