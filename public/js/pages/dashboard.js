@@ -5,6 +5,11 @@ import { listaOrcamentos } from '../comum.js';
 import { usuarioAtual } from '../main.js';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const formatarIndicador = (centavos) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+}).format((centavos || 0) / 100);
 
 function indicador(nomeIcone, cor, rotulo, valor, href, detalhe) {
   return h(
@@ -38,17 +43,18 @@ function saudacao() {
   const hora = new Date().getHours();
   const nome = (usuarioAtual()?.nome || '').split(/\s+/)[0];
   const periodo = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-  return nome ? `${periodo}, ${nome}!` : `${periodo}!`;
+  return nome ? `${periodo}, ${nome}.` : `${periodo}.`;
 }
 
 const diasDesde = (iso) => Math.max(0, -diasAte(new Date(iso).toISOString().slice(0, 10)));
 
 // Texto e ícone de cada motivo do bloco "Precisa de atenção".
 const MOTIVOS = {
-  aprovado: (a) => ['aprovado', 'sucesso', `${a.cliente_nome} aprovou a proposta`, `pelo link, ${haQuanto(a.quando)}`],
+  aprovado: (a) => ['aprovado', 'sucesso', `${a.cliente_nome.split(/\s+/)[0]} aprovou a proposta`, formatarDinheiro(a.total_cents)],
   vence: (a) => {
     const d = diasAte(a.data_validade);
-    return ['relogio', 'alerta', `A proposta de ${a.cliente_nome} ${d === 0 ? 'vence hoje' : d === 1 ? 'vence amanhã' : `vence em ${d} dias`}`, 'Bom momento para um lembrete'];
+    const primeiroNome = a.cliente_nome.split(/\s+/)[0];
+    return ['relogio', 'alerta', `Proposta de ${primeiroNome} ${d === 0 ? 'vence hoje' : d === 1 ? 'vence amanhã' : `vence em ${d} dias`}`, 'Bom momento para um lembrete'];
   },
   visto: (a) => ['olho', 'info', `${a.cliente_nome} abriu a proposta ${haQuanto(a.quando)}`, 'Chame enquanto está fresco na memória'],
   sem_resposta: (a) => ['whatsapp', '', `${a.cliente_nome} ainda não respondeu`, `enviado há ${diasDesde(a.quando)} dias`],
@@ -62,7 +68,7 @@ function blocoAtencao(d) {
       'a',
       { href: `#/orcamentos/${a.id}`, class: 'atencao-linha' },
       h('span', { class: `selo-icone ${cor}` }, icone(ic)),
-      h('div', { class: 'linha-principal' }, h('strong', {}, titulo), h('span', { class: 'suave' }, `nº ${formatarNumero(a.numero)} · ${detalhe}`)),
+      h('div', { class: 'linha-principal' }, h('strong', {}, titulo), a.motivo === 'vence' ? null : h('span', { class: 'suave' }, a.motivo === 'aprovado' ? detalhe : `nº ${formatarNumero(a.numero)} · ${detalhe}`)),
       h('strong', { class: 'valor atencao-valor' }, formatarDinheiro(a.total_cents)),
       icone('seta', 'icone linha-seta'),
     );
@@ -73,7 +79,7 @@ function blocoAtencao(d) {
     h(
       'div',
       { class: 'cartao-titulo' },
-      h('h2', {}, 'Precisa de atenção'),
+      h('h2', {}, 'Acompanhar hoje'),
       d.em_aberto
         ? h('a', { href: '#/orcamentos?status=abertos' }, d.em_aberto === 1 ? '1 orçamento em aberto' : `${d.em_aberto} orçamentos em aberto`)
         : null,
@@ -103,12 +109,13 @@ export async function paginaDashboard() {
 
   return h(
     'div',
-    { class: 'pagina' },
+    { class: 'pagina pagina-dashboard' },
     h(
       'div',
       { class: 'saudacao' },
+      h('span', { class: 'page-eyebrow' }, `${dataHoje.charAt(0).toUpperCase()}${dataHoje.slice(1)}`),
       h('h1', {}, saudacao()),
-      h('p', {}, `${dataHoje.charAt(0).toUpperCase()}${dataHoje.slice(1)} · ${cache.empresa?.nome || ''}`),
+      h('p', {}, 'Veja o que precisa da sua atenção hoje.'),
     ),
     blocoAtencao(d),
     h(
@@ -118,21 +125,15 @@ export async function paginaDashboard() {
         'orcamentos',
         '',
         `Orçado em ${mes}`,
-        formatarDinheiro(d.mes.valor_cents),
+        formatarIndicador(d.mes.valor_cents),
         '#/orcamentos',
-        h(
-          'span',
-          {},
-          d.mes.quantidade === 1 ? '1 orçamento' : `${d.mes.quantidade} orçamentos`,
-          comparacao(d.mes.valor_cents, d.mes_anterior.valor_cents, mesAnterior) ? ' · ' : '',
-          comparacao(d.mes.valor_cents, d.mes_anterior.valor_cents, mesAnterior),
-        ),
+        d.mes.quantidade === 1 ? '1 orçamento' : `${d.mes.quantidade} orçamentos`,
       ),
       indicador(
         'aprovado',
         'sucesso',
-        `Aprovado em ${mes}`,
-        formatarDinheiro(d.mes.aprovados_cents),
+        'Aprovado',
+        formatarIndicador(d.mes.aprovados_cents),
         '#/orcamentos?status=aprovado',
         d.mes.aprovados === 1 ? '1 aprovado' : `${d.mes.aprovados} aprovados`,
       ),
@@ -144,7 +145,7 @@ export async function paginaDashboard() {
         '#/orcamentos?status=aprovado',
         d.conversao.enviados ? `${d.conversao.aprovados} de ${d.conversao.enviados} nos últimos 90 dias` : 'Envie propostas para medir',
       ),
-      indicador('dinheiro', 'alerta', 'Valor médio', formatarDinheiro(medio), '#/orcamentos', `por orçamento em ${mes}`),
+      indicador('dinheiro', 'alerta', 'Valor médio', formatarIndicador(medio), '#/orcamentos', `por orçamento em ${mes}`),
     ),
     h(
       'div',

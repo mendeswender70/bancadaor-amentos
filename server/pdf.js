@@ -3,19 +3,19 @@ import { readFileSync } from 'node:fs';
 import { formatarData, formatarDinheiro } from '../public/shared/calc.js';
 
 const COR = {
+  fundo: '#100d0b',
   tinta: '#f5efe6',
-  texto: '#e0d4c6',
+  texto: '#dfd3c4',
   suave: '#b9ad9e',
   linha: '#514031',
   acento: '#c39a69',
-  painel: '#1c1713',
-  painelTexto: '#f5efe6',
   dourado: '#e2c397',
-  desconto: '#92cba5',
+  verde: '#92cba5',
 };
 
-const MARGEM = 52;
-const RODAPE = 34;
+const MARGEM = 40;
+const RODAPE_Y = 798;
+const LIMITE_CONTEUDO = 774;
 
 const fonte = (arquivo) => readFileSync(new URL(`./fontes/${arquivo}`, import.meta.url));
 const FONTES = {
@@ -27,7 +27,7 @@ const FONTES = {
   sansForte: fonte('inter-latin-600-normal.woff'),
   sansItalica: fonte('inter-latin-400-italic.woff'),
 };
-const MADEIRA = readFileSync(new URL('../public/images/madeira-esquadro.jpg', import.meta.url));
+const MADEIRA = readFileSync(new URL('../public/images/login-fundo.jpg', import.meta.url));
 
 /**
  * Gera o PDF do cliente a partir da visão do cliente (ver visaoCliente.js).
@@ -40,9 +40,9 @@ const MADEIRA = readFileSync(new URL('../public/images/madeira-esquadro.jpg', im
 export function gerarPdf(v, logo) {
   const doc = new PDFDocument({
     size: 'A4',
-    margins: { top: MARGEM, bottom: MARGEM, left: MARGEM, right: MARGEM },
+    margins: 0,
     bufferPages: true,
-    info: { Title: `Orçamento nº ${v.numero}`, Author: v.empresa.nome || '', Creator: 'esquadro' },
+    info: { Title: `Proposta nº ${v.numero}`, Author: v.empresa.nome || '', Creator: 'esquadro' },
   });
   for (const [nome, dados] of Object.entries(FONTES)) doc.registerFont(nome, dados);
 
@@ -56,339 +56,276 @@ export function gerarPdf(v, logo) {
   const largura = doc.page.width - MARGEM * 2;
   const esq = MARGEM;
   const dir = MARGEM + largura;
-  const limite = () => doc.page.height - MARGEM - RODAPE;
-  const desenharFundo = () => {
+  const empresa = v.empresa || {};
+  const cliente = v.cliente || {};
+  const quantidadeMoveis = (v.ambientes || []).reduce((soma, a) => soma + (a.itens || []).length, 0);
+
+  const escrever = (texto, x, y, { f = 'sans', t = 9, cor = COR.texto, ...opcoes } = {}) => {
+    if (texto === undefined || texto === null || texto === '') return y;
+    doc.font(f).fontSize(t).fillColor(cor).text(String(texto), x, y, { lineGap: 1.5, ...opcoes });
+    return doc.y;
+  };
+  const alturaTexto = (texto, w, { f = 'sans', t = 9, ...opcoes } = {}) =>
+    doc.font(f).fontSize(t).heightOfString(String(texto || ' '), { width: w, lineGap: 1.5, ...opcoes });
+  const rotulo = (texto, x, y, { cor = COR.suave, t = 6.5, espacamento = 1.1, ...opcoes } = {}) =>
+    escrever(String(texto || '').toUpperCase(), x, y, {
+      f: 'sansForte', t, cor, characterSpacing: espacamento, lineBreak: false, ...opcoes,
+    });
+  const fio = (y, x1 = esq, x2 = dir, cor = COR.linha, espessura = 0.65) => {
+    doc.save();
+    const rgba = String(cor).match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/i);
+    if (rgba) {
+      doc.strokeColor([Number(rgba[1]), Number(rgba[2]), Number(rgba[3])]);
+      if (rgba[4] !== undefined) doc.strokeOpacity(Number(rgba[4]));
+    } else doc.strokeColor(cor);
+    doc.moveTo(x1, y).lineTo(x2, y).lineWidth(espessura).stroke();
+    doc.restore();
+  };
+  const painel = (x, y, w, h, raio = 13, opacidade = 0.72) => {
+    doc.save();
+    doc.roundedRect(x, y, w, h, raio).fillOpacity(opacidade).fill('#1c1713');
+    doc.roundedRect(x, y, w, h, raio).lineWidth(0.65).strokeColor(COR.linha).stroke();
+    doc.restore();
+  };
+  const fundo = (opacidade = 0.43) => {
     const imagem = doc.openImage(MADEIRA);
     const escala = Math.max(doc.page.width / imagem.width, doc.page.height / imagem.height);
     const larguraImagem = imagem.width * escala;
     const alturaImagem = imagem.height * escala;
     doc.save();
-    doc.image(imagem, (doc.page.width - larguraImagem) / 2, (doc.page.height - alturaImagem) / 2, { width: larguraImagem, height: alturaImagem });
-    doc.fillOpacity(0.44).rect(0, 0, doc.page.width, doc.page.height).fill('#080604');
-    doc.restore();
-    doc.roundedRect(14, 14, doc.page.width - 28, doc.page.height - 28, 11).lineWidth(0.7).strokeColor('#6a5138').stroke();
-  };
-  const painel = (x, y, w, h, raio = 12, opacidade = 0.84) => {
-    doc.save();
-    doc.roundedRect(x, y, w, h, raio).fillOpacity(opacidade).fill(COR.painel);
-    doc.roundedRect(x, y, w, h, raio).lineWidth(0.6).strokeColor(COR.linha).stroke();
-    doc.restore();
-  };
-  // Páginas seguintes ganham um cabeçalho discreto.
-  const novaPagina = () => {
-    doc.addPage();
-    desenharFundo();
-    const yC = MARGEM - 14;
-    escrever(v.empresa.nome || '', MARGEM, yC, { f: 'serif', t: 10, cor: COR.tinta, width: largura * 0.6, lineBreak: false });
-    escrever(`Orçamento Nº ${v.numero}`, MARGEM + largura * 0.4, yC + 1.5, {
-      t: 8,
-      cor: COR.suave,
-      width: largura * 0.6,
-      align: 'right',
-      lineBreak: false,
+    doc.rect(0, 0, doc.page.width, doc.page.height).clip();
+    doc.image(imagem, (doc.page.width - larguraImagem) / 2, (doc.page.height - alturaImagem) / 2, {
+      width: larguraImagem,
+      height: alturaImagem,
     });
-    fio(yC + 18);
-    doc.y = yC + 38;
+    doc.rect(0, 0, doc.page.width, doc.page.height).fillOpacity(opacidade).fill(COR.fundo);
+    doc.restore();
+  };
+  const marca = (x, y, maxW = 320, { tamanho = 23, comSubtitulo = true } = {}) => {
+    if (logo) {
+      try {
+        const imagem = doc.openImage(logo);
+        const escala = Math.min(maxW / imagem.width, 42 / imagem.height, 1);
+        doc.image(imagem, x, y, { width: imagem.width * escala, height: imagem.height * escala });
+        return;
+      } catch {
+        // Logo inválida: mantém a marca tipográfica da proposta.
+      }
+    }
+    const nome = String(empresa.nome || 'Móveis planejados').trim();
+    const principal = nome.replace(/\s+planejados?$/i, '').trim() || nome;
+    escrever(principal.toLocaleUpperCase('pt-BR'), x, y, {
+      f: 'serifMedia', t: tamanho, cor: COR.tinta, width: maxW, lineBreak: false,
+    });
+    if (comSubtitulo) rotulo('P L A N E J A D O S', x, y + 30, { t: 9, cor: COR.dourado, espacamento: 0.3, width: maxW });
+  };
+  const cabecalho = (y = 37) => {
+    marca(esq, y, largura * 0.54, { tamanho: 14, comSubtitulo: false });
+    rotulo(`Proposta nº ${v.numero}`, dir - 169, y, {
+      t: 8, cor: COR.dourado, espacamento: 0.45, width: 169, align: 'right',
+    });
+    fio(y + 39, esq, dir, 'rgba(226,195,151,0.22)', 0.65);
+  };
+  const rodape = (pagina, total) => {
+    fio(RODAPE_Y - 11, esq, dir, 'rgba(226,195,151,0.28)', 0.65);
+    escrever(String(empresa.nome || '').toLocaleUpperCase('pt-BR'), esq, RODAPE_Y, {
+      t: 5.7, cor: COR.suave, width: largura * 0.55, lineBreak: false,
+    });
+    escrever(`Nº ${v.numero}  ·  ${String(pagina).padStart(2, '0')} / ${String(total).padStart(2, '0')}`, dir - 112, RODAPE_Y, {
+      t: 5.7, cor: COR.suave, width: 112, align: 'right', lineBreak: false,
+    });
+  };
+  const novaPaginaDetalhes = () => {
+    doc.addPage({ size: 'A4', margins: 0 });
+    fundo(0.72);
+    cabecalho(37);
+    doc.y = 100;
   };
   const garantir = (altura) => {
-    if (doc.y + altura > limite()) novaPagina();
-  };
-  const escrever = (texto, x, y, { f = 'sans', t = 9.5, cor = COR.texto, ...opcoes } = {}) => {
-    doc.font(f).fontSize(t).fillColor(cor).text(texto, x, y, { lineGap: 1.5, ...opcoes });
-    return doc.y;
-  };
-  const altura = (texto, largo, { f = 'sans', t = 9.5, ...opcoes } = {}) =>
-    doc.font(f).fontSize(t).heightOfString(texto || ' ', { width: largo, lineGap: 1.5, ...opcoes });
-  const rotulo = (texto, x, y, opcoes = {}) =>
-    escrever(texto.toUpperCase(), x, y, { f: 'sansForte', t: 7, cor: COR.suave, characterSpacing: 1.4, ...opcoes });
-  const fio = (y, x1 = esq, x2 = dir, cor = COR.linha, espessura = 0.6) => {
-    doc.moveTo(x1, y).lineTo(x2, y).lineWidth(espessura).strokeColor(cor).stroke();
+    if (doc.y + altura > LIMITE_CONTEUDO) novaPaginaDetalhes();
   };
 
-  desenharFundo();
+  fundo();
 
-  const empresa = v.empresa;
-  const c = v.cliente;
-
-  // ============================================================ Cabeçalho
-  const topo = MARGEM;
-  const larguraEsq = largura * 0.58;
-  let yEsq = topo;
-  let temLogo = false;
-  if (logo) {
-    try {
-      const img = doc.openImage(logo);
-      const escala = Math.min(170 / img.width, 58 / img.height, 1);
-      doc.image(img, esq, topo, { width: img.width * escala, height: img.height * escala });
-      yEsq = topo + img.height * escala + 10;
-      temLogo = true;
-    } catch {
-      // Logo inválida: segue só com o nome da empresa.
-    }
-  }
-  if (!temLogo) {
-    yEsq = escrever(empresa.nome || 'Orçamento', esq, topo - 2, { f: 'serif', t: 21, cor: COR.tinta, width: larguraEsq }) + 4;
-  } else if (empresa.nome) {
-    yEsq = escrever(empresa.nome, esq, yEsq, { f: 'sansForte', t: 9.5, cor: COR.tinta, width: larguraEsq }) + 2;
-  }
-  const contatos = [
-    [empresa.telefone && `Tel. ${empresa.telefone}`, empresa.whatsapp && `WhatsApp ${empresa.whatsapp}`].filter(Boolean).join('   ·   '),
-    empresa.email,
-    [empresa.endereco, [empresa.cidade, empresa.estado].filter(Boolean).join(' - ')].filter(Boolean).join(', '),
-    empresa.cnpj && `CNPJ ${empresa.cnpj}`,
-  ].filter(Boolean);
-  for (const linha of contatos) yEsq = escrever(linha, esq, yEsq, { t: 8, cor: COR.suave, width: larguraEsq });
-
-  const colunaDir = esq + largura * 0.6;
-  const larguraDir = dir - colunaDir;
-  rotulo('Orçamento', colunaDir, topo, { width: larguraDir, align: 'right', cor: COR.acento, characterSpacing: 2.4 });
-  escrever(`Nº ${v.numero}`, colunaDir, topo + 12, { f: 'serif', t: 22, cor: COR.tinta, width: larguraDir, align: 'right', features: ['lnum'] });
-  const yDir = escrever(`Emitido em ${formatarData(v.data)}`, colunaDir, topo + 44, {
-    t: 8.5,
-    cor: COR.suave,
-    width: larguraDir,
-    align: 'right',
+  // Capa editorial: marca, apresentação do projeto e um resumo em vidro.
+  marca(esq + 12, 47, 320, { tamanho: 23 });
+  rotulo('Proposta', dir - 52 - 124, 52, { t: 10, cor: COR.dourado, espacamento: 0.8, width: 124, align: 'right' });
+  escrever(`Nº ${v.numero}`, dir - 52 - 124, 69, {
+    f: 'serifMedia', t: 13, cor: COR.tinta, width: 124, align: 'right', lineBreak: false,
   });
 
-  let y = Math.max(yEsq, yDir) + 20;
-  fio(y);
-  doc.rect(esq, y - 1, 46, 2).fill(COR.acento);
-  y += 22;
+  rotulo('Móveis feitos para o seu espaço', esq + 12, 216, { t: 9, cor: COR.dourado, espacamento: 0.8 });
+  escrever('Seu projeto,\nem cada detalhe.', esq + 12, 246, {
+    f: 'serif', t: 43, cor: COR.tinta, width: 491, lineGap: -1.5,
+  });
+  fio(377, esq + 12, esq + 57, COR.acento, 2);
+  escrever('Uma proposta de móveis planejados\nfeita sob medida para o seu espaço.', esq + 12, 400, {
+    f: 'sans', t: 13, cor: COR.tinta, width: 405, lineGap: 2,
+  });
 
-  // ======================================================= Dados principais
+  const resumoY = 505;
+  const resumoH = 253;
+  painel(esq, resumoY, largura, resumoH, 20, 0.48);
+  rotulo('Preparado para', esq + 23, resumoY + 19, { t: 8.5, cor: COR.dourado, espacamento: 0.6 });
+  escrever(cliente.nome || 'Cliente', esq + 23, resumoY + 39, {
+    f: 'serifMedia', t: 25, cor: COR.tinta, width: largura - 46, lineBreak: false,
+  });
+  fio(resumoY + 90, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.6);
+
   const colunas = [
-    {
-      titulo: 'Preparado para',
-      principal: c.nome || '',
-      linhas: [
-        c.telefone || c.whatsapp,
-        c.email,
-        c.cpf_cnpj && `CPF/CNPJ ${c.cpf_cnpj}`,
-        [c.endereco, [c.cidade, c.estado].filter(Boolean).join(' - ')].filter(Boolean).join(', '),
-      ].filter(Boolean),
-      peso: 0.46,
-    },
-    { titulo: 'Válido até', principal: formatarData(v.data_validade), linhas: [`${v.validade_dias} dias a partir da emissão`], peso: 0.27 },
-    { titulo: 'Prazo de entrega', principal: v.prazo_entrega || 'A combinar', linhas: [], peso: 0.27 },
+    ['Emissão', formatarData(v.data)],
+    ['Válida até', formatarData(v.data_validade)],
+    ['Entrega', v.prazo_entrega || 'A combinar'],
   ];
-  const alturasColunas = colunas.map((col, i) => {
-    const w = largura * col.peso - (i < colunas.length - 1 ? 18 : 0);
-    return 13 + altura(col.principal, w, { f: 'serifMedia', t: 12.5 }) + col.linhas.reduce((soma, linha) => soma + altura(linha, w, { t: 8.5 }), 0);
+  const colW = 146;
+  colunas.forEach(([titulo, valor], i) => {
+    const x = esq + 23 + i * (colW + 14);
+    rotulo(titulo, x, resumoY + 109, { t: 8.5, espacamento: 0.45, width: colW });
+    escrever(valor, x, resumoY + 125, {
+      f: 'sansMedia', t: 12, cor: COR.tinta, width: colW, lineBreak: false,
+    });
   });
-  painel(esq, y - 12, largura, Math.max(75, Math.max(...alturasColunas) + 25), 14, 0.82);
-  let x = esq;
-  let yMax = y;
-  colunas.forEach((col, i) => {
-    const w = largura * col.peso - (i < colunas.length - 1 ? 18 : 0);
-    rotulo(col.titulo, x, y, { width: w });
-    let yc = escrever(col.principal, x, y + 13, { f: 'serifMedia', t: 12.5, cor: COR.tinta, width: w, features: ['lnum'] }) + 2;
-    for (const linha of col.linhas) yc = escrever(linha, x, yc, { t: 8.5, cor: COR.suave, width: w });
-    yMax = Math.max(yMax, yc);
-    x += largura * col.peso;
+  fio(resumoY + 168, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.6);
+  rotulo('Investimento total', esq + 23, resumoY + 186, { t: 8.5, cor: COR.dourado, espacamento: 0.65 });
+  escrever(formatarDinheiro(v.total_cents), esq + 23, resumoY + 206, {
+    f: 'sansForte', t: 29, cor: COR.tinta, width: 300, lineBreak: false, features: ['lnum'],
   });
-  // Divisórias verticais entre as colunas, na altura do bloco.
-  let xDiv = esq;
-  for (const col of colunas.slice(0, -1)) {
-    xDiv += largura * col.peso;
-    doc.moveTo(xDiv - 9, y).lineTo(xDiv - 9, yMax).lineWidth(0.6).strokeColor(COR.linha).stroke();
-  }
-  y = yMax + 24;
+  escrever(`${v.ambientes.length} ${v.ambientes.length === 1 ? 'ambiente' : 'ambientes'} · ${quantidadeMoveis} ${quantidadeMoveis === 1 ? 'móvel' : 'móveis'}`,
+    dir - 242, resumoY + 219, { t: 10, cor: COR.suave, width: 177, align: 'right', lineBreak: false });
 
-  const primeiroNome = String(c.nome || '').trim().split(/\s+/)[0];
-  y = escrever(
-    `${primeiroNome ? `Olá, ${primeiroNome}! ` : ''}Apresentamos a proposta dos móveis planejados do seu projeto, organizada por ambiente. Todos os móveis são feitos sob medida.`,
-    esq,
-    y,
-    { t: 9.5, cor: COR.texto, width: largura * 0.86, lineGap: 2.5 },
-  );
-  doc.y = y + 26;
+  // Segunda página: ambientes, investimento, forma de pagamento e observações.
+  novaPaginaDetalhes();
+  rotulo('O que está incluído', esq, 100, { t: 8.5, cor: COR.dourado, espacamento: 0.9 });
+  escrever('O seu projeto', esq, 121, { f: 'serif', t: 31, cor: COR.tinta, lineBreak: false });
+  doc.y = 180;
 
-  // A capa apresenta o investimento e os dados principais antes dos itens.
-  const capaY = doc.y;
-  const capaAltura = 78;
-  painel(esq, capaY, largura, capaAltura, 13, 0.86);
-  rotulo('Investimento total', esq + 18, capaY + 16, { cor: COR.dourado, characterSpacing: 1.5 });
-  escrever(formatarDinheiro(v.total_cents), esq + 18, capaY + 31, { f: 'serif', t: 22, cor: COR.tinta, width: largura * 0.56, features: ['lnum'] });
-  escrever(`${v.ambientes.length} ${v.ambientes.length === 1 ? 'ambiente' : 'ambientes'} · ${v.ambientes.reduce((soma, a) => soma + a.itens.length, 0)} móveis`, dir - 190, capaY + 43, {
-    t: 8,
-    cor: COR.suave,
-    width: 172,
-    align: 'right',
-  });
-
-  // A proposta do cliente começa os detalhes em uma página dedicada.
-  novaPagina();
-  rotulo('O que está incluído', esq, doc.y, { cor: COR.acento, characterSpacing: 1.8 });
-  doc.y += 17;
-
-  // ================================================================ Grupos
-  const grupos = v.ambientes
-    .filter((a) => a.itens.length)
-    .map((a) => ({ titulo: a.nome, detalhe: a.descricao, subtotal: a.subtotal_cents, itens: a.itens }));
-  if (v.servicos.length) {
+  const grupos = (v.ambientes || [])
+    .filter((a) => (a.itens || []).length)
+    .map((a) => ({ titulo: a.nome, subtotal: a.subtotal_cents, itens: a.itens }));
+  if ((v.servicos || []).length) {
     grupos.push({
       titulo: 'Serviços adicionais',
-      detalhe: '',
-      subtotal: v.servicos.reduce((soma, s) => soma + s.valor_cents, 0),
+      subtotal: v.servicos.reduce((soma, item) => soma + item.valor_cents, 0),
       itens: v.servicos,
     });
   }
 
-  const recuo = 30;
-  const colValor = 110;
-  const larguraItem = largura - recuo - colValor - 12;
-  const textoItem = (i) => (i.quantidade > 1 ? `${i.descricao}  ·  ${i.quantidade} unidades` : i.descricao);
-  const alturaItem = (i) => altura(textoItem(i), larguraItem, { t: 9.5 }) + 14;
-
-  const tituloGrupo = (grupo, indice, continuacao) => {
-    const yT = doc.y;
-    escrever(String(indice).padStart(2, '0'), esq, yT + 4, { f: 'sansForte', t: 8.5, cor: COR.acento, characterSpacing: 1 });
-    escrever(continuacao ? `${grupo.titulo} (continuação)` : grupo.titulo, esq + recuo, yT, {
-      f: 'serif',
-      t: 14,
-      cor: COR.tinta,
-      width: largura - recuo - colValor - 12,
+  let indiceGrupo = 0;
+  const desenharGrupo = (grupo, continua = false) => {
+    const itens = grupo.itens || [];
+    const topo = doc.y;
+    const alturaGrupo = 102 + itens.length * 65;
+    garantir(alturaGrupo);
+    const y = doc.y;
+    painel(esq, y, largura, alturaGrupo, 20, 0.86);
+    escrever(String(indiceGrupo).padStart(2, '0'), esq + 23, y + 17, {
+      f: 'sansForte', t: 10, cor: COR.dourado, width: 25, lineBreak: false,
     });
-    const yFim = doc.y;
-    if (!continuacao) {
-      escrever(formatarDinheiro(grupo.subtotal), dir - colValor - 40, yT + 2, {
-        f: 'sansForte',
-        t: 10.5,
-        cor: COR.tinta,
-        width: colValor + 40,
-        align: 'right',
+    escrever(`${grupo.titulo}${continua ? ' · continuação' : ''}`, esq + 60, y + 17, {
+      f: 'serifMedia', t: 19, cor: COR.tinta, width: largura - 90, lineBreak: false,
+    });
+    fio(y + 66, esq + 23, dir - 23, 'rgba(226,195,151,0.24)', 0.65);
+
+    const itemAltura = 65;
+    const inicioItens = y + 73;
+    itens.forEach((item, i) => {
+      const yItem = inicioItens + i * itemAltura;
+      const nome = item.quantidade > 1 ? `${item.descricao} × ${item.quantidade}` : item.descricao;
+      escrever(nome, esq + 23, yItem + 10, {
+        f: 'sansMedia', t: 12, cor: COR.tinta, width: largura - 170, lineBreak: false,
       });
-    }
-    doc.y = yFim + 2;
-    if (grupo.detalhe && !continuacao) {
-      doc.y = escrever(grupo.detalhe, esq + recuo, doc.y, { f: 'sansItalica', t: 8.5, cor: COR.suave, width: largura - recuo }) + 2;
-    }
-    doc.y += 4;
+      const quantidade = item.quantidade || 1;
+      escrever(`${quantidade} ${quantidade === 1 ? 'unidade' : 'unidades'}`, esq + 23, yItem + 29, {
+        f: 'sans', t: 9.5, cor: COR.suave, width: largura - 170, lineBreak: false,
+      });
+      escrever(formatarDinheiro(item.valor_cents), dir - 145, yItem + 20, {
+        f: 'sansForte', t: 12.5, cor: COR.dourado, width: 120, align: 'right', lineBreak: false,
+      });
+    });
+    fio(y + alturaGrupo - 32, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.65);
+    const yTotal = y + alturaGrupo - 22;
+    rotulo(`Total do ambiente`, esq + 23, yTotal, { t: 8, espacamento: 0.65, width: 250 });
+    escrever(formatarDinheiro(grupo.subtotal), dir - 230, yTotal - 1, {
+      f: 'sansForte', t: 10.5, cor: COR.dourado, width: 205, align: 'right', lineBreak: false,
+    });
+    doc.y = y + alturaGrupo;
+    return topo;
   };
 
-  grupos.forEach((grupo, gi) => {
-    const indice = gi + 1;
-    // O título nunca fica sozinho no fim da página.
-    garantir(34 + (grupo.detalhe ? altura(grupo.detalhe, largura - recuo, { t: 8.5 }) : 0) + alturaItem(grupo.itens[0]));
-    tituloGrupo(grupo, indice, false);
-    for (const item of grupo.itens) {
-      const h = alturaItem(item);
-      if (doc.y + h > limite()) {
-        novaPagina();
-        tituloGrupo(grupo, indice, true);
-      }
-      const yI = doc.y;
-      fio(yI, esq + recuo, dir);
-      doc
-        .font('sans')
-        .fontSize(9.5)
-        .fillColor(COR.texto)
-        .text(item.descricao, esq + recuo, yI + 7, { width: larguraItem, lineGap: 1.5, continued: item.quantidade > 1 });
-      if (item.quantidade > 1) doc.fillColor(COR.suave).text(`  ·  ${item.quantidade} unidades`);
-      escrever(formatarDinheiro(item.valor_cents), dir - colValor, yI + 7, { t: 9.5, cor: COR.texto, width: colValor, align: 'right' });
-      doc.y = yI + h;
-    }
-    fio(doc.y, esq + recuo, dir);
-    doc.y += 22;
-  });
+  for (const grupo of grupos) {
+    indiceGrupo += 1;
+    // Propostas longas continuam em novas páginas no mesmo estilo visual.
+    if (doc.y + 102 + grupo.itens.length * 65 > LIMITE_CONTEUDO) novaPaginaDetalhes();
+    desenharGrupo(grupo);
+    doc.y += 20;
+  }
 
-  // ================================================================= Total
   const ajustes = [];
-  if (v.acrescimo || v.desconto_cents) ajustes.push(['Subtotal', formatarDinheiro(v.subtotal_cents), COR.texto]);
-  if (v.acrescimo) ajustes.push([v.acrescimo.descricao, formatarDinheiro(v.acrescimo.valor_cents), COR.texto]);
-  if (v.desconto_cents) ajustes.push(['Desconto', `- ${formatarDinheiro(v.desconto_cents)}`, COR.desconto]);
-
-  const alturaPainel = 74;
-  garantir(ajustes.length * 18 + alturaPainel + 10);
-  const blocoX = dir - 230;
-  for (const [nome, valor, cor] of ajustes) {
-    const yA = doc.y;
-    escrever(nome, blocoX, yA, { t: 9.5, cor: COR.suave, width: 120 });
-    escrever(valor, dir - 130, yA, { t: 9.5, cor, width: 130, align: 'right' });
-    doc.y = yA + 18;
-  }
-  if (ajustes.length) doc.y += 6;
-
-  const yP = doc.y;
-  painel(esq, yP, largura, alturaPainel, 12, 0.9);
-  rotulo('Investimento total', esq + 22, yP + 20, { cor: COR.dourado, characterSpacing: 2 });
-  if (v.pagamento.descricao) {
-    escrever(v.pagamento.descricao, esq + 22, yP + 36, { t: 9, cor: COR.painelTexto, width: largura * 0.48 });
-  }
-  escrever(formatarDinheiro(v.total_cents), esq + largura * 0.42, yP + 21, {
-    f: 'serif',
-    t: 26,
-    cor: COR.tinta,
-    features: ['lnum'],
-    width: largura * 0.58 - 22,
-    align: 'right',
-  });
-  doc.y = yP + alturaPainel + 30;
-
-  // ============================================================== Seções
-  const secao = (titulo, alturaMinima) => {
-    garantir(alturaMinima + 26);
-    rotulo(titulo, esq, doc.y, { cor: COR.acento, characterSpacing: 2 });
-    doc.y += 6;
-    fio(doc.y);
-    doc.y += 10;
-  };
-
-  const linhasPagamento = v.pagamento.linhas.map((l) => {
-    const [nome, ...resto] = l.split(': ');
-    return [nome, resto.join(': ')];
-  });
-  const pares = [
-    v.pagamento.descricao && ['Forma de pagamento', v.pagamento.descricao],
-    ...linhasPagamento,
-    v.prazo_entrega && ['Prazo de entrega', v.prazo_entrega],
-    ['Validade da proposta', `${v.validade_dias} dias (até ${formatarData(v.data_validade)})`],
-  ].filter(Boolean);
-  secao('Condições', 40);
-  for (const [nome, valor] of pares) {
-    const h = Math.max(altura(valor, largura * 0.64, { f: 'sansMedia' }), 12) + 8;
-    garantir(h);
-    const yL = doc.y;
-    escrever(nome, esq, yL, { t: 9, cor: COR.suave, width: largura * 0.34 });
-    escrever(valor, esq + largura * 0.36, yL, { f: 'sansMedia', t: 9.5, cor: COR.tinta, width: largura * 0.64 });
-    doc.y = yL + h;
-  }
-  doc.y += 14;
-
-  const observacoes = String(v.observacoes || '')
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (observacoes.length) {
-    secao('Observações', 30);
-    for (const linha of observacoes) {
-      const h = altura(linha, largura - 14, { t: 9 }) + 5;
-      garantir(h);
-      const yO = doc.y;
-      doc.circle(esq + 2.5, yO + 5.2, 1.4).fill(COR.acento);
-      escrever(linha, esq + 14, yO, { t: 9, cor: COR.texto, width: largura - 14 });
-      doc.y = yO + h;
+  if (v.acrescimo || v.desconto_cents) ajustes.push(['Subtotal', formatarDinheiro(v.subtotal_cents)]);
+  if (v.acrescimo) ajustes.push([v.acrescimo.descricao, formatarDinheiro(v.acrescimo.valor_cents)]);
+  if (v.desconto_cents) ajustes.push(['Desconto', `− ${formatarDinheiro(v.desconto_cents)}`]);
+  if (ajustes.length) {
+    const hAjustes = ajustes.length * 17;
+    garantir(hAjustes + 76);
+    for (const [nome, valor] of ajustes) {
+      escrever(nome, dir - 230, doc.y, { t: 7.5, cor: COR.suave, width: 120, lineBreak: false });
+      escrever(valor, dir - 110, doc.y, { f: 'sansMedia', t: 7.5, cor: COR.texto, width: 110, align: 'right', lineBreak: false });
+      doc.y += 17;
     }
-    doc.y += 14;
+    doc.y += 6;
   }
 
-  // ================================================================ Rodapé
+  garantir(85);
+  const totalY = doc.y;
+  painel(esq, totalY, largura, 72, 20, 0.48);
+  rotulo('Investimento total', esq + 23, totalY + 16, { t: 9, cor: COR.dourado, espacamento: 0.65 });
+  escrever(formatarDinheiro(v.total_cents), dir - 258, totalY + 16, {
+    f: 'sansForte', t: 27, cor: COR.tinta, width: 235, align: 'right', lineBreak: false, features: ['lnum'],
+  });
+  doc.y = totalY + 92;
+
+  const entrada = (v.pagamento?.linhas || []).find((linha) => /^entrada\s*:/i.test(linha));
+  const restante = (v.pagamento?.linhas || []).find((linha) => !/^entrada\s*:/i.test(linha));
+  const pagamentoLabel = v.pagamento?.descricao || 'Condição combinada';
+  const entradaValor = entrada ? entrada.replace(/^entrada\s*:\s*/i, '') : pagamentoLabel;
+  const validade = v.data_validade ? `Até ${formatarData(v.data_validade)}` : `${v.validade_dias} dias`;
+
+  garantir(190);
+  const pagamentoY = doc.y;
+  const pagamentoH = 170;
+  painel(esq, pagamentoY, largura, pagamentoH, 20, 0.86);
+  escrever('Pagamento e prazo', esq + 23, pagamentoY + 15, { f: 'serifMedia', t: 19, cor: COR.tinta });
+  const colunaGap = 24;
+  const metade = (largura - 46 - colunaGap) / 2;
+  const x1 = esq + 23;
+  const x2 = x1 + metade + colunaGap;
+  const campoResumo = (label, valor, x, y) => {
+    rotulo(label, x, y, { t: 8.5, espacamento: 0.35, width: metade });
+    escrever(valor || 'A combinar', x, y + 16, { f: 'sansMedia', t: 12, cor: COR.tinta, width: metade, lineBreak: false });
+  };
+  const percentualEntrada = pagamentoLabel.match(/(\d{1,3}%)(?=\s+de entrada)/i)?.[1];
+  const entradaRotulo = percentualEntrada ? `Entrada · ${percentualEntrada}` : 'Entrada';
+  campoResumo(entradaRotulo, entradaValor, x1, pagamentoY + 60);
+  campoResumo('Restante', restante || 'Conforme combinado', x2, pagamentoY + 60);
+  campoResumo('Entrega', v.prazo_entrega || 'A combinar', x1, pagamentoY + 114);
+  campoResumo('Validade', validade, x2, pagamentoY + 114);
+  doc.y = pagamentoY + pagamentoH + 23;
+
+  const observacoes = String(v.observacoes || '').split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
+  if (observacoes.length) {
+    const textoObs = observacoes.join('\n');
+    const alturaObs = alturaTexto(textoObs, largura - 8, { t: 7.2 }) + 28;
+    garantir(alturaObs);
+    rotulo('Observações', esq, doc.y, { t: 5.5, cor: COR.dourado, espacamento: 1 });
+    escrever(textoObs, esq, doc.y + 21, { t: 7.2, cor: COR.texto, width: largura - 8 });
+    doc.y += alturaObs;
+  }
+
+  // Numeração e rodapé são desenhados depois que todas as páginas existem.
   const paginas = doc.bufferedPageRange();
   for (let i = 0; i < paginas.count; i++) {
     doc.switchToPage(paginas.start + i);
-    doc.page.margins.bottom = 0;
-    const yR = doc.page.height - MARGEM - 8;
-    fio(yR - 8);
-    const infoEmpresa = [empresa.nome, empresa.telefone || empresa.whatsapp, empresa.email].filter(Boolean).join('   ·   ');
-    escrever(infoEmpresa, esq, yR, { t: 7.5, cor: COR.suave, width: largura * 0.6, lineBreak: false });
-    escrever(`Nº ${v.numero}   ·   Página ${i + 1} de ${paginas.count}   ·   feito com esquadro`, esq + largura * 0.4, yR, {
-      t: 7.5,
-      cor: COR.suave,
-      width: largura * 0.6,
-      align: 'right',
-      lineBreak: false,
-    });
-    doc.page.margins.bottom = MARGEM;
+    rodape(i + 1, paginas.count);
   }
 
   doc.end();

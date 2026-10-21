@@ -823,6 +823,123 @@ p {
   }
 }
 
+/* Composição do link público conforme os frames Proposta cliente do Figma. */
+.p-pagina {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 clamp(24px, 8.33vw, 120px) calc(110px + env(safe-area-inset-bottom));
+  color: #f5efe6;
+  background: #100d0b;
+}
+
+.p-topo {
+  min-height: 82px;
+  padding: 45px 0 0;
+  border: 0;
+}
+
+.p-logo { max-width: 200px; max-height: 37px; }
+.p-monograma { width: 37px; height: 37px; border-radius: 10px; }
+.p-link-pdf { background: rgb(28 23 19 / 54%); border-color: rgb(81 64 49 / 70%); backdrop-filter: blur(14px); }
+
+.p-capa {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 50px 0 0;
+}
+
+.p-sobre { display: block; font-size: 11px; line-height: 20px; }
+.p-capa h1 { margin-top: 9px; font-size: 35px; line-height: 43px; letter-spacing: -.035em; }
+.p-intro { max-width: 54ch; margin-top: 13px; color: #b9ad9e; font-size: 15px; line-height: 22px; }
+
+.p-meta {
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  grid-template-rows: 1fr 1fr;
+  height: 98px;
+  margin: 23px 0 0;
+  padding: 0 16px;
+  gap: 0 16px;
+  align-items: center;
+  border: 1px solid rgb(81 64 49 / 65%);
+  border-radius: 17px;
+  background: #1c1713;
+}
+
+.p-meta > div { min-width: 0; }
+.p-meta > div:nth-child(3) { display: none; }
+.p-meta dt { color: #b9ad9e; font-size: 10px; line-height: 14px; }
+.p-meta dd { margin-top: 4px; color: #f5efe6; font-size: 14px; font-weight: 600; line-height: 20px; }
+
+.p-secao { padding: 35px 0 0; gap: 12px; }
+.p-titulo-secao { color: #f5efe6; font-size: 25px; font-weight: 500; line-height: 32px; letter-spacing: -.025em; }
+.p-ambiente { min-height: 256px; border: 1px solid rgb(81 64 49 / 65%); border-radius: 17px; background: #1c1713; }
+.p-ambiente > header { display: flex; align-items: center; height: 56px; gap: 13px; padding: 0 16px; border: 0; }
+.p-indice { display: grid; place-items: center; width: 45px; min-width: 45px; height: 27px; border-radius: 13px; background: rgb(195 154 105 / 14%); color: #c39a69; font-family: 'Inter', system-ui, sans-serif; font-size: 11px; line-height: 1; }
+.p-ambiente h3 { color: #f5efe6; font-size: 17px; font-weight: 600; line-height: 22px; }
+.p-itens { padding: 0 16px; }
+.p-itens li { display: flex; align-items: center; min-height: 54px; padding: 15px 0; border-top: 1px solid rgb(81 64 49 / 60%); gap: 8px; }
+.p-item-nome { min-width: 0; color: #f5efe6; font-size: 13px; line-height: 20px; }
+.p-item-nome small { color: #b9ad9e; }
+.p-itens li .p-valor { width: 108px; flex: 0 0 108px; color: #e2c397; font-size: 13px; font-weight: 500; text-align: right; }
+.p-ambiente > footer { display: none; }
+
+.p-barra {
+  height: 106px;
+  min-height: 106px;
+  padding: 0 24px calc(0px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgb(81 64 49 / 60%);
+  background: #1c1713;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  align-items: flex-start;
+}
+
+.p-barra-total { min-width: 0; flex: 1; align-self: flex-start; margin-top: 14px; line-height: 1.1; }
+.p-barra-total span { color: #b9ad9e; font-size: 10px; font-weight: 600; line-height: 16px; }
+.p-barra-total strong { color: #f5efe6; font-size: 20px; font-weight: 600; line-height: 24px; }
+.p-barra-botoes { align-self: flex-start; margin-top: 23px; gap: 6px; }
+.p-botao { min-height: 52px; border-radius: 14px; }
+.p-botao-principal { border-color: rgba(255,242,216,.72); background: linear-gradient(142deg, rgba(206,165,111,.38) 2.7%, rgba(174,119,65,.24) 48%, rgba(113,80,47,.16) 93.6%), linear-gradient(142deg, rgba(255,245,223,.16), rgba(255,255,255,.025) 34%, rgba(234,197,141,.065)); box-shadow: inset 0 -1px 2px rgb(0 0 0 / 18%), inset 0 1px 1.5px rgb(255 255 255 / 18%), 0 4px 6px rgb(0 0 0 / 22%); }
+.p-botao-sec { background: linear-gradient(145deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 1%)), rgb(28 23 19 / 54%); border-color: rgb(226 195 151 / 25%); }
+
+@media (max-width: 480px) {
+  .p-pagina { padding: 0 24px calc(110px + env(safe-area-inset-bottom)); }
+  .p-topo { height: 82px; min-height: 82px; padding-top: 45px; }
+  .p-topo .p-link-pdf { display: none; }
+  .p-marca { gap: 10px; }
+  .p-marca strong { color: #f5efe6; font-size: 17px; line-height: 20px; }
+  .p-capa { padding-top: 50px; }
+  .p-intro { max-width: 340px; }
+  .p-meta { grid-template-columns: repeat(2,minmax(0,1fr)); height: 98px; margin-top: 23px; padding: 0 16px; }
+  .p-meta > div:nth-child(3) { display: none; }
+  .p-secao { padding-top: 35px; gap: 12px; }
+  .p-ambiente { min-height: 256px; }
+  .p-ambiente > header { height: 56px; padding: 0 16px; }
+  .p-itens { padding: 0 16px; }
+  .p-itens li { min-height: 54px; padding: 15px 0; }
+  .p-barra { inset: auto 0 0; height: 106px; min-height: 106px; padding: 0 24px env(safe-area-inset-bottom); }
+  .p-barra-botoes .p-botao-principal { width: 164px; min-width: 164px; height: 52px; padding: 0 10px; }
+  .p-barra-botoes .p-botao-principal .icone { display: none; }
+  .p-barra-botoes .p-botao-sec[href^='https://wa.me'] { display: none; }
+  .p-barra-botoes .p-texto-aprovar-completo { display: none; }
+  .p-barra-total { min-width: 0; }
+  .p-barra-total strong { font-size: 20px; }
+  .p-modal { background: #1c1713; border: 1px solid rgb(81 64 49 / 70%); color: #f5efe6; }
+  .p-modal input[type='text'] { border: 1px solid rgb(255 255 255 / 15%); background: rgb(23 21 19 / 42%); color: #f5efe6; }
+}
+
+@media (min-width: 700px) {
+  .p-topo { height: 96px; min-height: 96px; padding-top: 30px; }
+  .p-capa { padding-top: 30px; }
+  .p-meta { grid-template-columns: repeat(3,minmax(0,1fr)); height: auto; min-height: 104px; padding: 16px 20px; gap: 18px; }
+  .p-meta > div:nth-child(3) { display: block; }
+  .p-secao { padding-top: 26px; }
+  .p-ambiente { min-height: 0; }
+  .p-ambiente > footer { display: flex; }
+}
+
 /* Acabamento do redesign do Figma e contraste confortável em todas as telas. */
 .p-topo {
   border-bottom-color: rgb(81 64 49 / 62%);
@@ -952,6 +1069,11 @@ p {
 .p-feito {
   color: var(--madeira-clara);
 }
+
+.p-marca-nome { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.p-marca-nome strong { font-size: 17px; line-height: 20px; text-transform: uppercase; }
+.p-marca-nome small { color: var(--madeira-clara); font-size: 8px; font-weight: 600; letter-spacing: .06em; line-height: 11px; }
+.p-monograma { object-fit: cover; }
 
 :focus-visible {
   outline: 3px solid rgb(226 195 151 / 74%);

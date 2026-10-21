@@ -19,22 +19,71 @@ function chavePushParaBytes(chave) {
   return Uint8Array.from(dados, (caractere) => caractere.charCodeAt(0));
 }
 
-export async function paginaConfiguracoes(aba = 'empresa') {
+export async function paginaConfiguracoes(aba) {
+  const mostrarVisao = !aba;
+  aba ||= 'empresa';
   aba = APELIDOS[aba] || aba;
   if (!ABAS.some(([a]) => a === aba)) aba = 'empresa';
   const montar = { empresa: abaEmpresa, moveis: abaMoveis, pagamento: abaPagamento, conta: abaConta }[aba];
+  const formulario = await montar();
+  const resumoEmpresa = h('section', { class: 'config-empresa-resumo' },
+    h('span', { class: 'config-logo-resumo', 'aria-hidden': 'true' },
+      cache.empresa?.tem_logo
+        ? h('img', { src: `/api/empresa/logo?v=${encodeURIComponent(cache.empresa.logo_atualizado_em || '')}`, alt: '' })
+        : h('img', { src: '/icons/esquadro.svg', alt: '' }),
+    ),
+    h('div', {},
+      h('strong', {}, cache.empresa?.nome || 'Sua marcenaria'),
+      h('span', {}, 'Identidade da proposta'),
+    ),
+  );
+  const itensVisao = [
+    ['empresa', 'Empresa', 'Logo e informações da proposta', 'empresa'],
+    ['moveis', 'Móveis e preços', 'Catálogo e valores', 'preco'],
+    ['pagamento', 'Pagamento', 'Condições da proposta', 'pagamento'],
+    ['conta', 'Minha conta', 'Acesso e notificações', 'usuario'],
+  ];
+  const titulo = h('span', {},
+    h('span', { class: 'config-titulo-mobile' }, 'Ajustes'),
+    h('span', { class: 'config-titulo-desktop' }, 'Empresa'),
+  );
+  const cabecalho = cabecalhoPagina(titulo, {
+    subtitulo: h('span', {},
+      h('span', { class: 'config-subtitulo-mobile' }, 'Sua empresa, do seu jeito.'),
+      h('span', { class: 'config-subtitulo-desktop' }, 'Os dados e a identidade que acompanham suas propostas.'),
+    ),
+    acoes: aba === 'empresa' ? h('button', { type: 'submit', form: 'config-empresa-form', class: 'botao botao-primario config-salvar-topo' }, 'Salvar empresa') : null,
+  });
+  cabecalho.querySelector('.titulos').prepend(h('span', { class: 'page-eyebrow config-eyebrow' },
+    h('span', { class: 'config-eyebrow-mobile' }, 'ESQUADRO'),
+    h('span', { class: 'config-eyebrow-desktop' }, 'AJUSTES / EMPRESA'),
+  ));
+
   return h(
     'div',
-    { class: 'pagina' },
-    cabecalhoPagina('Ajustes', { subtitulo: 'Empresa, móveis e preços, condições de pagamento e sua conta' }),
-    h(
-      'nav',
-      { class: 'abas', 'aria-label': 'Seções dos ajustes' },
-      ABAS.map(([a, texto, ic]) =>
-        h('a', { href: `#/config/${a}`, class: a === aba ? 'ativo' : '', 'aria-current': a === aba ? 'page' : null }, icone(ic, 'icone icone-mini'), texto),
+    { class: `pagina pagina-config${mostrarVisao ? ' config-visao' : ''}` },
+    cabecalho,
+    h('div', { class: 'config-overview' },
+      resumoEmpresa,
+      h('h2', {}, 'Preferências'),
+      h('nav', { class: 'config-opcoes', 'aria-label': 'Preferências' },
+        itensVisao.map(([rota, texto, detalhe, ic]) =>
+          h('a', { href: `#/config/${rota}`, class: 'config-opcao' },
+            h('span', { class: 'config-opcao-icone' }, icone(ic)),
+            h('span', { class: 'config-opcao-texto' }, h('strong', {}, texto), h('small', {}, detalhe)),
+            icone('seta', 'icone config-opcao-seta'),
+          ),
+        ),
       ),
     ),
-    await montar(),
+    h('div', { class: 'config-formulario' },
+      h('nav', { class: 'abas', 'aria-label': 'Seções dos ajustes' },
+        ABAS.map(([a, texto, ic]) =>
+          h('a', { href: `#/config/${a}`, class: a === aba ? 'ativo' : '', 'aria-current': a === aba ? 'page' : null }, icone(ic, 'icone icone-mini'), texto),
+        ),
+      ),
+      formulario,
+    ),
   );
 }
 
@@ -107,7 +156,8 @@ async function abaEmpresa() {
   return h(
     'form',
     {
-      class: 'formulario',
+      class: 'formulario config-form-empresa',
+      id: 'config-empresa-form',
       onsubmit: async (e) => {
         e.preventDefault();
         botao.disabled = true;
@@ -129,35 +179,44 @@ async function abaEmpresa() {
       'section',
       { class: 'cartao' },
       h('h2', {}, 'Dados que aparecem no orçamento'),
-      h(
-        'div',
-        { class: 'grade-formulario' },
+      h('div', { class: 'grade-formulario config-grade-empresa' },
         texto('nome', 'Nome da empresa', { maxlength: '200' }, { classe: 'campo-inteiro' }),
         texto('cnpj', 'CNPJ', { maxlength: '30' }, { classe: 'campo-metade' }),
-        texto('email', 'E-mail', { type: 'email', maxlength: '200' }, { classe: 'campo-metade' }),
-        texto('telefone', 'Telefone', { type: 'tel', maxlength: '40' }, { classe: 'campo-metade' }),
-        texto('whatsapp', 'WhatsApp', { type: 'tel', maxlength: '40' }, { classe: 'campo-metade' }),
-        texto('endereco', 'Endereço', { maxlength: '300' }, { classe: 'campo-inteiro' }),
-        texto('cidade', 'Cidade', { maxlength: '100' }, { classe: 'campo-metade' }),
-        texto('estado', 'Estado', { maxlength: '50' }, { classe: 'campo-metade' }),
-      ),
-      h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Logo (PNG ou JPG)'), previa, arquivo),
-    ),
-    h(
-      'section',
-      { class: 'cartao' },
-      h('h2', {}, 'Padrões para novos orçamentos'),
-      h(
-        'div',
-        { class: 'grade-formulario' },
-        texto('validade_padrao_dias', 'Validade padrão (dias)', { type: 'number', min: '0', max: '3650', inputmode: 'numeric' }, { classe: 'campo-metade' }),
-        texto('prazo_padrao', 'Prazo de entrega padrão', { maxlength: '200', placeholder: 'Ex.: 30 dias úteis' }, { classe: 'campo-metade' }),
-        campo('Condição de pagamento padrão', entradas.condicao_pagamento_padrao_id, { classe: 'campo-inteiro' }),
-        texto('texto_padrao', 'Texto padrão do orçamento (observações)', { rows: '5', maxlength: '5000' }, { classe: 'campo-inteiro' }),
-        texto('mensagem_whatsapp', 'Mensagem do WhatsApp', { rows: '3', maxlength: '1000' }, { classe: 'campo-inteiro', dica: 'Use {cliente} para o primeiro nome do cliente e {link} para o link da proposta (se não usar, o link vai no final).' }),
+        texto('email', 'E-mail', { type: 'email', maxlength: '200', placeholder: 'E-mail da empresa' }, { classe: 'campo-metade' }),
+        texto('telefone', 'Telefone', { type: 'tel', maxlength: '40', placeholder: 'Adicionar telefone' }, { classe: 'campo-metade' }),
+        texto('whatsapp', 'WhatsApp', { type: 'tel', maxlength: '40', placeholder: 'Adicionar WhatsApp' }, { classe: 'campo-metade' }),
+        texto('endereco', 'Endereço', { maxlength: '300', placeholder: 'Rua, número e complemento' }, { classe: 'campo-inteiro' }),
+        texto('cidade', 'Cidade', { maxlength: '100', placeholder: 'Informe a cidade' }, { classe: 'campo-cidade' }),
+        texto('estado', 'Estado', { maxlength: '50', placeholder: 'UF' }, { classe: 'campo-estado' }),
       ),
     ),
-    h('div', { class: 'acoes-formulario' }, botao),
+    h('div', { class: 'config-lateral-form' },
+      h('section', { class: 'cartao config-cartao-logo' },
+        h('div', { class: 'config-logo-cabecalho' },
+          h('span', { class: 'config-logo-icone' }, icone('empresa')),
+          h('span', {}, h('strong', {}, 'Logo da empresa'), h('small', {}, 'PNG ou JPG · até 2 MB')),
+        ),
+        h('label', { class: 'botao botao-pequeno config-enviar-logo' }, 'Enviar logo', arquivo),
+        previa,
+      ),
+      h('section', { class: 'cartao config-cartao-padroes' },
+        h('h2', {}, 'Novos orçamentos'),
+        h('div', { class: 'grade-formulario config-grade-padroes' },
+          texto('validade_padrao_dias', 'Validade (dias)', { type: 'number', min: '0', max: '3650', inputmode: 'numeric' }, { classe: 'campo-metade' }),
+          texto('prazo_padrao', 'Prazo de entrega', { maxlength: '200', placeholder: '30 dias úteis' }, { classe: 'campo-metade' }),
+          campo('Pagamento', entradas.condicao_pagamento_padrao_id, { classe: 'campo-inteiro' }),
+        ),
+        h('p', { class: 'config-ajuda-padroes' }, 'Os padrões preenchem os novos orçamentos automaticamente.'),
+        h('details', { class: 'config-padroes-avancados' },
+          h('summary', { class: 'botao' }, 'Editar padrões'),
+          h('div', { class: 'grade-formulario' },
+            texto('texto_padrao', 'Texto padrão do orçamento (observações)', { rows: '5', maxlength: '5000' }, { classe: 'campo-inteiro' }),
+            texto('mensagem_whatsapp', 'Mensagem do WhatsApp', { rows: '3', maxlength: '1000' }, { classe: 'campo-inteiro', dica: 'Use {cliente} para o primeiro nome do cliente e {link} para o link da proposta (se não usar, o link vai no final).' }),
+          ),
+        ),
+      ),
+    ),
+    h('div', { class: 'acoes-formulario config-salvar-inferior' }, botao),
   );
 }
 

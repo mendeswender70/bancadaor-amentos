@@ -122,7 +122,6 @@ export function monograma() {
 }
 
 function montarLayout() {
-  const empresa = cache.empresa;
   const link = ([href, texto, ic, padrao], rotuloCurto) =>
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
 
@@ -137,13 +136,11 @@ function montarLayout() {
         h(
           'a',
           { href: '#/', class: 'lateral-marca' },
-          monograma(),
-          h('div', {}, h('strong', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos'), h('small', {}, 'Orçamentos de móveis')),
+          marcaEsquadro('marca-app marca-lateral'),
         ),
         h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
         h('nav', { class: 'lateral-nav' }, MENU.map((m) => link(m))),
         botaoNovidades('lateral'),
-        h('a', { href: '#/config/conta', class: 'lateral-assinatura', title: 'esquadro' }, marcaEsquadro('marca-mini')),
         h(
           'div',
           { class: 'lateral-rodape' },
@@ -162,7 +159,7 @@ function montarLayout() {
         h(
           'header',
           { class: 'topo' },
-          h('a', { href: '#/', class: 'topo-marca' }, monograma(), h('span', { class: 'marca-nome' }, empresa?.nome || 'Orçamentos')),
+          h('a', { href: '#/', class: 'topo-marca' }, marcaEsquadro('marca-app marca-mobile')),
           botaoNovidades('topo'),
           h('a', { href: '#/config/conta', class: 'avatar topo-avatar', title: 'Minha conta', 'aria-label': 'Minha conta' }, iniciais(usuario?.nome)),
         ),
@@ -318,7 +315,6 @@ async function abrirNovidades({ somenteNaoLidas = false } = {}) {
 }
 
 export function atualizarMarca() {
-  for (const el of raiz.querySelectorAll('.marca-nome')) el.textContent = cache.empresa?.nome || 'Orçamentos';
   for (const el of raiz.querySelectorAll('.monograma')) el.replaceWith(monograma());
 }
 
@@ -357,51 +353,16 @@ async function mostrarAcesso() {
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
 }
 
-function simboloAcessoAnimado() {
-  const svgNs = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNs, 'svg');
-  svg.setAttribute('viewBox', '0 0 40 40');
-  svg.setAttribute('class', 'acesso-simbolo-desenho');
-  svg.setAttribute('aria-hidden', 'true');
-  const tracos = [
-    ['M9 5V33H35', 'acesso-traco-principal'],
-    ['M9 12H16'],
-    ['M9 19H14'],
-    ['M9 26H16'],
-    ['M16 33V27'],
-    ['M23 33V29'],
-    ['M30 33V27'],
-  ];
-  for (const [d, classe] of tracos) {
-    const path = document.createElementNS(svgNs, 'path');
-    path.setAttribute('d', d);
-    path.setAttribute('pathLength', '100');
-    if (classe) path.setAttribute('class', classe);
-    svg.append(path);
-  }
-  return svg;
-}
-
 function medidorAcesso(input, controle = input, limite = 30) {
-  const linha = h('span', { class: 'acesso-medida', 'aria-hidden': 'true' });
-  const medidor = h('div', { class: 'acesso-medidor' }, controle, linha);
-  const atualizar = () => {
-    const progresso = Math.min(1, input.value.length / limite);
-    medidor.style.setProperty('--acesso-progresso', String(progresso));
-  };
-  input.addEventListener('input', atualizar);
-  input.addEventListener('change', atualizar);
-  atualizar();
-  return medidor;
+  void input;
+  void limite;
+  return controle;
 }
 
-function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO' } = {}) {
-  const serragem = h('div', { class: 'acesso-serragem', 'aria-hidden': 'true' }, ...Array.from({ length: 7 }, () => h('span', {})));
+function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO', subtituloMobile = '' } = {}) {
   return h(
     'div',
     { class: 'acesso' },
-    h('img', { class: 'acesso-planta', src: '/images/login-planta.svg', alt: '', 'aria-hidden': 'true' }),
-    serragem,
     h(
       'section',
       { class: 'acesso-marca' },
@@ -410,7 +371,18 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
         'div',
         { class: 'acesso-chamada' },
         h('span', { class: 'acesso-chamada-etiqueta' }, 'PRECISÃO EM CADA DETALHE'),
-        h('h2', {}, 'Seus projetos. Seus números. No esquadro.'),
+        h('h2', { 'aria-label': 'Seus projetos. Seus números. No esquadro.' },
+          h('span', { class: 'acesso-titulo-mobile' },
+            h('span', {}, 'Seus projetos. Seus'),
+            h('span', {}, 'números. No'),
+            h('span', {}, 'esquadro.'),
+          ),
+          h('span', { class: 'acesso-titulo-desktop' },
+            h('span', {}, 'Seus projetos.'),
+            h('span', {}, 'Seus números.'),
+            h('span', {}, 'No esquadro.'),
+          ),
+        ),
         h('p', {}, 'Sua marcenaria organizada, do primeiro cálculo ao orçamento aprovado.'),
       ),
     ),
@@ -420,12 +392,14 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
       h(
         'div',
         { class: 'acesso-cartao' },
-        h('div', { class: 'acesso-simbolo' }, simboloAcessoAnimado()),
         h('span', { class: 'acesso-etiqueta' }, etiqueta),
         h('h1', {}, titulo),
-        subtitulo ? h('p', { class: 'acesso-subtitulo' }, subtitulo) : null,
+        subtitulo ? h('p', { class: 'acesso-subtitulo' },
+          subtituloMobile ? h('span', { class: 'acesso-subtitulo-desktop' }, subtitulo) : null,
+          h('span', { class: subtituloMobile ? 'acesso-subtitulo-mobile' : '' }, subtituloMobile || subtitulo),
+        ) : null,
         formulario,
-        h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados e orçamentos ficam protegidos.')),
+        h('div', { class: 'acesso-seguranca' }, icone('cadeado'), h('span', {}, 'Seus dados ficam protegidos.')),
       ),
     ),
   );
@@ -479,7 +453,9 @@ function telaEntrar() {
     h('div', { class: 'campo' }, h('label', { for: senha.id }, 'Senha'), medidorAcesso(senha, h('div', { class: 'campo-controle-senha acesso-senha-controle' }, senha, mostrarSenha), 20), avisoCapsLock),
     botao,
   );
-  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form);
+  return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form, {
+    subtituloMobile: 'Entre para acompanhar seus orçamentos.',
+  });
 }
 
 function telaConfigurar() {

@@ -9,14 +9,16 @@ export async function paginaClientes() {
   const busca = h('input', {
     type: 'search',
     class: 'busca',
-    placeholder: 'Nome ou telefone',
+    placeholder: window.matchMedia('(min-width: 768px)').matches ? 'Procurar por nome, telefone ou WhatsApp' : 'Nome ou telefone',
     'aria-label': 'Procurar cliente',
   });
+  const contador = h('p', { class: 'contador-clientes' });
 
   const carregar = async () => {
     substituir(lista, carregando());
     try {
       const clientes = await api.get(`/clientes?q=${encodeURIComponent(busca.value)}`);
+      contador.textContent = `${clientes.length} ${clientes.length === 1 ? 'cliente' : 'clientes'}`;
       if (!clientes.length) {
         substituir(
           lista,
@@ -82,15 +84,16 @@ export async function paginaClientes() {
     const cliente = await modalNovoCliente();
     if (cliente) irPara(`#/clientes/${cliente.id}`);
   };
+  const botaoNovo = h('button', { type: 'button', class: 'botao botao-primario novo-cliente', onclick: novo }, icone('usuarioMais'), 'Novo cliente');
 
   return h(
     'div',
-    { class: 'pagina' },
+    { class: 'pagina pagina-clientes' },
     cabecalhoPagina('Clientes', {
-      subtitulo: 'Histórico e propostas em um lugar.',
-      acoes: h('button', { type: 'button', class: 'botao botao-primario', onclick: novo }, icone('usuarioMais'), 'Novo cliente'),
+      subtitulo: h('span', {}, h('span', { class: 'texto-clientes-mobile' }, 'Histórico e propostas em um lugar.'), h('span', { class: 'texto-clientes-desktop' }, 'Cadastro e histórico de cada cliente.')),
     }),
-    h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),
+    h('div', { class: 'clientes-filtros' }, h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca), botaoNovo),
+    contador,
     lista,
   );
 }
@@ -112,7 +115,7 @@ export async function paginaCliente(id) {
 
   return h(
     'div',
-    { class: 'pagina' },
+    { class: 'pagina pagina-cliente' },
     cabecalhoPagina(cliente.nome, {
       voltar: '#/clientes',
       subtitulo: [cliente.whatsapp || cliente.telefone, cliente.cidade].filter(Boolean).join(' · ') || 'Cliente',

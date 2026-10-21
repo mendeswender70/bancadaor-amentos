@@ -79,7 +79,7 @@ export async function paginaOrcamentos(query) {
   const busca = h('input', {
     type: 'search',
     class: 'busca',
-    placeholder: 'Procurar por cliente ou número',
+    placeholder: window.matchMedia('(min-width: 768px)').matches ? 'Procurar por cliente ou número do orçamento' : 'Cliente ou número do orçamento',
     value: filtros.q,
     'aria-label': 'Procurar orçamento',
     oninput: debounce((e) => {
@@ -149,9 +149,12 @@ export async function paginaOrcamentos(query) {
 
   return h(
     'div',
-    { class: 'pagina' },
+    { class: 'pagina pagina-orcamentos' },
     cabecalhoPagina('Orçamentos', {
-      subtitulo: 'Todas as propostas, organizadas do rascunho à aprovação.',
+      subtitulo: h('span', {},
+        h('span', { class: 'texto-orcamentos-mobile' }, 'Acompanhe cada proposta sem perder o fio.'),
+        h('span', { class: 'texto-orcamentos-desktop' }, 'Todas as propostas, organizadas do rascunho à aprovação.'),
+      ),
       acoes: h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario botao-novo-orcamento' }, icone('mais'), 'Novo orçamento'),
     }),
     h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),

@@ -48,20 +48,14 @@ function linkWhatsApp(p, mensagem) {
 
 function marcaEmpresa(p) {
   const nome = p.empresa.nome || 'Proposta';
-  const iniciais = nome
-    .split(/\s+/)
-    .filter((x) => x.length > 2)
-    .slice(0, 2)
-    .map((x) => x[0])
-    .join('')
-    .toUpperCase();
+  const nomePrincipal = nome.replace(/\s+planejados?$/i, '').trim() || nome;
   return h(
     'div',
     { class: 'p-marca' },
     p.tem_logo
       ? h('img', { class: 'p-logo', src: `${base}/logo`, alt: nome })
-      : h('span', { class: 'p-monograma', 'aria-hidden': 'true' }, iniciais || nome[0]),
-    p.tem_logo ? null : h('strong', {}, nome),
+      : h('img', { class: 'p-monograma', src: '/icons/esquadro.svg', alt: '' }),
+    p.tem_logo ? null : h('span', { class: 'p-marca-nome' }, h('strong', {}, nomePrincipal), h('small', {}, 'PLANEJADOS')),
   );
 }
 
@@ -316,7 +310,7 @@ function mostrar(p, { acabouDeAprovar = false } = {}) {
       h(
         'p',
         { class: 'p-intro' },
-        `Preparamos esta proposta de móveis planejados sob medida para você. Confira os ambientes, os valores e as condições — e aprove por aqui mesmo quando estiver tudo certo.`,
+        'Preparamos esta proposta de móveis planejados sob medida para você.',
       ),
       h(
         'dl',

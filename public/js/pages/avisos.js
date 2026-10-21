@@ -1,6 +1,6 @@
 import { formatarDinheiro, formatarNumero } from '/shared/calc.js';
 import { api } from '../api.js';
-import { h, icone, vazioIlustrado, haQuanto, diasAte } from '../ui.js';
+import { h, icone, substituir, vazioIlustrado, haQuanto, diasAte } from '../ui.js';
 import { cabecalhoPagina } from '../comum.js';
 import { novidades } from '../novidades.js';
 
@@ -21,7 +21,7 @@ const idAviso = (a) => `${a.motivo}:${a.id}:${a.quando}`;
 function detalheAviso(a) {
   switch (a.motivo) {
     case 'aprovado':
-      return ['aprovado', `${a.cliente_nome} aprovou a proposta`, `Nº ${formatarNumero(a.numero)} · ${haQuanto(a.quando)}`];
+      return ['aprovado', 'Proposta aprovada', `${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`];
     case 'visto':
       return ['olho', 'Cliente abriu sua proposta', `${a.cliente_nome} · Nº ${formatarNumero(a.numero)} · ${haQuanto(a.quando)}`];
     case 'vence': {
@@ -152,10 +152,30 @@ export async function paginaAvisos() {
   atualizarAbas();
   renderAvisos();
 
+  const cabecalho = cabecalhoPagina(
+    h('span', {},
+      h('span', { class: 'avisos-titulo-mobile' }, 'Avisos'),
+      h('span', { class: 'avisos-titulo-desktop' }, 'Notificações'),
+    ),
+    { subtitulo: h('span', {},
+      h('span', { class: 'avisos-subtitulo-mobile' }, 'Acompanhe o que mudou nos seus orçamentos.'),
+      h('span', { class: 'avisos-subtitulo-desktop' }, 'Acompanhe as respostas dos clientes e as novidades do sistema.'),
+    ) },
+  );
+  cabecalho.querySelector('.titulos').prepend(h('span', { class: 'page-eyebrow avisos-eyebrow-desktop' }, 'ESQUADRO · CENTRAL DE ATIVIDADE'));
+  const controles = h('div', { class: 'central-avisos-controles' }, abas, h('div', { class: 'central-avisos-acoes' }, acao));
+  const resumoNovidades = h('aside', { class: 'avisos-resumo-novidades' },
+    h('span', { class: 'page-eyebrow' }, 'NOVIDADES'),
+    h('h2', {}, 'O Esquadro continua melhorando.'),
+    h('p', {}, 'Veja lembretes, aprovações e outros ajustes recentes.'),
+    h('button', { type: 'button', class: 'botao botao-pequeno', onclick: () => trocarAba('novidades') }, 'Ver novidades ', icone('seta', 'icone icone-mini')),
+  );
+
   return h('div', { class: 'pagina pagina-avisos' },
-    cabecalhoPagina('Avisos', { subtitulo: 'Acompanhe o que mudou nos seus orçamentos.' }),
-    abas,
-    h('div', { class: 'central-avisos-acoes' }, acao),
+    h('a', { href: '#/', class: 'avisos-voltar', 'aria-label': 'Voltar para o início' }, icone('voltar')),
+    cabecalho,
+    controles,
     conteudo,
+    resumoNovidades,
   );
 }

@@ -255,7 +255,11 @@ export async function paginaEditor({ id, clienteId }) {
 
   // ------------------------------------------------------------ Elementos fixos
   const tituloEl = h('h1', {});
-  const subtituloEl = h('p', {});
+  const estadoTopoMobile = h('span', { class: 'editor-auto-save-text' }, 'Salvo automaticamente');
+  const estadoTopoDesktop = h('span', { class: 'editor-auto-save-text' }, 'Salvo automaticamente');
+  const seloStatusTopo = h('span', { class: 'editor-status-badge' });
+  const resumoClienteLateral = h('p', { class: 'editor-resumo-cliente' });
+  const resumoPagamentoLateral = h('div', { class: 'editor-resumo-pagamento' });
   const etapasEl = h('div', { class: 'etapas-area' });
   const blocoCliente = h('div', { class: 'bloco-cliente' });
   const validadeTexto = h('small', { class: 'dica' });
@@ -309,24 +313,31 @@ export async function paginaEditor({ id, clienteId }) {
       el.onclick = estado === 'erro' ? () => salvar() : null;
       el.setAttribute('role', 'status');
     }
+    if (estado === 'salvo') estadoSalvo.textContent = 'Alterações salvas automaticamente';
+    estadoBarra.textContent = estado === 'salvo' ? 'Alterações salvas automaticamente' : textos[estado];
+    const textoTopo = estado === 'salvo' ? 'Salvo automaticamente' : textos[estado];
+    estadoTopoMobile.textContent = textoTopo;
+    estadoTopoDesktop.textContent = textoTopo;
   }
 
   // --------------------------------------------------------------- Atualizações
   function atualizarCabecalho() {
-    tituloEl.textContent = orc.numero ? `Orçamento nº ${formatarNumero(orc.numero)}` : 'Novo orçamento';
-    subtituloEl.textContent = orc.id
-      ? [`Criado em ${formatarData(orc.criado_em)}`, orc.duplicado_de_numero ? `cópia do nº ${formatarNumero(orc.duplicado_de_numero)}` : '']
-          .filter(Boolean)
-          .join(' · ')
-      : 'O número é gerado quando o primeiro móvel for adicionado';
+    tituloEl.textContent = orc.numero ? `Orçamento ${formatarNumero(orc.numero)}` : 'Novo orçamento';
+    seloStatusTopo.textContent = STATUS[orc.status] || orc.status;
+    seloStatusTopo.className = `editor-status-badge selo-${orc.status}`;
+    resumoClienteLateral.textContent = orc.cliente?.nome || '';
+    resumoPagamentoLateral.replaceChildren(
+      h('span', {}, orc.pagamento_descricao || 'Pagamento não informado'),
+      orc.prazo_entrega ? h('span', {}, `Entrega em ${orc.prazo_entrega}`) : null,
+    );
     desenharEtapas();
     const c = orc.cliente || {};
     substituir(
       blocoCliente,
-      avatar(c.nome, 'avatar-grande'),
+      h('span', { class: 'editor-cliente-icone' }, icone('clientes')),
       h(
         'div',
-        {},
+        { class: 'editor-cliente-dados' },
         h('strong', { class: 'cliente-nome' }, c.nome),
         h(
           'span',
@@ -334,7 +345,7 @@ export async function paginaEditor({ id, clienteId }) {
           [c.telefone, c.whatsapp && c.whatsapp !== c.telefone ? `WhatsApp ${c.whatsapp}` : ''].filter(Boolean).join(' · ') || 'Sem telefone',
         ),
       ),
-      h('button', { type: 'button', class: 'botao botao-pequeno', onclick: trocarCliente }, 'Trocar'),
+      h('button', { type: 'button', class: 'botao-icone editor-trocar-cliente', 'aria-label': 'Trocar cliente', onclick: trocarCliente }, icone('baixo')),
     );
     const acoes = [
       ['whatsapp', 'Enviar ao cliente', enviarAoCliente],
@@ -452,10 +463,9 @@ export async function paginaEditor({ id, clienteId }) {
       orc.ambientes.length
         ? orc.ambientes.map((a) => linhaResumo(a.nome, formatarDinheiro(subtotalAmbiente(a)), `resumo-ambiente${a.itens.length ? '' : ' resumo-vazio'}`))
         : linhaResumo('Móveis', formatarDinheiro(0)),
-      t.subtotal_servicos_cents ? linhaResumo('Serviços adicionais', formatarDinheiro(t.subtotal_servicos_cents), 'resumo-ambiente') : null,
-      linhaResumo('Subtotal', formatarDinheiro(t.subtotal_cents), 'resumo-subtotal'),
+      linhaResumo('Serviços', formatarDinheiro(t.subtotal_servicos_cents || 0), 'resumo-servicos'),
       t.acrescimo_cents ? linhaResumo(orc.acrescimo_descricao || 'Acréscimo', formatarDinheiro(t.acrescimo_cents)) : null,
-      t.desconto_cents ? linhaResumo('Desconto', `- ${formatarDinheiro(t.desconto_cents)}`, 'resumo-desconto') : null,
+      linhaResumo('Desconto', formatarDinheiro(t.desconto_cents || 0), 'resumo-desconto'),
       linhaResumo('Total', formatarDinheiro(t.total_cents), 'resumo-total'),
     );
     const linhas = descreverPagamento(t.total_cents, {
@@ -567,26 +577,20 @@ export async function paginaEditor({ id, clienteId }) {
       h(
         'div',
         { class: 'ambiente-topo' },
+        h('span', { class: 'ambiente-numero' }, String(ai + 1).padStart(2, '0')),
         h('span', { class: 'selo-icone' }, icone('ambiente')),
         h('div', { class: 'ambiente-titulo' }, h('h3', {}, ambiente.nome), h('span', {}, n ? plural(n, 'móvel', 'móveis') : 'Nenhum móvel ainda')),
         h('span', { class: 'ambiente-subtotal' }, formatarDinheiro(subtotalAmbiente(ambiente))),
-        menuSuspenso(
-          [
-            ['editar', 'Renomear e detalhes', () => editarAmbiente(ai)],
-            ['copiar', 'Duplicar ambiente', () => duplicarAmbiente(ai)],
-            ['cima', 'Mover para cima', () => moverAmbiente(ai, -1), { desativado: ai === 0 }],
-            ['baixo', 'Mover para baixo', () => moverAmbiente(ai, 1), { desativado: ai === orc.ambientes.length - 1 }],
-            '-',
-            ['lixeira', 'Remover ambiente', () => removerAmbiente(ai), { perigo: true }],
-          ],
-          { rotulo: `Opções de ${ambiente.nome}` },
-        ),
+        h('button', { type: 'button', class: 'botao-icone ambiente-editar', 'aria-label': `Editar ambiente ${ambiente.nome}`, onclick: () => editarAmbiente(ai) }, icone('editar')),
       ),
       ambiente.descricao ? h('div', { class: 'ambiente-detalhe' }, ambiente.descricao) : null,
       h(
         'div',
         { class: 'ambiente-corpo' },
-        n ? ambiente.itens.map((item, ii) => linhaItem(item, ai, ii)) : null,
+        n ? ambiente.itens.flatMap((item, ii) => [
+          ii > 0 ? h('div', { class: 'ambiente-separador', 'aria-hidden': 'true' }) : null,
+          linhaItem(item, ai, ii),
+        ].filter(Boolean)) : null,
         h(
           'button',
           { type: 'button', class: 'botao botao-tracejado botao-bloco', onclick: () => editarItem(ai) },
@@ -615,7 +619,11 @@ export async function paginaEditor({ id, clienteId }) {
           h(
             'div',
             { class: 'item-detalhes' },
-            h('span', {}, [item.tipo_nome && item.tipo_nome !== item.descricao ? item.tipo_nome : null, descreverMedida(item)].filter(Boolean).join(' · ')),
+            h('span', {}, [
+              item.tipo_nome && item.tipo_nome !== item.descricao ? item.tipo_nome : null,
+              item.metodo_calculo === 'unidade' ? null : descreverMedida(item),
+              `${item.quantidade || 1} ${(item.quantidade || 1) === 1 ? 'unidade' : 'unidades'}`,
+            ].filter(Boolean).join(' · ')),
             h('span', { class: 'item-calculo', title: 'Cálculo interno — não aparece para o cliente' }, icone('cadeado', 'icone icone-mini'), descreverCalculo(item)),
             personalizado ? h('span', { class: 'etiqueta item-calculo' }, `preço personalizado · padrão ${formatarDinheiro(item.preco_padrao_cents)}`) : null,
             item.observacoes ? h('span', { class: 'item-obs' }, item.observacoes) : null,
@@ -625,15 +633,18 @@ export async function paginaEditor({ id, clienteId }) {
       h(
         'div',
         { class: 'item-acoes' },
-        h('button', { type: 'button', class: 'botao-icone', title: 'Copiar móvel', 'aria-label': 'Copiar móvel', onclick: () => copiarItem(ai, ii) }, icone('copiar')),
-        h('button', { type: 'button', class: 'botao-icone perigo', title: 'Remover móvel', 'aria-label': 'Remover móvel', onclick: () => removerItem(ai, ii) }, icone('lixeira')),
+        h('button', { type: 'button', class: 'botao-icone item-editar', title: 'Editar móvel', 'aria-label': `Editar ${item.descricao || item.tipo_nome}`, onclick: () => editarItem(ai, ii) }, icone('editar')),
       ),
     );
   }
 
   async function criarAmbiente(inicial) {
-    const dados = inicial || (await formularioAmbiente(null, orc.ambientes));
+    const dados = inicial || (await formularioAmbiente(null, orc.ambientes, comCalculos));
     if (!dados) return;
+    if (dados.acao === 'calculos') {
+      botaoCalculos.click();
+      return;
+    }
     orc.ambientes.push({ nome: dados.nome, descricao: dados.descricao, itens: [] });
     redesenhar();
     // Já abre o formulário do primeiro móvel do ambiente.
@@ -642,8 +653,14 @@ export async function paginaEditor({ id, clienteId }) {
   }
 
   async function editarAmbiente(ai) {
-    const dados = await formularioAmbiente(orc.ambientes[ai], orc.ambientes);
+    const dados = await formularioAmbiente(orc.ambientes[ai], orc.ambientes, comCalculos);
     if (!dados) return;
+    if (dados.acao === 'calculos') return botaoCalculos.click();
+    if (dados.acao === 'novo') return criarAmbiente();
+    if (dados.acao === 'duplicar') return duplicarAmbiente(ai);
+    if (dados.acao === 'acima') return moverAmbiente(ai, -1);
+    if (dados.acao === 'abaixo') return moverAmbiente(ai, 1);
+    if (dados.acao === 'remover') return removerAmbiente(ai);
     Object.assign(orc.ambientes[ai], dados);
     redesenhar();
   }
@@ -698,6 +715,14 @@ export async function paginaEditor({ id, clienteId }) {
       const inicial = novo ? null : orc.ambientes[ai].itens[ii];
       const resultado = await formularioItem(inicial, tipos, novo, orc.ambientes, ambienteAtual);
       if (!resultado) break;
+      if (resultado.acao === 'copiar') {
+        copiarItem(ai, ii);
+        break;
+      }
+      if (resultado.acao === 'remover') {
+        await removerItem(ai, ii);
+        break;
+      }
       if (novo) {
         orc.ambientes[resultado.ambiente].itens.push(resultado.item);
       } else if (resultado.ambiente !== ai) {
@@ -1138,6 +1163,7 @@ export async function paginaEditor({ id, clienteId }) {
       atualizarValores();
     },
   });
+  const validadeDiasEl = entradaNumero(orc.validade_dias, (v) => { orc.validade_dias = v; atualizarValores(); }, { min: 0, max: 3650, id: 'validade-dias' });
 
   const texto = (chave, attrs = {}) =>
     h(attrs.rows ? 'textarea' : 'input', {
@@ -1193,13 +1219,13 @@ export async function paginaEditor({ id, clienteId }) {
         h(
           'div',
           { class: 'campo campo-metade' },
-          h('label', { for: 'validade-dias' }, 'Validade (dias)'),
-          entradaNumero(orc.validade_dias, (v) => { orc.validade_dias = v; atualizarValores(); }, { min: 0, max: 3650, id: 'validade-dias' }),
-          validadeTexto,
+          h('label', { for: 'validade-dias' }, 'Validade'),
+          h('div', { class: 'entrada-com-unidade editor-validade-input' }, validadeDiasEl, h('span', {}, 'dias')),
         ),
       ),
+      validadeTexto,
     ],
-    { aberta: !fechadaNoCelular },
+    { aberta: true },
   );
 
   const secaoAmbientes = h(
@@ -1208,11 +1234,11 @@ export async function paginaEditor({ id, clienteId }) {
     h(
       'div',
       { class: 'secao-topo secao-topo-solta' },
-      h('div', { class: 'secao-cabecalho' }, h('span', { class: 'secao-numero' }, '2'), h('span', { class: 'secao-titulos' }, h('h2', {}, 'Ambientes e móveis'), h('span', { class: 'secao-resumo' }))),
-      botaoCalculos,
+      h('div', { class: 'secao-cabecalho' }, h('span', { class: 'secao-numero' }, '2'), h('span', { class: 'secao-titulos' }, h('h2', {}, 'Ambientes'), h('span', { class: 'secao-resumo' }))),
+      h('button', { type: 'button', class: 'botao botao-secundario editor-adicionar-ambiente-topo', onclick: () => criarAmbiente() }, icone('mais'), 'Ambiente'),
     ),
     listaAmbientes,
-    h('button', { type: 'button', class: 'botao botao-secundario botao-grande botao-bloco', onclick: () => criarAmbiente() }, icone('mais'), 'Adicionar ambiente'),
+    h('button', { type: 'button', class: 'botao botao-secundario botao-grande botao-bloco editor-adicionar-ambiente', onclick: () => criarAmbiente() }, icone('mais'), 'Ambiente'),
   );
   resumoSecao.ambientes = secaoAmbientes.querySelector('.secao-resumo');
 
@@ -1257,12 +1283,12 @@ export async function paginaEditor({ id, clienteId }) {
   // Índice das seções (atalho para rolar até cada uma)
   const indice = h(
     'nav',
-    { class: 'indice-secoes', 'aria-label': 'Partes do orçamento' },
+    { class: 'indice-secoes editor-indice', 'aria-label': 'Partes do orçamento' },
     [
       [secaoCliente, '1', 'Cliente'],
       [secaoAmbientes, '2', 'Ambientes'],
-      [secaoExtras, '3', 'Serviços e descontos'],
-      [secaoCondicoes, '4', 'Pagamento'],
+      [secaoExtras, '3', 'Extras'],
+      [secaoCondicoes, '4', 'Condições'],
     ].map(([el, n, rotulo]) =>
       h(
         'button',
@@ -1281,7 +1307,7 @@ export async function paginaEditor({ id, clienteId }) {
   );
 
   // Abas: o orçamento e o histórico
-  const painelOrcamento = h('div', { class: 'editor-principal' }, indice, secaoCliente, secaoAmbientes, secaoExtras, secaoCondicoes);
+  const painelOrcamento = h('div', { class: 'editor-principal' }, secaoCliente, secaoAmbientes, secaoExtras, secaoCondicoes);
   const painelHistorico = h(
     'div',
     { class: 'editor-principal', hidden: true },
@@ -1293,6 +1319,7 @@ export async function paginaEditor({ id, clienteId }) {
     const orcamento = qual === 'orcamento';
     painelOrcamento.hidden = !orcamento;
     painelHistorico.hidden = orcamento;
+    indice.hidden = !orcamento;
     abaOrcamento.classList.toggle('ativo', orcamento);
     abaHistorico.classList.toggle('ativo', !orcamento);
     abaOrcamento.setAttribute('aria-selected', String(orcamento));
@@ -1312,12 +1339,24 @@ export async function paginaEditor({ id, clienteId }) {
     { class: 'pagina pagina-editor' },
     h(
       'div',
-      { class: 'cabecalho-pagina cabecalho-editor' },
-      h('a', { href: '#/orcamentos', class: 'voltar', 'aria-label': 'Voltar' }, icone('voltar')),
-      h('div', { class: 'titulos' }, tituloEl, subtituloEl),
+      { class: 'cabecalho-editor' },
+      h('div', { class: 'editor-caminho' },
+        h('a', { href: '#/orcamentos', class: 'voltar', 'aria-label': 'Voltar para orçamentos' }, icone('voltar')),
+        h('div', { class: 'editor-caminho-texto' }, h('span', {}, 'Orçamentos'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Editar orçamento')),
+        h('span', { class: 'editor-auto-save editor-auto-save-desktop' }, icone('check', 'icone icone-mini'), estadoTopoDesktop),
+        h('button', { type: 'button', class: 'botao-icone editor-historico-topo', 'aria-label': 'Abrir histórico', onclick: () => mostrarAba('historico') }, icone('historico')),
+      ),
+      h('div', { class: 'editor-titulo-fila' },
+        h('div', { class: 'editor-titulo-bloco' },
+          h('span', { class: 'page-eyebrow editor-eyebrow' }, 'EDITOR DE ORÇAMENTO'),
+          h('div', { class: 'editor-titulo-linha' }, tituloEl, seloStatusTopo),
+          h('span', { class: 'editor-auto-save editor-auto-save-mobile' }, icone('check', 'icone icone-mini'), estadoTopoMobile),
+        ),
+      ),
     ),
     etapasEl,
     avisoConflito,
+    indice,
     h('div', { class: 'abas-editor', role: 'tablist', 'aria-label': 'Orçamento e histórico' }, abaOrcamento, abaHistorico),
     h(
       'div',
@@ -1326,8 +1365,15 @@ export async function paginaEditor({ id, clienteId }) {
       h(
         'aside',
         { class: 'editor-lateral' },
-        h('section', { class: 'cartao' }, h('div', { class: 'cartao-titulo' }, h('h2', {}, 'Resumo'), estadoSalvo), resumo),
-        h('section', { class: 'cartao' }, acoesLateral),
+        h('section', { class: 'cartao editor-resumo-card' },
+          h('div', { class: 'cartao-titulo' }, h('h2', {}, 'Resumo')),
+          resumoClienteLateral,
+          resumo,
+          resumoPagamentoLateral,
+          h('button', { type: 'button', class: 'botao botao-primario editor-ver-proposta-desktop', onclick: verComoCliente }, 'Ver proposta'),
+          estadoSalvo,
+        ),
+        h('section', { class: 'cartao editor-acoes-card' }, acoesLateral),
       ),
     ),
 
@@ -1339,6 +1385,7 @@ export async function paginaEditor({ id, clienteId }) {
         'div',
         { class: 'cabecalho-acoes' },
         menuBarra,
+        h('button', { type: 'button', class: 'botao botao-primario editor-ver-proposta-mobile', onclick: verComoCliente }, 'Ver proposta'),
         h('button', { type: 'button', class: 'botao botao-whatsapp botao-grande', onclick: enviarAoCliente }, icone('whatsapp'), 'Enviar'),
       ),
     ),
@@ -1406,7 +1453,7 @@ function salvarSugestoesAmbiente(lista) {
   return filaSugestoes;
 }
 
-function formularioAmbiente(inicial, ambientes) {
+function formularioAmbiente(inicial, ambientes, comCalculos = false) {
   return abrirModal(inicial ? 'Editar ambiente' : 'Novo ambiente', (fechar) => {
     const nome = h('input', { type: 'text', required: true, maxlength: '100', value: inicial?.nome || '', placeholder: 'Ex.: Quarto do casal', autocomplete: 'off' });
     const descricao = h('textarea', {
@@ -1560,6 +1607,19 @@ function formularioAmbiente(inicial, ambientes) {
         areaNova,
       ),
       campo('Detalhes do ambiente (opcional, aparece no PDF)', descricao, { dica: 'Materiais, cores, acabamentos…' }),
+      h(
+        'details',
+        { class: 'mais-opcoes editor-acoes-secundarias' },
+        h('summary', {}, 'Mais ações'),
+        h('div', { class: 'editor-acoes-secundarias-lista' },
+          h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'calculos' }) }, `${comCalculos ? 'Ocultar' : 'Mostrar'} cálculos internos`),
+          h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'novo' }) }, 'Adicionar outro ambiente'),
+          inicial ? h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'duplicar' }) }, 'Duplicar ambiente') : null,
+          inicial ? h('button', { type: 'button', class: 'link-botao', disabled: ambientes.indexOf(inicial) === 0, onclick: () => fechar({ acao: 'acima' }) }, 'Mover para cima') : null,
+          inicial ? h('button', { type: 'button', class: 'link-botao', disabled: ambientes.indexOf(inicial) === ambientes.length - 1, onclick: () => fechar({ acao: 'abaixo' }) }, 'Mover para baixo') : null,
+          inicial ? h('button', { type: 'button', class: 'link-botao perigo', onclick: () => fechar({ acao: 'remover' }) }, 'Remover ambiente') : null,
+        ),
+      ),
       h(
         'div',
         { class: 'acoes-modal' },
@@ -1765,6 +1825,7 @@ function formularioItem(inicial, tipos, novo, ambientes, ambienteIndice) {
           campo('Quantidade', quantidade, { classe: 'campo-metade' }),
         ),
         h('details', { class: 'mais-opcoes', open: Boolean(item.observacoes) }, h('summary', {}, 'Observação interna'), campo('Não aparece para o cliente', observacao)),
+        !novo ? h('details', { class: 'mais-opcoes editor-acoes-secundarias' }, h('summary', {}, 'Ações do móvel'), h('div', { class: 'editor-acoes-secundarias-lista' }, h('button', { type: 'button', class: 'link-botao', onclick: () => fechar({ acao: 'copiar' }) }, 'Copiar móvel'), h('button', { type: 'button', class: 'link-botao perigo', onclick: () => fechar({ acao: 'remover' }) }, 'Remover móvel'))) : null,
         resultado,
         h(
           'div',

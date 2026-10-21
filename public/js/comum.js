@@ -25,7 +25,7 @@ export function selo(status) {
 }
 
 export function cabecalhoPagina(titulo, { voltar, acoes, subtitulo } = {}) {
-  const etiqueta = { Orçamentos: 'PROPOSTAS', Clientes: 'SEUS CONTATOS', Ajustes: 'PREFERÊNCIAS' }[titulo];
+  const etiqueta = { Orçamentos: 'PROPOSTAS', Clientes: 'SEUS CONTATOS', Ajustes: 'ESQUADRO' }[titulo];
   return h(
     'div',
     { class: 'cabecalho-pagina' },
@@ -40,6 +40,19 @@ export function avatar(nome, classe = '') {
 }
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
+function dataCompacta(iso) {
+  if (!iso) return '';
+  const valor = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(valor.getTime())) return '';
+  const partes = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).formatToParts(valor);
+  const parte = (tipo) => partes.find((item) => item.type === tipo)?.value?.replace('.', '') || '';
+  return `${parte('day')} ${parte('month')} ${parte('year')}`;
+}
+
+function diaMesCompacto(iso) {
+  return dataCompacta(iso).split(' ').slice(0, 2).join(' ');
+}
 
 /** Etiquetas de uma linha: ambientes, validade e o que o cliente fez pelo link. */
 function etiquetasOrcamento(o) {
@@ -144,7 +157,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
         : o.status === 'visto' || (o.visualizacoes && ['enviado', 'negociacao'].includes(o.status))
           ? `Cliente abriu a proposta ${haQuanto(o.ultima_visualizacao_em)}`
           : o.status === 'enviado'
-            ? 'Proposta enviada ao cliente'
+            ? o.data_validade ? `Válido até ${diaMesCompacto(o.data_validade)}` : 'Proposta enviada ao cliente'
             : o.status === 'negociacao'
               ? 'Em negociação'
               : o.status === 'expirado'
@@ -162,7 +175,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
       const link = variante === 'tabela' && mostrarCliente
         ? h('a', { href: `#/orcamentos/${o.id}`, class: 'linha-link orcamento-link-tabela' },
             h('span', { class: 'orcamento-cliente' }, avatar(o.cliente_nome, 'avatar-linha'),
-              h('span', { class: 'orcamento-cliente-texto' }, h('strong', {}, o.cliente_nome), h('small', {}, `Nº ${formatarNumero(o.numero)}`)),
+              h('span', { class: 'orcamento-cliente-texto' }, h('strong', {}, o.cliente_nome), h('small', { 'data-data': dataCompacta(o.data) }, `Nº ${formatarNumero(o.numero)}`)),
             ),
             h('span', { class: 'orcamento-atividade' },
               h('strong', {}, atividade),
