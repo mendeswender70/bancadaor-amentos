@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import webpush from 'web-push';
+import { somarDias } from '../public/shared/calc.js';
 import { criarApp } from '../server/app.js';
 import { visaoCliente } from '../server/visaoCliente.js';
 import { carregarOrcamento } from '../server/orcamentos.js';
@@ -16,10 +18,11 @@ let pastaTemp;
 let pgliteServidor;
 let socketServidor;
 
-async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false } = {}) {
+async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false, autorizacao } = {}) {
   const headers = {};
   if (!semCookie && cookie) headers.cookie = cookie;
   if (!semCabecalho) headers['X-Requested-With'] = 'fetch';
+  if (autorizacao) headers.authorization = `Bearer ${autorizacao}`;
   if (corpo !== undefined) headers['Content-Type'] = 'application/json';
   const r = await fetch(base + caminho, { method: metodo, headers, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
   const setCookie = r.headers.get('set-cookie');
@@ -93,6 +96,61 @@ test('login, logout e senha errada', async () => {
   assert.equal(r.status, 200);
   r = await chamar('GET', '/auth/estado');
   assert.equal(r.dados.usuario.nome, 'Admin');
+});
+
+test('detecta nova versão para a aba autenticada e mostra configuração do push', async () => {
+  const versao = await chamar('GET', '/versao');
+  assert.equal(versao.status, 200);
+  assert.equal(typeof versao.dados.versao, 'string');
+  const push = await chamar('GET', '/notificacoes/config');
+  assert.equal(push.status, 200);
+  assert.equal(typeof push.dados.configurada, 'boolean');
+});
+
+test('inscrição push fica vinculada ao usuário e pode ser removida', async () => {
+  const chaves = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'];
+  const anteriores = Object.fromEntries(chaves.map((chave) => [chave, process.env[chave]]));
+  process.env.VAPID_PUBLIC_KEY = 'chave-publica-de-teste';
+  process.env.VAPID_PRIVATE_KEY = 'chave-privada-de-teste';
+  const inscricao = {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-device-1',
+    keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) },
+  };
+  try {
+    let r = await chamar('POST', '/notificacoes/push', { inscricao: { ...inscricao, endpoint: 'https://example.test/ssrf' } });
+    assert.equal(r.status, 400, 'recusa endpoints fora dos serviços de push conhecidos');
+    r = await chamar('POST', '/notificacoes/push', { inscricao });
+    assert.equal(r.status, 200);
+    const db = await app.locals.obterDb();
+    assert.equal((await db.get('SELECT usuario_id FROM inscricoes_push WHERE endpoint = ?', inscricao.endpoint)).usuario_id, 1);
+    r = await chamar('DELETE', '/notificacoes/push', { endpoint: inscricao.endpoint });
+    assert.equal(r.status, 200);
+    assert.equal(await db.get('SELECT endpoint FROM inscricoes_push WHERE endpoint = ?', inscricao.endpoint), undefined);
+  } finally {
+    for (const chave of chaves) {
+      if (anteriores[chave] === undefined) delete process.env[chave];
+      else process.env[chave] = anteriores[chave];
+    }
+  }
+});
+
+test('endpoint de deploy exige segredo e ignora eventos repetidos', async () => {
+  const anterior = process.env.DEPLOY_NOTIFICATION_SECRET;
+  process.env.DEPLOY_NOTIFICATION_SECRET = 'segredo-de-deploy-de-teste';
+  const deploy = { deployment_id: 'deploy-teste-1', commit: 'abc123' };
+  try {
+    let r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: 'incorreto' });
+    assert.equal(r.status, 401);
+    r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.enviadas, 0);
+    r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.duplicado, true);
+  } finally {
+    if (anterior === undefined) delete process.env.DEPLOY_NOTIFICATION_SECRET;
+    else process.env.DEPLOY_NOTIFICATION_SECRET = anterior;
+  }
 });
 
 test('alterações exigem o cabeçalho anti-CSRF', async () => {
@@ -348,12 +406,47 @@ test('dashboard mostra indicadores do mês', async () => {
   assert.equal(r2.dados.em_aberto, 1);
 });
 
-test('orçamento enviado expira após a validade', async () => {
+test('orçamento expirado é reaberto ao renovar a validade, inclusive nos links existentes', async () => {
   hojeFalso = '2026-10-05';
-  const r = await chamar('GET', `/orcamentos/${orcamentoId}`);
+  let r = await chamar('GET', `/orcamentos/${orcamentoId}`);
   assert.equal(r.dados.status, 'expirado');
   const aprovado = await chamar('GET', `/orcamentos/${duplicadoId}`);
   assert.equal(aprovado.dados.status, 'aprovado', 'aprovado não expira');
+
+  // Simula um registro já salvo pela versão antiga: datas futuras, status expirado.
+  const db = await app.locals.obterDb();
+  await db.run(
+    'UPDATE orcamentos SET data = ?, validade_dias = ?, data_validade = ? WHERE id = ?',
+    '2026-10-20',
+    10,
+    '2026-10-30',
+    orcamentoId,
+  );
+  hojeFalso = '2026-10-20';
+  r = await chamar('GET', `/orcamentos/${orcamentoId}`);
+  assert.equal(r.dados.data_validade, '2026-10-30');
+  assert.equal(r.dados.status, 'enviado', 'corrige ao abrir um orçamento já afetado');
+
+  const { token: tokenRenovado } = (await chamar('POST', `/orcamentos/${orcamentoId}/link`)).dados;
+  let proposta = await semLogin('GET', `/publico/propostas/${tokenRenovado}`);
+  assert.equal(proposta.dados.situacao.status, 'enviado');
+  assert.equal(proposta.dados.situacao.pode_aprovar, true);
+
+  // Uma edição após outra expiração também recupera o status anterior.
+  hojeFalso = '2026-10-31';
+  r = await chamar('GET', `/orcamentos/${orcamentoId}`);
+  assert.equal(r.dados.status, 'expirado');
+  const atual = r.dados;
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, {
+    ...atual,
+    data: '2026-11-01',
+    validade_dias: 10,
+  });
+  assert.equal(r.dados.data_validade, '2026-11-11');
+  assert.equal(r.dados.status, 'enviado');
+  proposta = await semLogin('GET', `/publico/propostas/${tokenRenovado}`);
+  assert.equal(proposta.dados.situacao.pode_aprovar, true);
+
   hojeFalso = '2026-09-24';
 });
 
@@ -530,6 +623,8 @@ test('edições seguidas (salvamento automático) viram um só registro no hist�
 });
 
 test('lista de orçamentos: grupo "perdidos", ambientes e WhatsApp do cliente', async () => {
+  const { orc } = await novaProposta({ abrir: false });
+  assert.equal((await mudarStatus(orc.id, 'recusado')).status, 200);
   const r = await chamar('GET', '/orcamentos?status=perdidos');
   assert.ok(r.dados.orcamentos.length >= 1);
   assert.ok(r.dados.orcamentos.every((o) => ['recusado', 'cancelado', 'expirado'].includes(o.status)));
@@ -559,16 +654,151 @@ async function aprovarProposta(token, corpo, opcoes) {
   return semLogin('POST', `/publico/propostas/${token}/aprovar`, { ...corpo, versao_proposta: proposta.versao_proposta }, opcoes);
 }
 
-async function novaProposta() {
+async function novaProposta({ abrir = true } = {}) {
   const r = await chamar('POST', `/orcamentos/${orcamentoId}/duplicar`);
   assert.equal(r.status, 201);
   const orc = r.dados;
   const { token } = (await chamar('POST', `/orcamentos/${orc.id}/link`)).dados;
-  const proposta = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+  const proposta = abrir ? (await semLogin('GET', `/publico/propostas/${token}`)).dados : null;
   return { orc, token, proposta };
 }
 
 const aceite = (proposta) => ({ nome: 'João da Silva', aceite: true, versao_proposta: proposta.versao_proposta });
+
+test('push avisa na primeira visita e aprovação sem duplicar e sem bloquear a proposta', async () => {
+  const anterior = {
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+    sendNotification: webpush.sendNotification,
+  };
+  const chavesVapid = webpush.generateVAPIDKeys();
+  process.env.VAPID_PUBLIC_KEY = chavesVapid.publicKey;
+  process.env.VAPID_PRIVATE_KEY = chavesVapid.privateKey;
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/push-event-device-1';
+  const envios = [];
+  webpush.sendNotification = async (_inscricao, payload) => envios.push(JSON.parse(payload));
+
+  try {
+    const inscricao = {
+      endpoint,
+      keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) },
+    };
+    assert.equal((await chamar('POST', '/notificacoes/push', { inscricao })).status, 200);
+
+    const { orc, token } = await novaProposta({ abrir: false });
+    const primeiraVisita = await semLogin('GET', `/publico/propostas/${token}`);
+    assert.equal(primeiraVisita.status, 200);
+    assert.equal(envios.length, 1);
+    assert.equal(envios[0].titulo, 'Proposta visualizada');
+    assert.match(envios[0].texto, new RegExp(primeiraVisita.dados.numero));
+    assert.equal(envios[0].caminho, `/#/orcamentos/${orc.id}`);
+    assert.equal(envios[0].tag, `esquadro-proposta-${orc.id}-visualizada`);
+
+    await semLogin('GET', `/publico/propostas/${token}`);
+    assert.equal(envios.length, 1, 'visitas seguintes não repetem o aviso');
+
+    const aprovada = await aprovarProposta(token, { nome: 'João da Silva', aceite: true });
+    assert.equal(aprovada.status, 200);
+    assert.equal(envios.length, 2);
+    assert.equal(envios[1].titulo, 'Proposta aprovada');
+    assert.match(envios[1].texto, new RegExp(aprovada.dados.numero));
+    assert.equal(envios[1].caminho, `/#/orcamentos/${orc.id}`);
+    assert.equal(envios[1].tag, `esquadro-proposta-${orc.id}-aprovada`);
+
+    await aprovarProposta(token, { nome: 'João da Silva', aceite: true });
+    assert.equal(envios.length, 2, 'aprovações repetidas não repetem o aviso');
+
+    const outra = await novaProposta({ abrir: false });
+    webpush.sendNotification = async () => {
+      throw Object.assign(new Error('inscrição expirada'), { statusCode: 410 });
+    };
+    const visitaComInscricaoExpirada = await semLogin('GET', `/publico/propostas/${outra.token}`);
+    assert.equal(visitaComInscricaoExpirada.status, 200, 'a falha push não impede o cliente de abrir a proposta');
+    assert.equal(await (await app.locals.obterDb()).get('SELECT endpoint FROM inscricoes_push WHERE endpoint = ?', endpoint), undefined);
+  } finally {
+    await chamar('DELETE', '/notificacoes/push', { endpoint });
+    webpush.sendNotification = anterior.sendNotification;
+    for (const [chave, valor] of Object.entries({ VAPID_PUBLIC_KEY: anterior.publicKey, VAPID_PRIVATE_KEY: anterior.privateKey })) {
+      if (valor === undefined) delete process.env[chave];
+      else process.env[chave] = valor;
+    }
+  }
+});
+
+test('lembretes push avisam propostas sem resposta e perto do vencimento uma vez', async () => {
+  const anteriores = {
+    secret: process.env.DEPLOY_NOTIFICATION_SECRET,
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+    sendNotification: webpush.sendNotification,
+  };
+  const chavesVapid = webpush.generateVAPIDKeys();
+  process.env.DEPLOY_NOTIFICATION_SECRET = 'segredo-lembrete-teste';
+  process.env.VAPID_PUBLIC_KEY = chavesVapid.publicKey;
+  process.env.VAPID_PRIVATE_KEY = chavesVapid.privateKey;
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/push-reminder-device-1';
+  const envios = [];
+  webpush.sendNotification = async (_inscricao, payload) => envios.push(JSON.parse(payload));
+
+  try {
+    const inscricao = {
+      endpoint,
+      keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) },
+    };
+    assert.equal((await chamar('POST', '/notificacoes/push', { inscricao })).status, 200);
+
+    const { orc: semRetorno } = await novaProposta({ abrir: false });
+    assert.equal((await mudarStatus(semRetorno.id, 'enviado')).status, 200);
+    const db = await app.locals.obterDb();
+    await db.run(
+      `UPDATE orcamentos SET enviado_em = now() - interval '6 days', data_validade = ? WHERE id = ?`,
+      somarDias(hojeFalso, 10),
+      semRetorno.id,
+    );
+    const { orc: pertoDoVencimento } = await novaProposta({ abrir: false });
+    assert.equal((await mudarStatus(pertoDoVencimento.id, 'enviado')).status, 200);
+    await db.run(
+      `UPDATE orcamentos SET enviado_em = now() - interval '1 day', data_validade = ? WHERE id = ?`,
+      somarDias(hojeFalso, 2),
+      pertoDoVencimento.id,
+    );
+
+    let r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true });
+    assert.equal(r.status, 401, 'exige o segredo do agendamento');
+    r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true, autorizacao: 'incorreto' });
+    assert.equal(r.status, 401);
+    r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.encontrados, 2);
+    assert.equal(r.dados.processados, 2);
+    assert.equal(envios.length, 2);
+
+    const semResposta = envios.find((aviso) => aviso.titulo === 'Proposta aguardando resposta');
+    const vencimento = envios.find((aviso) => aviso.titulo === 'Proposta perto do vencimento');
+    assert.match(semResposta.texto, new RegExp(`nº ${semRetorno.numero}`));
+    assert.match(vencimento.texto, /vence em 2 dias/);
+    assert.equal(semResposta.caminho, `/#/orcamentos/${semRetorno.id}`);
+    assert.equal(vencimento.caminho, `/#/orcamentos/${pertoDoVencimento.id}`);
+
+    r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.encontrados, 0, 'não seleciona eventos já enviados');
+    assert.equal(r.dados.processados, 0);
+    assert.equal(envios.length, 2);
+    assert.equal((await db.get('SELECT COUNT(*) AS n FROM notificacoes_lembrete')).n, 2);
+  } finally {
+    await chamar('DELETE', '/notificacoes/push', { endpoint });
+    webpush.sendNotification = anteriores.sendNotification;
+    for (const [chave, valor] of Object.entries({
+      DEPLOY_NOTIFICATION_SECRET: anteriores.secret,
+      VAPID_PUBLIC_KEY: anteriores.publicKey,
+      VAPID_PRIVATE_KEY: anteriores.privateKey,
+    })) {
+      if (valor === undefined) delete process.env[chave];
+      else process.env[chave] = valor;
+    }
+  }
+});
 
 test('uma tela antiga não desfaz o aceite nem sobrescreve os valores', async () => {
   const { orc, token, proposta } = await novaProposta();
@@ -686,4 +916,35 @@ test('edição e aprovação simultâneas nunca aprovam conteúdo diferente do l
   const atual = (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
   if (atual.status === 'aprovado') assert.equal(atual.prazo_entrega, orc.prazo_entrega);
   else assert.equal(atual.prazo_entrega, 'Prazo novo');
+});
+
+test('exclui orçamento e os dados relacionados somente com sessão autenticada', async () => {
+  const { orc, token } = await novaProposta({ abrir: false });
+  const db = await app.locals.obterDb();
+  const atualizado = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, observacoes_internas: 'Pronto para exclusão' });
+  assert.equal(atualizado.status, 200);
+  const filha = await chamar('POST', `/orcamentos/${orc.id}/duplicar`);
+  assert.equal(filha.status, 201);
+  assert.equal(filha.dados.duplicado_de_id, orc.id);
+  await db.run(
+    "INSERT INTO notificacoes_lembrete (orcamento_id, tipo, referencia) VALUES (?, 'sem_resposta', 'teste-exclusao')",
+    orc.id,
+  );
+
+  assert.equal((await semLogin('DELETE', `/orcamentos/${orc.id}`)).status, 401);
+  assert.ok(await db.get('SELECT id FROM orcamentos WHERE id = ?', orc.id), 'a tentativa sem sessão não remove o orçamento');
+
+  const removido = await chamar('DELETE', `/orcamentos/${orc.id}`);
+  assert.equal(removido.status, 200);
+  assert.deepEqual(removido.dados, { ok: true });
+  assert.equal(await db.get('SELECT id FROM orcamentos WHERE id = ?', orc.id), undefined);
+  assert.ok(await db.get('SELECT id FROM orcamentos WHERE id = ?', orcamentoId), 'o orçamento original permanece');
+  for (const tabela of ['orcamento_ambientes', 'orcamento_itens', 'orcamento_servicos', 'orcamento_historico', 'notificacoes_lembrete']) {
+    assert.equal(await db.get(`SELECT 1 AS existe FROM ${tabela} WHERE orcamento_id = ? LIMIT 1`, orc.id), undefined, `${tabela} foi removida em cascata`);
+  }
+  const filhaPreservada = await db.get('SELECT id, duplicado_de_id FROM orcamentos WHERE id = ?', filha.dados.id);
+  assert.ok(filhaPreservada, 'a cópia feita a partir do orçamento removido permanece');
+  assert.equal(filhaPreservada.duplicado_de_id, null);
+  assert.equal((await semLogin('GET', `/publico/propostas/${token}`)).status, 404);
+  assert.equal((await chamar('DELETE', `/orcamentos/${orc.id}`)).status, 404);
 });

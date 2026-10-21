@@ -1,0 +1,28 @@
+name: Notificar atualização publicada
+
+on:
+  deployment_status:
+
+jobs:
+  notificar:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar push aos dispositivos inscritos
+        env:
+          DEPLOYMENT_ID: ${{ github.event.deployment.id }}
+          COMMIT_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_NOTIFICATION_SECRET }}
+        run: |
+          if [ -z "$DEPLOY_SECRET" ]; then
+            echo "::notice title=Push ainda não configurado::Configure DEPLOY_NOTIFICATION_SECRET para ativar os avisos no PWA."
+            exit 0
+          fi
+          payload="$(jq -cn --arg deployment_id "$DEPLOYMENT_ID" --arg commit "$COMMIT_SHA" '{deployment_id: $deployment_id, commit: $commit}')"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 2 \
+            -X POST "https://esquadro.site/api/deploy/notificar" \
+            -H "Authorization: Bearer $DEPLOY_SECRET" \
+            -H 'X-Requested-With: fetch' \
+            -H 'Content-Type: application/json' \
+            --data "$payload"

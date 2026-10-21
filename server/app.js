@@ -1,6 +1,9 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import webpush from 'web-push';
 import { AMBIENTES_SUGERIDOS, METODOS, TIPOS_AJUSTE, LIMITES, formatarNumero } from '../public/shared/calc.js';
+import { novidades } from '../public/js/novidades.js';
 import {
   conferirSenha,
   criarLimitadorLogin,
@@ -24,6 +27,7 @@ import {
   expirarVencidos,
   garantirToken,
   idPorToken,
+  listarLembretesAutomaticos,
   listarHistorico,
   listarOrcamentos,
   podeAprovar,
@@ -40,6 +44,73 @@ const padraoLike = (s) => `%${String(s).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 const SEM_BUSCA = ({ nome_busca, telefone_digitos, whatsapp_digitos, ...resto }) => resto;
 
 const MAX_SUGESTOES_AMBIENTE = 80;
+
+function segredoCorreto(recebido, esperado) {
+  if (!recebido || !esperado) return false;
+  const a = Buffer.from(String(recebido));
+  const b = Buffer.from(String(esperado));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function configurarVapid() {
+  const publica = process.env.VAPID_PUBLIC_KEY;
+  const privada = process.env.VAPID_PRIVATE_KEY;
+  if (!publica || !privada) throw new ErroHttp(503, 'As notificações push ainda não foram configuradas.');
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://esquadro.site', publica, privada);
+}
+
+async function enviarPushInscritos(db, { titulo, texto, caminho = '/', tag = 'esquadro-atualizacao' }) {
+  const inscricoes = await db.all('SELECT endpoint, chave_p256dh, chave_auth FROM inscricoes_push');
+  if (!inscricoes.length) return { inscricoes: 0, enviadas: 0, expiradas: 0, falhas: 0 };
+
+  configurarVapid();
+  const payload = JSON.stringify({ titulo, texto, caminho, tag });
+  const resultados = await Promise.allSettled(
+    inscricoes.map(async (inscricao) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: inscricao.endpoint, keys: { p256dh: inscricao.chave_p256dh, auth: inscricao.chave_auth } },
+          payload,
+          { TTL: 60 * 60 * 24 },
+        );
+        return 'enviada';
+      } catch (erro) {
+        if ([404, 410].includes(erro.statusCode)) {
+          await db.run('DELETE FROM inscricoes_push WHERE endpoint = ?', inscricao.endpoint);
+          return 'expirada';
+        }
+        throw erro;
+      }
+    }),
+  );
+  const resumo = { inscricoes: inscricoes.length, enviadas: 0, expiradas: 0, falhas: 0 };
+  for (const resultado of resultados) {
+    if (resultado.status === 'rejected') resumo.falhas++;
+    else if (resultado.value === 'enviada') resumo.enviadas++;
+    else if (resultado.value === 'expirada') resumo.expiradas++;
+  }
+  return resumo;
+}
+
+async function tentarNotificar(db, notificacao) {
+  try {
+    await enviarPushInscritos(db, notificacao);
+  } catch (erro) {
+    // A proposta do cliente não deve falhar só porque o serviço push está indisponível.
+    console.error('Não foi possível enviar a notificação push.', erro.statusCode || erro.code || 'erro desconhecido');
+  }
+}
+
+function endpointPushValido(url) {
+  const host = url.hostname.toLowerCase();
+  const servidorPush =
+    host === 'fcm.googleapis.com' ||
+    host === 'web.push.apple.com' ||
+    host === 'push.services.mozilla.com' ||
+    host.endsWith('.push.services.mozilla.com') ||
+    host.endsWith('.notify.windows.com');
+  return url.protocol === 'https:' && !url.username && !url.password && (!url.port || url.port === '443') && servidorPush;
+}
 
 /** Sugestões salvas pela empresa ou, se nunca foram alteradas, as padrão. */
 function lerSugestoesAmbiente(json) {
@@ -181,9 +252,18 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     const orcId = await idPorToken(db, req.params.token);
     await expirarVencidos(db, dataHoje());
     // A própria empresa conferindo o link não conta como visita do cliente.
-    if (!(await usuarioDaSessao(db, req))) await registrarVisualizacao(db, orcId);
+    const primeiraVisualizacao = !(await usuarioDaSessao(db, req)) && await registrarVisualizacao(db, orcId);
+    const proposta = await montarProposta(orcId);
+    if (primeiraVisualizacao) {
+      await tentarNotificar(db, {
+        titulo: 'Proposta visualizada',
+        texto: `O cliente abriu o orçamento nº ${proposta.publica.numero} pela primeira vez.`,
+        caminho: `/#/orcamentos/${orcId}`,
+        tag: `esquadro-proposta-${orcId}-visualizada`,
+      });
+    }
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-    res.json((await montarProposta(orcId)).publica);
+    res.json(proposta.publica);
   });
 
   api.get('/publico/propostas/:token/logo', async (req, res) => {
@@ -206,12 +286,169 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (nome.length < 3) throw invalido('Digite seu nome completo para aprovar.');
     if (req.body.aceite !== true) throw invalido('Confirme que leu e concorda com a proposta.');
     await expirarVencidos(db, dataHoje());
-    await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta);
-    res.json((await montarProposta(orcId)).publica);
+    const aprovadaAgora = await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta);
+    const proposta = await montarProposta(orcId);
+    if (aprovadaAgora) {
+      await tentarNotificar(db, {
+        titulo: 'Proposta aprovada',
+        texto: `O cliente aprovou o orçamento nº ${proposta.publica.numero}.`,
+        caminho: `/#/orcamentos/${orcId}`,
+        tag: `esquadro-proposta-${orcId}-aprovada`,
+      });
+    }
+    res.json(proposta.publica);
+  });
+
+  // O GitHub chama esta rota após um deploy de produção concluído.
+  api.post('/deploy/notificar', async (req, res) => {
+    const segredo = process.env.DEPLOY_NOTIFICATION_SECRET;
+    if (!segredo) throw new ErroHttp(503, 'O aviso automático de deploy ainda não foi configurado.');
+    const autorizacao = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    if (!segredoCorreto(autorizacao, segredo)) throw new ErroHttp(401, 'Não autorizado.');
+
+    const deploymentId = texto(req.body.deployment_id, { max: 200, obrigatorio: true, campo: 'Deploy' });
+    const commit = texto(req.body.commit, { max: 100, campo: 'Commit' });
+    const registro = await db.run(
+      `INSERT INTO notificacoes_deploy (deployment_id, commit_sha) VALUES (?, ?)
+       ON CONFLICT (deployment_id) DO UPDATE SET commit_sha = EXCLUDED.commit_sha, estado = 'enviando', iniciado_em = now(), enviado_em = NULL
+       WHERE notificacoes_deploy.estado = 'erro' OR notificacoes_deploy.iniciado_em < now() - interval '5 minutes'`,
+      deploymentId,
+      commit,
+    );
+    if (!registro.changes) return res.json({ ok: true, duplicado: true });
+
+    try {
+      const resultado = await enviarPushInscritos(db, {
+        titulo: 'Atualização no esquadro',
+        texto: 'Uma nova versão está disponível. Abra o app para ver as novidades.',
+      });
+      await db.run("UPDATE notificacoes_deploy SET estado = 'enviado', enviado_em = now() WHERE deployment_id = ?", deploymentId);
+      res.json({ ok: true, ...resultado });
+    } catch (erro) {
+      await db.run("UPDATE notificacoes_deploy SET estado = 'erro' WHERE deployment_id = ?", deploymentId).catch(() => {});
+      throw erro;
+    }
+  });
+
+  // O GitHub Actions chama esta rota diariamente para lembrar propostas pendentes.
+  api.post('/lembretes/notificar', async (req, res) => {
+    const segredo = process.env.DEPLOY_NOTIFICATION_SECRET;
+    if (!segredo) throw new ErroHttp(503, 'Os lembretes automáticos ainda não foram configurados.');
+    const autorizacao = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    if (!segredoCorreto(autorizacao, segredo)) throw new ErroHttp(401, 'Não autorizado.');
+
+    const dataAtual = dataHoje();
+    await expirarVencidos(db, dataAtual);
+    const lembretes = await listarLembretesAutomaticos(db, dataAtual);
+    const resumo = { encontrados: lembretes.length, processados: 0, duplicados: 0, falhas: 0, falhas_push: 0 };
+    for (const lembrete of lembretes) {
+      const registro = await db.run(
+        `INSERT INTO notificacoes_lembrete (orcamento_id, tipo, referencia)
+         VALUES (?, ?, ?)
+         ON CONFLICT (orcamento_id, tipo, referencia) DO UPDATE
+         SET estado = 'enviando', iniciado_em = now(), enviado_em = NULL
+         WHERE notificacoes_lembrete.estado = 'erro'
+            OR notificacoes_lembrete.iniciado_em < now() - interval '5 minutes'`,
+        lembrete.id,
+        lembrete.tipo,
+        lembrete.referencia,
+      );
+      if (!registro.changes) {
+        resumo.duplicados++;
+        continue;
+      }
+
+      try {
+        const vencimento = lembrete.dias_para_vencer === 0
+          ? 'vence hoje'
+          : lembrete.dias_para_vencer === 1
+            ? 'vence amanhã'
+            : `vence em ${lembrete.dias_para_vencer} dias`;
+        const notificacao = lembrete.tipo === 'sem_resposta'
+          ? {
+              titulo: 'Proposta aguardando resposta',
+              texto: `O orçamento nº ${lembrete.numero} foi enviado há pelo menos 5 dias e ainda aguarda retorno.`,
+            }
+          : {
+              titulo: 'Proposta perto do vencimento',
+              texto: `O orçamento nº ${lembrete.numero} ${vencimento}.`,
+            };
+        const resultado = await enviarPushInscritos(db, {
+          ...notificacao,
+          caminho: `/#/orcamentos/${lembrete.id}`,
+          tag: `esquadro-lembrete-${lembrete.tipo}-${lembrete.id}`,
+        });
+        resumo.processados++;
+        resumo.falhas_push += resultado.falhas;
+        await db.run(
+          `UPDATE notificacoes_lembrete SET estado = 'enviado', enviado_em = now()
+           WHERE orcamento_id = ? AND tipo = ? AND referencia = ?`,
+          lembrete.id,
+          lembrete.tipo,
+          lembrete.referencia,
+        );
+      } catch {
+        resumo.falhas++;
+        await db.run(
+          `UPDATE notificacoes_lembrete SET estado = 'erro'
+           WHERE orcamento_id = ? AND tipo = ? AND referencia = ?`,
+          lembrete.id,
+          lembrete.tipo,
+          lembrete.referencia,
+        ).catch(() => {});
+        console.error('Falha ao enviar lembrete de proposta.');
+      }
+    }
+    res.json({ ok: true, ...resumo });
   });
 
   // Daqui para baixo, somente usuários autenticados.
   api.use(exigirLogin(obterDb));
+
+  api.get('/versao', (_req, res) => {
+    res.json({ versao: novidades[0]?.id || 'inicio' });
+  });
+
+  api.get('/notificacoes/config', async (req, res) => {
+    res.json({ chave_publica: process.env.VAPID_PUBLIC_KEY || null, configurada: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) });
+  });
+
+  api.post('/notificacoes/push', async (req, res) => {
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+      throw new ErroHttp(503, 'As notificações push ainda não foram configuradas.');
+    }
+    const inscricao = req.body.inscricao;
+    const endpoint = texto(inscricao?.endpoint, { max: 4096, obrigatorio: true, campo: 'Dispositivo' });
+    let url;
+    try {
+      url = new URL(endpoint);
+    } catch {
+      throw invalido('Inscrição de notificação inválida.');
+    }
+    if (!endpointPushValido(url)) throw invalido('Inscrição de notificação inválida.');
+    const p256dh = String(inscricao?.keys?.p256dh || '');
+    const auth = String(inscricao?.keys?.auth || '');
+    if (!/^[A-Za-z0-9_-]{80,160}$/.test(p256dh) || !/^[A-Za-z0-9_-]{16,64}$/.test(auth)) {
+      throw invalido('Chaves da inscrição de notificação inválidas.');
+    }
+    await db.run(
+      `INSERT INTO inscricoes_push (endpoint, usuario_id, chave_p256dh, chave_auth)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (endpoint) DO UPDATE SET usuario_id = EXCLUDED.usuario_id,
+         chave_p256dh = EXCLUDED.chave_p256dh, chave_auth = EXCLUDED.chave_auth, atualizado_em = now()`,
+      endpoint,
+      req.usuario.id,
+      p256dh,
+      auth,
+    );
+    res.json({ ok: true });
+  });
+
+  api.delete('/notificacoes/push', async (req, res) => {
+    const endpoint = texto(req.body.endpoint, { max: 4096, obrigatorio: true, campo: 'Dispositivo' });
+    await db.run('DELETE FROM inscricoes_push WHERE endpoint = ? AND usuario_id = ?', endpoint, req.usuario.id);
+    res.json({ ok: true });
+  });
 
   api.put('/conta', async (req, res) => {
     const nome = texto(req.body.nome, { max: 100, obrigatorio: true, campo: 'Nome' });
@@ -589,8 +826,14 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   });
 
   api.put('/orcamentos/:id', async (req, res) => {
-    const orcId = await atualizarOrcamento(db, id(req.params.id), req.body, req.usuario.id);
+    const orcId = await atualizarOrcamento(db, id(req.params.id), req.body, req.usuario.id, dataHoje());
     res.json(await carregarOrcamento(db, orcId));
+  });
+
+  api.delete('/orcamentos/:id', async (req, res) => {
+    const resultado = await db.run('DELETE FROM orcamentos WHERE id = ?', id(req.params.id));
+    if (!resultado.changes) throw naoEncontrado('Orçamento não encontrado.');
+    res.json({ ok: true });
   });
 
   api.patch('/orcamentos/:id/status', async (req, res) => {

@@ -220,11 +220,11 @@ function barraAcoes(p) {
       'div',
       { class: 'p-barra-botoes' },
       whats
-        ? h('a', { class: 'p-botao p-botao-sec', href: whats, target: '_blank', rel: 'noopener' }, icone('whatsapp'), h('span', { class: 'p-texto-botao' }, 'Tirar dúvidas'))
+        ? h('a', { class: 'p-botao p-botao-sec', href: whats, 'aria-label': 'Tirar dúvidas pelo WhatsApp', target: '_blank', rel: 'noopener' }, icone('whatsapp'), h('span', { class: 'p-texto-botao' }, 'Tirar dúvidas'))
         : null,
       p.situacao.pode_aprovar
-        ? h('button', { type: 'button', class: 'p-botao p-botao-principal', onclick: () => aprovar(p) }, icone('check'), 'Aprovar proposta')
-        : h('a', { class: 'p-botao p-botao-sec', href: `${base}/pdf` }, icone('baixar'), h('span', { class: 'p-texto-botao' }, 'Baixar PDF')),
+        ? h('button', { type: 'button', class: 'p-botao p-botao-principal', 'aria-label': 'Aprovar proposta', onclick: () => aprovar(p) }, icone('check'), h('span', {}, 'Aprovar', h('span', { class: 'p-texto-aprovar-completo' }, ' proposta')))
+        : h('a', { class: 'p-botao p-botao-sec', href: `${base}/pdf`, 'aria-label': 'Baixar proposta em PDF' }, icone('baixar'), h('span', { class: 'p-texto-botao' }, 'Baixar PDF')),
     ),
   );
 }

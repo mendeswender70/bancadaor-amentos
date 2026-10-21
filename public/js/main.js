@@ -11,6 +11,8 @@ import { paginaAvisos } from './pages/avisos.js';
 
 const raiz = document.getElementById('app');
 let usuario = null;
+let intervaloVersao = null;
+let avisoVersaoAtivo = null;
 
 // ------------------------------------------------------------------ Rotas
 
@@ -227,6 +229,63 @@ async function atualizarIndicadorNovidades() {
 
 window.addEventListener('esquadro:avisos-lidos', atualizarIndicadorNovidades);
 
+function registrarServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((erro) => {
+    console.warn('Notificações do PWA indisponíveis:', erro?.message || erro);
+  });
+}
+
+function avisarNovaVersao() {
+  if (avisoVersaoAtivo) return;
+  const atualizar = () => location.reload();
+  const dispensar = () => {
+    avisoVersaoAtivo?.remove();
+    avisoVersaoAtivo = null;
+  };
+  avisoVersaoAtivo = h(
+    'div',
+    { class: 'atualizacao-disponivel', role: 'status', 'aria-live': 'polite' },
+    icone('historico'),
+    h('div', {}, h('strong', {}, 'Nova versão disponível'), h('span', {}, 'Atualize para ver as novidades.')),
+    h('button', { type: 'button', class: 'botao botao-primario botao-pequeno', onclick: atualizar }, 'Atualizar'),
+    h('button', { type: 'button', class: 'botao-icone', 'aria-label': 'Depois', title: 'Depois', onclick: dispensar }, '×'),
+  );
+  document.body.append(avisoVersaoAtivo);
+}
+
+function pararMonitorVersao() {
+  if (intervaloVersao) clearInterval(intervaloVersao);
+  intervaloVersao = null;
+  avisoVersaoAtivo?.remove();
+  avisoVersaoAtivo = null;
+}
+
+function iniciarMonitorVersao() {
+  pararMonitorVersao();
+  const versaoDaAba = novidades[0]?.id || 'inicio';
+  let versaoAvisada = null;
+  let consultando = false;
+  const conferir = async () => {
+    if (consultando || !usuario) return;
+    consultando = true;
+    try {
+      const atual = (await api.get('/versao')).versao;
+      if (atual !== versaoDaAba && atual !== versaoAvisada) {
+        versaoAvisada = atual;
+        avisarNovaVersao();
+      }
+    } catch {
+      // A próxima verificação tenta de novo quando a rede ou o servidor voltar.
+    } finally {
+      consultando = false;
+    }
+  };
+  conferir();
+  intervaloVersao = setInterval(conferir, 45_000);
+}
+
+
 async function abrirNovidades({ somenteNaoLidas = false } = {}) {
   const lidas = idsNovidadesLidas();
   const entradas = novidades.filter((n) => !somenteNaoLidas || !lidas.has(n.id));
@@ -275,6 +334,7 @@ function marcarMenu(caminho) {
 export async function sair() {
   if (verificarSaida && !(await verificarSaida())) return;
   verificarSaida = null;
+  pararMonitorVersao();
   await api.post('/auth/sair').catch(() => {});
   usuario = null;
   cache.empresa = null;
@@ -289,16 +349,59 @@ async function mostrarAcesso() {
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
+    registrarServiceWorker();
+    iniciarMonitorVersao();
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
   substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
 }
 
+function simboloAcessoAnimado() {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('viewBox', '0 0 40 40');
+  svg.setAttribute('class', 'acesso-simbolo-desenho');
+  svg.setAttribute('aria-hidden', 'true');
+  const tracos = [
+    ['M9 5V33H35', 'acesso-traco-principal'],
+    ['M9 12H16'],
+    ['M9 19H14'],
+    ['M9 26H16'],
+    ['M16 33V27'],
+    ['M23 33V29'],
+    ['M30 33V27'],
+  ];
+  for (const [d, classe] of tracos) {
+    const path = document.createElementNS(svgNs, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('pathLength', '100');
+    if (classe) path.setAttribute('class', classe);
+    svg.append(path);
+  }
+  return svg;
+}
+
+function medidorAcesso(input, controle = input, limite = 30) {
+  const linha = h('span', { class: 'acesso-medida', 'aria-hidden': 'true' });
+  const medidor = h('div', { class: 'acesso-medidor' }, controle, linha);
+  const atualizar = () => {
+    const progresso = Math.min(1, input.value.length / limite);
+    medidor.style.setProperty('--acesso-progresso', String(progresso));
+  };
+  input.addEventListener('input', atualizar);
+  input.addEventListener('change', atualizar);
+  atualizar();
+  return medidor;
+}
+
 function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVADO' } = {}) {
+  const serragem = h('div', { class: 'acesso-serragem', 'aria-hidden': 'true' }, ...Array.from({ length: 7 }, () => h('span', {})));
   return h(
     'div',
     { class: 'acesso' },
+    h('img', { class: 'acesso-planta', src: '/images/login-planta.svg', alt: '', 'aria-hidden': 'true' }),
+    serragem,
     h(
       'section',
       { class: 'acesso-marca' },
@@ -317,6 +420,7 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
       h(
         'div',
         { class: 'acesso-cartao' },
+        h('div', { class: 'acesso-simbolo' }, simboloAcessoAnimado()),
         h('span', { class: 'acesso-etiqueta' }, etiqueta),
         h('h1', {}, titulo),
         subtitulo ? h('p', { class: 'acesso-subtitulo' }, subtitulo) : null,
@@ -328,16 +432,25 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
 }
 
 function telaEntrar() {
-  const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
+  const email = h('input', { id: 'email-acesso', type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
   const senha = h('input', { id: 'senha-acesso', type: 'password', autocomplete: 'current-password', required: true });
+  const avisoCapsLock = h('small', { class: 'acesso-caps-lock', role: 'status', 'aria-live': 'polite' }, 'Caps Lock ativado');
+  avisoCapsLock.hidden = true;
+  const atualizarCapsLock = (evento) => { avisoCapsLock.hidden = !evento.getModifierState?.('CapsLock'); };
+  senha.addEventListener('keydown', atualizarCapsLock);
+  senha.addEventListener('keyup', atualizarCapsLock);
+  senha.addEventListener('blur', () => { avisoCapsLock.hidden = true; });
   const mostrarSenha = h('button', {
     type: 'button',
-    class: 'mostrar-senha',
+    class: 'mostrar-senha acesso-senha-alternar',
+    'aria-label': 'Mostrar senha',
+    'aria-controls': senha.id,
     'aria-pressed': 'false',
     onclick: () => {
       const visivel = senha.type === 'password';
       senha.type = visivel ? 'text' : 'password';
       mostrarSenha.textContent = visivel ? 'Ocultar' : 'Mostrar';
+      mostrarSenha.setAttribute('aria-label', visivel ? 'Ocultar senha' : 'Mostrar senha');
       mostrarSenha.setAttribute('aria-pressed', String(visivel));
     },
   }, 'Mostrar');
@@ -349,17 +462,21 @@ function telaEntrar() {
       onsubmit: async (e) => {
         e.preventDefault();
         botao.disabled = true;
+        botao.setAttribute('aria-busy', 'true');
+        botao.replaceChildren(icone('serra', 'icone acesso-serra'), h('span', {}, 'Entrando…'));
         try {
           await api.post('/auth/entrar', { email: email.value, senha: senha.value });
           await mostrarAcesso();
         } catch (erro) {
           avisoErro(erro);
           botao.disabled = false;
+          botao.removeAttribute('aria-busy');
+          botao.replaceChildren('Entrar');
         }
       },
     },
-    campo('E-mail', email),
-    h('div', { class: 'campo' }, h('label', { for: senha.id }, 'Senha'), h('div', { class: 'campo-controle-senha' }, senha, mostrarSenha)),
+    h('div', { class: 'campo' }, h('label', { for: email.id }, 'E-mail'), medidorAcesso(email, email, 36)),
+    h('div', { class: 'campo' }, h('label', { for: senha.id }, 'Senha'), medidorAcesso(senha, h('div', { class: 'campo-controle-senha acesso-senha-controle' }, senha, mostrarSenha), 20), avisoCapsLock),
     botao,
   );
   return cartaoAcesso('Bem-vindo de volta', 'Entre para acompanhar seus orçamentos e manter sua marcenaria em movimento.', form);
@@ -408,6 +525,7 @@ function telaConfigurar() {
 
 quandoPerderSessao(() => {
   if (!usuario) return;
+  pararMonitorVersao();
   usuario = null;
   verificarSaida = null;
   aviso('Sua sessão expirou. Entre novamente.', 'erro');

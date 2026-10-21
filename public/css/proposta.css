@@ -594,6 +594,10 @@ p {
     min-width: 0;
   }
 
+  .p-barra-total strong {
+    font-size: 1rem;
+  }
+
   .p-barra-botoes {
     gap: 6px;
   }
@@ -609,7 +613,8 @@ p {
     padding: 0;
   }
 
-  .p-barra-botoes .p-texto-botao {
+  .p-barra-botoes .p-texto-botao,
+  .p-barra-botoes .p-texto-aprovar-completo {
     display: none;
   }
 

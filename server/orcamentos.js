@@ -382,13 +382,30 @@ export function criarOrcamento(db, body, usuarioId) {
   });
 }
 
-export function atualizarOrcamento(db, id, body, usuarioId) {
+// A expiração automática troca somente enviado/negociação por expirado.
+// Ao renovar a validade, recuperamos do histórico a situação que a proposta tinha.
+async function statusAbertoAnterior(db, id) {
+  const anterior = await db.get(
+    `SELECT snapshot::jsonb ->> 'status' AS status
+     FROM orcamento_historico
+     WHERE orcamento_id = ? AND snapshot IS NOT NULL
+       AND snapshot::jsonb ->> 'status' IN ('enviado', 'negociacao')
+     ORDER BY id DESC LIMIT 1`,
+    id,
+  );
+  return anterior?.status ?? 'enviado';
+}
+
+export function atualizarOrcamento(db, id, body, usuarioId, dataHoje) {
   return db.transacao(async (t) => {
     await bloquearOrcamento(t, id);
     const anterior = await carregarOrcamento(t, id);
     if (!anterior) throw naoEncontrado('Orçamento não encontrado.');
     conferirVersao(body.versao, anterior.versao);
     const novo = await normalizarOrcamento(t, body);
+    if (anterior.status === 'expirado' && novo.status === 'expirado' && novo.data_validade >= dataHoje) {
+      novo.status = await statusAbertoAnterior(t, id);
+    }
     const mudouProposta = assinaturaProposta(anterior) !== assinaturaProposta(novo);
     const precisaNovoAceite = anterior.status === 'aprovado' && mudouProposta;
     if (precisaNovoAceite) novo.status = 'negociacao';
@@ -468,7 +485,13 @@ export async function expirarVencidos(db, dataHoje) {
     `SELECT id FROM orcamentos WHERE status IN ('enviado', 'negociacao') AND data_validade < ?`,
     dataHoje,
   );
-  if (!vencidos.length) return;
+  // Corrige também registros em que a validade foi renovada antes desta
+  // correção, mas o status expirado acabou sendo mantido no banco.
+  const renovados = await db.all(
+    `SELECT id FROM orcamentos WHERE status = 'expirado' AND data_validade >= ?`,
+    dataHoje,
+  );
+  if (!vencidos.length && !renovados.length) return;
   await db.transacao(async (t) => {
     for (const { id } of vencidos) {
       const r = await t.run(
@@ -478,6 +501,22 @@ export async function expirarVencidos(db, dataHoje) {
         dataHoje,
       );
       if (r.changes) await registrarHistorico(t, id, 'Validade vencida — status alterado para Expirado', null);
+    }
+    for (const { id } of renovados) {
+      const atual = await t.get('SELECT status, data_validade FROM orcamentos WHERE id = ? FOR UPDATE', id);
+      if (!atual || atual.status !== 'expirado' || atual.data_validade < dataHoje) continue;
+      const status = await statusAbertoAnterior(t, id);
+      const r = await t.run(
+        `UPDATE orcamentos SET status = ?, versao = versao + 1, atualizado_em = now()
+         WHERE id = ? AND status = 'expirado' AND data_validade >= ?`,
+        status,
+        id,
+        dataHoje,
+      );
+      if (r.changes) {
+        await marcarDatasStatus(t, id, 'expirado', status);
+        await registrarHistorico(t, id, `Validade renovada — status restaurado para ${STATUS[status]}`, null);
+      }
     }
   });
 }
@@ -626,6 +665,48 @@ async function precisaAtencao(db, dataHoje) {
   return lista.slice(0, 6);
 }
 
+/** Lembretes push diários para propostas sem resposta e perto de vencer. */
+export async function listarLembretesAutomaticos(db, dataHoje) {
+  const colunas = `o.id, o.numero, o.data_validade`;
+  const semResposta = await db.all(
+    `SELECT ${colunas}, 'sem_resposta' AS tipo,
+            COALESCE(o.enviado_em::text, o.atualizado_em::text) AS referencia
+     FROM orcamentos o
+     WHERE o.status = 'enviado'
+       AND o.data_validade > ?
+       AND COALESCE(o.enviado_em, o.atualizado_em) <= now() - interval '5 days'
+       AND NOT EXISTS (
+         SELECT 1 FROM notificacoes_lembrete l
+         WHERE l.orcamento_id = o.id AND l.tipo = 'sem_resposta'
+           AND l.referencia = COALESCE(o.enviado_em::text, o.atualizado_em::text)
+           AND l.estado = 'enviado'
+       )
+     ORDER BY COALESCE(o.enviado_em, o.atualizado_em), o.id
+     LIMIT 10`,
+    somarDias(dataHoje, 2),
+  );
+  const pertoVencimento = await db.all(
+    `SELECT ${colunas}, 'perto_vencimento' AS tipo, o.data_validade AS referencia
+     FROM orcamentos o
+     WHERE o.status IN ('enviado', 'negociacao') AND o.data_validade >= ? AND o.data_validade <= ?
+       AND NOT EXISTS (
+         SELECT 1 FROM notificacoes_lembrete l
+         WHERE l.orcamento_id = o.id AND l.tipo = 'perto_vencimento'
+           AND l.referencia = o.data_validade AND l.estado = 'enviado'
+       )
+     ORDER BY o.data_validade, o.id
+     LIMIT 10`,
+    dataHoje,
+    somarDias(dataHoje, 2),
+  );
+  return [...semResposta, ...pertoVencimento].map((lembrete) => ({
+    ...lembrete,
+    dias_para_vencer: Math.round(
+      (Date.parse(`${lembrete.data_validade}T00:00:00Z`) - Date.parse(`${dataHoje}T00:00:00Z`)) / 86_400_000,
+    ),
+  }));
+}
+
 export async function resumoDashboard(db, dataHoje) {
   const inicioMes = inicioDoMes(dataHoje);
   const mes = await numerosDoPeriodo(db, inicioMes, somarMeses(inicioMes, 1));
@@ -673,14 +754,16 @@ export async function idPorToken(db, token) {
 }
 
 export async function registrarVisualizacao(db, id) {
-  await db.transacao(async (t) => {
+  return db.transacao(async (t) => {
     const r = await t.get(
       `UPDATE orcamentos SET visualizacoes = visualizacoes + 1, ultima_visualizacao_em = now(),
          visualizado_em = COALESCE(visualizado_em, now())
        WHERE id = ? RETURNING visualizacoes`,
       id,
     );
-    if (r?.visualizacoes === 1) await registrarHistorico(t, id, 'Cliente abriu a proposta pelo link', null);
+    const primeiraVisualizacao = r?.visualizacoes === 1;
+    if (primeiraVisualizacao) await registrarHistorico(t, id, 'Cliente abriu a proposta pelo link', null);
+    return primeiraVisualizacao;
   });
 }
 
@@ -696,7 +779,7 @@ export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
     if (!Number.isInteger(versaoProposta) || versaoProposta !== orc.versao_proposta) {
       throw new ErroHttp(409, 'A proposta foi alterada. Atualize a página, confira os valores e as condições e confirme novamente.');
     }
-    if (orc.status === 'aprovado') return;
+    if (orc.status === 'aprovado') return false;
     if (!podeAprovar(orc, dataHoje)) {
       throw new ErroHttp(
         409,
@@ -708,5 +791,6 @@ export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
     await t.run(`UPDATE orcamentos SET status = 'aprovado', versao = versao + 1, atualizado_em = now() WHERE id = ?`, id);
     await marcarDatasStatus(t, id, orc.status, 'aprovado', { peloLink: true, nome });
     await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})`, null);
+    return true;
   });
 }
