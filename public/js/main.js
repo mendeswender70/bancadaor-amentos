@@ -1,5 +1,5 @@
 import { api, cache, quandoPerderSessao } from './api.js';
-import { h, anexar, icone, substituir, carregando, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
+import { h, anexar, icone, substituir, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
 import { novidades } from './novidades.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
@@ -57,7 +57,9 @@ async function rotear() {
   if (!conteudo) montarLayout();
   marcarMenu(caminho);
   const alvo = document.getElementById('conteudo');
-  substituir(alvo, carregando());
+  // Mantém a tela anterior visível até a próxima página terminar de buscar os
+  // dados. O spinner em tela cheia causava uma piscada preta em cada navegação.
+  alvo.setAttribute('aria-busy', 'true');
   window.scrollTo(0, 0);
 
   for (const [padrao, pagina] of ROTAS) {
@@ -68,11 +70,14 @@ async function rotear() {
       if (hashAtual === location.hash) substituir(alvo, el);
     } catch (erro) {
       if (erro.status === 401) return;
-      substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
+      if (hashAtual === location.hash) substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
+    } finally {
+      if (hashAtual === location.hash) alvo.removeAttribute('aria-busy');
     }
     return;
   }
   substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, 'Página não encontrada.'), h('a', { href: '#/' }, 'Voltar ao início')));
+  alvo.removeAttribute('aria-busy');
 }
 
 window.addEventListener('hashchange', rotear);

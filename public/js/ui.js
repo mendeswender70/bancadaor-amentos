@@ -288,16 +288,45 @@ export function iniciais(nome) {
 
 let menuAberto = null;
 document.addEventListener('click', (e) => {
-  if (menuAberto && !menuAberto.contains(e.target)) fecharMenu();
+  if (menuAberto && !menuAberto.raiz.contains(e.target) && !menuAberto.lista.contains(e.target)) fecharMenu();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') fecharMenu();
+  if (e.key === 'Escape' && menuAberto) {
+    const botao = menuAberto.botao;
+    fecharMenu();
+    botao.focus();
+  }
 });
+window.addEventListener('hashchange', fecharMenu);
 function fecharMenu() {
-  menuAberto?.querySelector('.menu-opcoes')?.remove();
-  menuAberto?.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false');
+  menuAberto?.lista.remove();
+  menuAberto?.botao.setAttribute('aria-expanded', 'false');
   menuAberto = null;
 }
+
+function posicionarMenu(lista, botao) {
+  const margem = 12;
+  const ancora = botao.getBoundingClientRect();
+  const largura = Math.min(280, window.innerWidth - margem * 2);
+  lista.style.width = `${largura}px`;
+  lista.style.maxHeight = `min(420px, calc(100dvh - ${margem * 2}px))`;
+
+  const altura = lista.getBoundingClientRect().height;
+  const abaixo = window.innerHeight - ancora.bottom - margem;
+  const acima = ancora.top - margem;
+  const top = abaixo >= Math.min(altura, 220) || abaixo >= acima
+    ? Math.min(ancora.bottom + 8, window.innerHeight - altura - margem)
+    : Math.max(margem, ancora.top - altura - 8);
+  const left = Math.max(margem, Math.min(ancora.right - largura, window.innerWidth - largura - margem));
+  Object.assign(lista.style, { top: `${top}px`, left: `${left}px` });
+}
+
+window.addEventListener('resize', () => {
+  if (menuAberto) fecharMenu();
+});
+window.addEventListener('scroll', (e) => {
+  if (menuAberto && !menuAberto.lista.contains(e.target)) fecharMenu();
+}, true);
 
 /**
  * Botão "⋯" com lista de ações.
@@ -314,12 +343,12 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
     'aria-expanded': 'false',
     onclick: (e) => {
       e.stopPropagation();
-      const estavaAberto = menuAberto === raiz;
+      const estavaAberto = menuAberto?.raiz === raiz;
       fecharMenu();
       if (estavaAberto) return;
       const lista = h(
         'div',
-        { class: 'menu-opcoes', role: 'menu' },
+        { class: 'menu-opcoes menu-flutuante', role: 'menu' },
         opcoes.map((op) =>
           op === '-'
             ? h('hr', {})
@@ -340,12 +369,10 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
               ),
         ),
       );
-      raiz.append(lista);
-      // Perto do fim da tela, abre para cima (o menu inferior do celular cobre a parte de baixo).
-      const limite = window.innerHeight - (window.innerWidth < 1024 ? 90 : 16);
-      if (lista.getBoundingClientRect().bottom > limite) lista.classList.add('para-cima');
+      document.body.append(lista);
+      posicionarMenu(lista, botao);
       botao.setAttribute('aria-expanded', 'true');
-      menuAberto = raiz;
+      menuAberto = { raiz, lista, botao };
       lista.querySelector('button:not(:disabled)')?.focus();
     },
   }, icone('pontos'));

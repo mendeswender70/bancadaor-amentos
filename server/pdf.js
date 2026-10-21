@@ -201,7 +201,7 @@ export function gerarPdf(v, logo) {
 
   const grupos = (v.ambientes || [])
     .filter((a) => (a.itens || []).length)
-    .map((a) => ({ titulo: a.nome, subtotal: a.subtotal_cents, itens: a.itens }));
+    .map((a) => ({ titulo: a.nome, descricao: a.descricao, subtotal: a.subtotal_cents, itens: a.itens }));
   if ((v.servicos || []).length) {
     grupos.push({
       titulo: 'Serviços adicionais',
@@ -211,52 +211,122 @@ export function gerarPdf(v, logo) {
   }
 
   let indiceGrupo = 0;
-  const desenharGrupo = (grupo, continua = false) => {
-    const itens = grupo.itens || [];
-    const topo = doc.y;
-    const alturaGrupo = 102 + itens.length * 65;
-    garantir(alturaGrupo);
+  const prepararGrupo = (grupo) => {
+    const larguraTexto = largura - 170;
+    const itens = (grupo.itens || []).map((item) => {
+      const quantidade = item.quantidade || 1;
+      const nome = item.descricao;
+      const nomeAltura = alturaTexto(nome, larguraTexto, { f: 'sansMedia', t: 12 });
+      const quantidadeAltura = alturaTexto(`${quantidade} ${quantidade === 1 ? 'unidade' : 'unidades'}`, larguraTexto, { t: 9.5 });
+      return {
+        item,
+        nome,
+        quantidade,
+        quantidadeAltura,
+        nomeAltura,
+        altura: Math.max(65, nomeAltura + quantidadeAltura + 28),
+      };
+    });
+    const descricao = String(grupo.descricao || '').trim();
+    const tituloAltura = alturaTexto(grupo.titulo, largura - 90, { f: 'serifMedia', t: 19 });
+    const descricaoAltura = descricao ? alturaTexto(descricao, largura - 90, { t: 9.5 }) : 0;
+    const alturaCabecalho = Math.max(66, 17 + tituloAltura + (descricao ? 5 + descricaoAltura : 0) + 14);
+    return { ...grupo, itens, descricao, tituloAltura, descricaoAltura, alturaCabecalho };
+  };
+
+  const desenharSegmentoGrupo = (grupo, itens, { continua = false, final = false, alturaCabecalho = grupo.alturaCabecalho } = {}) => {
     const y = doc.y;
+    const titulo = `${grupo.titulo}${continua ? ' · continuação' : ''}`;
+    const alturaTitulo = alturaTexto(titulo, largura - 90, { f: 'serifMedia', t: 19 });
+    const alturaRodape = final ? 32 : 0;
+    const alturaGrupo = alturaCabecalho + itens.reduce((soma, item) => soma + item.altura, 0) + alturaRodape;
     painel(esq, y, largura, alturaGrupo, 20, 0.86);
     escrever(String(indiceGrupo).padStart(2, '0'), esq + 23, y + 17, {
       f: 'sansForte', t: 10, cor: COR.dourado, width: 25, lineBreak: false,
     });
-    escrever(`${grupo.titulo}${continua ? ' · continuação' : ''}`, esq + 60, y + 17, {
-      f: 'serifMedia', t: 19, cor: COR.tinta, width: largura - 90, lineBreak: false,
+    escrever(titulo, esq + 60, y + 17, {
+      f: 'serifMedia', t: 19, cor: COR.tinta, width: largura - 90,
     });
-    fio(y + 66, esq + 23, dir - 23, 'rgba(226,195,151,0.24)', 0.65);
+    if (grupo.descricao && !continua) {
+      escrever(grupo.descricao, esq + 60, y + 17 + alturaTitulo + 5, {
+        f: 'sans', t: 9.5, cor: COR.suave, width: largura - 90,
+      });
+    }
+    const divisorY = y + alturaCabecalho - 1;
+    fio(divisorY, esq + 23, dir - 23, 'rgba(226,195,151,0.24)', 0.65);
 
-    const itemAltura = 65;
-    const inicioItens = y + 73;
-    itens.forEach((item, i) => {
-      const yItem = inicioItens + i * itemAltura;
-      const nome = item.quantidade > 1 ? `${item.descricao} × ${item.quantidade}` : item.descricao;
-      escrever(nome, esq + 23, yItem + 10, {
-        f: 'sansMedia', t: 12, cor: COR.tinta, width: largura - 170, lineBreak: false,
+    let yItem = divisorY + 7;
+    for (const linha of itens) {
+      escrever(linha.nome, esq + 23, yItem + 2, {
+        f: 'sansMedia', t: 12, cor: COR.tinta, width: largura - 170,
       });
-      const quantidade = item.quantidade || 1;
-      escrever(`${quantidade} ${quantidade === 1 ? 'unidade' : 'unidades'}`, esq + 23, yItem + 29, {
-        f: 'sans', t: 9.5, cor: COR.suave, width: largura - 170, lineBreak: false,
+      const yQuantidade = yItem + 5 + linha.nomeAltura;
+      escrever(`${linha.quantidade} ${linha.quantidade === 1 ? 'unidade' : 'unidades'}`, esq + 23, yQuantidade, {
+        f: 'sans', t: 9.5, cor: COR.suave, width: largura - 170,
       });
-      escrever(formatarDinheiro(item.valor_cents), dir - 145, yItem + 20, {
+      escrever(formatarDinheiro(linha.item.valor_cents), dir - 145, yItem + Math.max(12, (linha.altura - 13) / 2), {
         f: 'sansForte', t: 12.5, cor: COR.dourado, width: 120, align: 'right', lineBreak: false,
       });
-    });
-    fio(y + alturaGrupo - 32, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.65);
-    const yTotal = y + alturaGrupo - 22;
-    rotulo(`Total do ambiente`, esq + 23, yTotal, { t: 8, espacamento: 0.65, width: 250 });
-    escrever(formatarDinheiro(grupo.subtotal), dir - 230, yTotal - 1, {
-      f: 'sansForte', t: 10.5, cor: COR.dourado, width: 205, align: 'right', lineBreak: false,
-    });
+      yItem += linha.altura;
+      if (yItem < y + alturaGrupo - alturaRodape) fio(yItem, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.55);
+    }
+
+    if (final) {
+      const yTotal = y + alturaGrupo - 22;
+      fio(y + alturaGrupo - 32, esq + 23, dir - 23, 'rgba(226,195,151,0.18)', 0.65);
+      rotulo('Total do ambiente', esq + 23, yTotal, { t: 8, espacamento: 0.65, width: 250 });
+      escrever(formatarDinheiro(grupo.subtotal), dir - 230, yTotal - 1, {
+        f: 'sansForte', t: 10.5, cor: COR.dourado, width: 205, align: 'right', lineBreak: false,
+      });
+    }
     doc.y = y + alturaGrupo;
-    return topo;
   };
 
-  for (const grupo of grupos) {
+  for (const bruto of grupos) {
     indiceGrupo += 1;
-    // Propostas longas continuam em novas páginas no mesmo estilo visual.
-    if (doc.y + 102 + grupo.itens.length * 65 > LIMITE_CONTEUDO) novaPaginaDetalhes();
-    desenharGrupo(grupo);
+    const grupo = prepararGrupo(bruto);
+    const alturaCompleta = grupo.alturaCabecalho + grupo.itens.reduce((soma, item) => soma + item.altura, 0) + 32;
+    if (doc.y + alturaCompleta > LIMITE_CONTEUDO && doc.y > 180) novaPaginaDetalhes();
+
+    let restantes = [...grupo.itens];
+    let continua = false;
+    do {
+      const disponivel = LIMITE_CONTEUDO - doc.y;
+      const alturaTituloContinua = alturaTexto(`${grupo.titulo} · continuação`, largura - 90, { f: 'serifMedia', t: 19 });
+      const cabecalho = continua ? Math.max(66, 17 + alturaTituloContinua + 14) : grupo.alturaCabecalho;
+      const alturaTotalItens = restantes.reduce((soma, item) => soma + item.altura, 0);
+      const cabeTudo = cabecalho + alturaTotalItens + 32 <= disponivel;
+      if (!cabeTudo && disponivel < cabecalho + restantes[0].altura + 32 && doc.y > 180) {
+        novaPaginaDetalhes();
+        continua = true;
+        continue;
+      }
+
+      let quantidadeItens = 0;
+      let alturaItens = 0;
+      const limiteItens = disponivel - cabecalho - (cabeTudo ? 32 : 0);
+      while (quantidadeItens < restantes.length && alturaItens + restantes[quantidadeItens].altura <= limiteItens) {
+        alturaItens += restantes[quantidadeItens].altura;
+        quantidadeItens += 1;
+      }
+
+      // Mesmo uma única linha longa pode ocupar uma página nova, mas nunca é cortada.
+      if (!quantidadeItens && restantes.length) {
+        novaPaginaDetalhes();
+        continua = true;
+        continue;
+      }
+
+      const segmento = restantes.splice(0, quantidadeItens);
+      const final = restantes.length === 0;
+      desenharSegmentoGrupo(grupo, segmento, { continua, final, alturaCabecalho: cabecalho });
+      if (!final) {
+        doc.y += 12;
+        novaPaginaDetalhes();
+        continua = true;
+      }
+    } while (restantes.length);
+
     doc.y += 20;
   }
 

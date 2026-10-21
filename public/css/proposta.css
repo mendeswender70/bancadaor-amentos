@@ -1079,3 +1079,79 @@ p {
   outline: 3px solid rgb(226 195 151 / 74%);
   outline-offset: 3px;
 }
+
+/* Propostas reais variam: textos maiores precisam aumentar a seção, nunca
+   invadir o primeiro móvel ou o card seguinte. */
+.p-pagina {
+  padding-bottom: calc(144px + env(safe-area-inset-bottom));
+}
+
+.p-ambiente {
+  min-height: 0;
+}
+
+.p-ambiente > header {
+  height: auto;
+  min-height: 56px;
+  align-items: flex-start;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.p-ambiente > header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.p-ambiente h3 {
+  overflow-wrap: anywhere;
+}
+
+.p-ambiente header p {
+  margin-top: 4px;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.p-itens li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  min-height: 54px;
+  gap: 8px 14px;
+}
+
+.p-item-nome {
+  min-width: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.p-itens li .p-valor {
+  align-self: start;
+  padding-top: 1px;
+}
+
+.p-ambiente > footer {
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+@media (max-width: 480px) {
+  .p-pagina {
+    padding-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+
+  .p-ambiente > header {
+    height: auto;
+    min-height: 56px;
+    padding: 14px 16px;
+  }
+
+  .p-itens li {
+    min-height: 54px;
+    padding: 15px 0;
+    gap: 8px;
+  }
+}
