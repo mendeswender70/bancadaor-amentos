@@ -407,7 +407,7 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
 
 function telaEntrar() {
   const email = h('input', { id: 'email-acesso', type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
-  const senha = h('input', { id: 'senha-acesso', type: 'password', autocomplete: 'current-password', required: true });
+  const senha = h('input', { id: 'senha-acesso', type: 'password', autocomplete: 'current-password', placeholder: '••••••••', required: true });
   const avisoCapsLock = h('small', { class: 'acesso-caps-lock', role: 'status', 'aria-live': 'polite' }, 'Caps Lock ativado');
   avisoCapsLock.hidden = true;
   const atualizarCapsLock = (evento) => { avisoCapsLock.hidden = !evento.getModifierState?.('CapsLock'); };
