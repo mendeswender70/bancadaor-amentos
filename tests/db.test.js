@@ -81,8 +81,13 @@ test('atualiza um banco v3 preservando os orçamentos e aprovações existentes'
       await antigo.close();
     }
     banco = await abrirBanco({ url: `pglite:${pasta}` });
-    const orc = await banco.get('SELECT status, total_cents, aprovado_por, aprovado_pelo_link, versao, versao_proposta FROM orcamentos WHERE numero = 1');
-    assert.deepEqual(orc, { status: 'aprovado', total_cents: 12345, aprovado_por: 'Cliente existente', aprovado_pelo_link: 1, versao: 1, versao_proposta: 1 });
+    const orc = await banco.get(`SELECT status, total_cents, aprovado_por, aprovado_pelo_link, versao, versao_proposta,
+      pagamento_cartao_metodo, pagamento_cartao_parcelas, pagamento_cartao_taxas
+      FROM orcamentos WHERE numero = 1`);
+    assert.deepEqual(orc, {
+      status: 'aprovado', total_cents: 12345, aprovado_por: 'Cliente existente', aprovado_pelo_link: 1,
+      versao: 1, versao_proposta: 1, pagamento_cartao_metodo: 'nenhum', pagamento_cartao_parcelas: 0, pagamento_cartao_taxas: '',
+    });
     assert.equal((await banco.get('SELECT MAX(versao) AS versao FROM migracoes')).versao, MIGRACOES.length);
     assert.equal((await banco.get('SELECT nextval(\'orcamentos_numero_seq\') AS numero')).numero, 2);
     assert.ok((await banco.get('SELECT concluida_em FROM configuracao_inicial WHERE id = 1')).concluida_em,

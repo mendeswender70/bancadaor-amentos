@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-cartao-nu-empresas',
+    data: '22 de outubro de 2026',
+    titulo: 'Novas opções de pagamento no cartão',
+    itens: [
+      'Escolha entre Tap to Pay presencial e Link de pagamento ao preparar um orçamento.',
+      'O cliente vê as taxas e os valores à vista ou parcelados no link da proposta e no PDF.',
+      'O total original do orçamento continua separado das opções de cartão.',
+    ],
+  },
+  {
     id: '2026-10-proposta-desktop-fundo-continuo',
     data: '22 de outubro de 2026',
     titulo: 'Proposta adaptada ao computador',

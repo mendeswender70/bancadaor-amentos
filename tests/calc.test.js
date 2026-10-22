@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calcularItem,
+  calcularOpcoesCartao,
   calcularPagamento,
   calcularTotais,
   descreverCalculo,
@@ -15,6 +16,8 @@ import {
   lerMedida,
   lerPercentual,
   somarDias,
+  TAXAS_CARTAO,
+  totalComTaxaCartao,
 } from '../public/shared/calc.js';
 
 const linear = (m, preco, extra = {}) => ({
@@ -187,6 +190,29 @@ test('parcelas somam exatamente o restante', () => {
     'Parcelamento: 10x de R$ 1.000,00',
   ]);
   assert.deepEqual(descreverPagamento(1000000, { entrada_tipo: 'nenhum', parcelas: 0 }), []);
+});
+
+test('calcula taxas específicas dos dois canais Nu Empresas', () => {
+  const link = calcularOpcoesCartao(100000, 'link_pagamento', 3);
+  assert.equal(link.nome, 'Link de pagamento');
+  assert.equal(link.recebimento, 'Recebimento em até 1 dia útil');
+  assert.equal(link.debito, null);
+  assert.deepEqual(link.credito.map((o) => o.taxa_centesimos_percentual), [399, 599, 699]);
+  assert.equal(link.credito.length, 3);
+  assert.ok(link.credito[0].total_cents > 100000);
+  assert.equal(link.credito[0].valores_parcelas_cents.reduce((soma, n) => soma + n, 0), link.credito[0].total_cents);
+
+  const presencial = calcularOpcoesCartao(100000, 'tap_to_pay', 12);
+  assert.equal(presencial.nome, 'Tap to Pay presencial');
+  assert.equal(presencial.debito.taxa_centesimos_percentual, 89);
+  assert.deepEqual(presencial.credito.map((o) => o.taxa_centesimos_percentual), TAXAS_CARTAO.tap_to_pay.credito);
+  assert.equal(presencial.credito.at(-1).taxa_centesimos_percentual, 1238);
+});
+
+test('gross-up cobre a taxa da operadora sem alterar o valor-base', () => {
+  const total = totalComTaxaCartao(100000, 399);
+  assert.equal(Math.round(total * (10000 - 399) / 10000), 100000);
+  assert.equal(totalComTaxaCartao(100000, 0), 100000);
 });
 
 test('calcula a data de validade', () => {

@@ -735,6 +735,36 @@ async function novaProposta({ abrir = true } = {}) {
 
 const aceite = (proposta) => ({ nome: 'João da Silva', aceite: true, versao_proposta: proposta.versao_proposta });
 
+test('o orçamento guarda e publica as taxas do canal de cartão escolhido', async () => {
+  for (const [metodo, parcelas, nome, debito, primeiraTaxa] of [
+    ['tap_to_pay', 6, 'Tap to Pay presencial', 89, 309],
+    ['link_pagamento', 12, 'Link de pagamento', null, 399],
+  ]) {
+    const { orc, token } = await novaProposta({ abrir: false });
+    orc.pagamento_cartao_metodo = metodo;
+    orc.pagamento_cartao_parcelas = parcelas;
+    const salvo = await chamar('PUT', `/orcamentos/${orc.id}`, orc);
+    assert.equal(salvo.status, 200, JSON.stringify(salvo.dados));
+    assert.equal(salvo.dados.pagamento_cartao_metodo, metodo);
+    assert.equal(salvo.dados.pagamento_cartao_parcelas, parcelas);
+    assert.equal(JSON.parse(salvo.dados.pagamento_cartao_taxas).debito, debito);
+
+    const proposta = await semLogin('GET', `/publico/propostas/${token}`);
+    assert.equal(proposta.status, 200);
+    const cartao = proposta.dados.pagamento.cartao;
+    assert.equal(cartao.nome, nome);
+    assert.equal(cartao.credito.length, parcelas);
+    assert.equal(cartao.credito[0].taxa_centesimos_percentual, primeiraTaxa);
+    assert.ok(cartao.credito[0].total_cents > proposta.dados.total_cents);
+    assert.equal(cartao.credito[0].valores_parcelas_cents.reduce((soma, valor) => soma + valor, 0), cartao.credito[0].total_cents);
+    assert.equal(proposta.dados.total_cents, salvo.dados.total_cents, 'a taxa do cartão não altera o valor-base da proposta');
+
+    const pdf = await semLogin('GET', `/publico/propostas/${token}/pdf`);
+    assert.equal(pdf.status, 200);
+    assert.equal(pdf.dados.subarray(0, 5).toString(), '%PDF-');
+  }
+});
+
 test('push avisa na primeira visita e aprovação sem duplicar e sem bloquear a proposta', async () => {
   const anterior = {
     publicKey: process.env.VAPID_PUBLIC_KEY,
@@ -905,6 +935,7 @@ test('alterações comerciais retiram o aceite e exigem nova aprovação', async
     'preço do móvel': (orc) => { orc.ambientes[0].itens[0].preco_unitario_interno_cents += 10000; },
     'descrição sem mudar total': (orc) => { orc.ambientes[0].itens[0].descricao += ' com acabamento novo'; },
     'condição de pagamento': (orc) => { orc.pagamento_descricao = 'Pagamento somente à vista'; },
+    'forma de pagamento com cartão': (orc) => { orc.pagamento_cartao_metodo = 'link_pagamento'; orc.pagamento_cartao_parcelas = 12; },
     'entrada': (orc) => { orc.pagamento_entrada_tipo = 'percentual'; orc.pagamento_entrada_valor = 3000; },
     'prazo': (orc) => { orc.prazo_entrega = '60 dias úteis'; },
     'validade': (orc) => { orc.validade_dias += 5; },

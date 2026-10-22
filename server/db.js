@@ -310,6 +310,14 @@ export const MIGRACOES = [
      SELECT 1, CASE WHEN EXISTS (SELECT 1 FROM usuarios) THEN now() ELSE NULL END`,
     `ALTER TABLE configuracao_inicial ENABLE ROW LEVEL SECURITY`,
   ],
+  // v9: formas de pagamento com cartão e a taxa escolhida no orçamento.
+  [
+    `ALTER TABLE orcamentos ADD COLUMN pagamento_cartao_metodo text NOT NULL DEFAULT 'nenhum'
+      CHECK (pagamento_cartao_metodo IN ('nenhum', 'tap_to_pay', 'link_pagamento'))`,
+    `ALTER TABLE orcamentos ADD COLUMN pagamento_cartao_parcelas integer NOT NULL DEFAULT 0
+      CHECK (pagamento_cartao_parcelas BETWEEN 0 AND 12)`,
+    `ALTER TABLE orcamentos ADD COLUMN pagamento_cartao_taxas text NOT NULL DEFAULT ''`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------

@@ -56,6 +56,60 @@ export const LIMITES = {
   parcelas: 120,
 };
 
+// Taxas recebidas da conta Nu Empresas em 22/10/2026. Os valores são
+// centésimos de ponto percentual: 399 representa 3,99% sobre a transação.
+export const TAXAS_CARTAO = {
+  tap_to_pay: {
+    nome: 'Tap to Pay presencial',
+    recebimento: 'Recebimento na hora',
+    debito: 89,
+    credito: [309, 579, 609, 799, 809, 819, 949, 968, 1037, 1105, 1227, 1238],
+  },
+  link_pagamento: {
+    nome: 'Link de pagamento',
+    recebimento: 'Recebimento em até 1 dia útil',
+    debito: null,
+    credito: [399, 599, 699, 789, 879, 959, 1049, 1149, 1399, 1499, 1579, 1649],
+  },
+};
+
+/** Calcula o total necessário para, descontada a taxa, receber o valor base. */
+export function totalComTaxaCartao(baseCents, taxaCentesimosPercentual) {
+  const base = Math.max(0, Math.round(Number(baseCents) || 0));
+  const taxa = Math.max(0, Math.round(Number(taxaCentesimosPercentual) || 0));
+  if (!base || !taxa) return base;
+  if (taxa >= 10_000) return base;
+  return dividirArredondando(base * 10_000, 10_000 - taxa);
+}
+
+/** Opções estimadas de débito e crédito para o canal selecionado. */
+export function calcularOpcoesCartao(baseCents, metodo, parcelasMaximas = 12, taxas = TAXAS_CARTAO[metodo]) {
+  if (!taxas || !['tap_to_pay', 'link_pagamento'].includes(metodo)) return null;
+  const max = Math.min(12, Math.max(1, Math.floor(Number(parcelasMaximas) || 12)));
+  const criarOpcao = (tipo, parcelas, taxa) => {
+    const totalCents = totalComTaxaCartao(baseCents, taxa);
+    return {
+      tipo,
+      parcelas,
+      taxa_centesimos_percentual: taxa,
+      taxa_cents: totalCents - Math.round(Number(baseCents) || 0),
+      total_cents: totalCents,
+      valores_parcelas_cents: dividirParcelas(totalCents, parcelas),
+    };
+  };
+  return {
+    canal: metodo,
+    nome: taxas.nome || TAXAS_CARTAO[metodo].nome,
+    recebimento: taxas.recebimento || TAXAS_CARTAO[metodo].recebimento,
+    debito: metodo === 'tap_to_pay' && Number.isInteger(taxas.debito)
+      ? criarOpcao('Débito à vista', 1, taxas.debito)
+      : null,
+    credito: (Array.isArray(taxas.credito) ? taxas.credito : []).slice(0, max).map((taxa, i) =>
+      criarOpcao(i === 0 ? 'Crédito à vista' : `Crédito ${i + 1}x`, i + 1, taxa),
+    ),
+  };
+}
+
 // Divisão de inteiros positivos com arredondamento de metade para cima.
 function dividirArredondando(numerador, divisor) {
   return Math.round(numerador / divisor);

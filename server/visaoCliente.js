@@ -1,4 +1,20 @@
-import { descreverPagamento, formatarNumero } from '../public/shared/calc.js';
+import { calcularOpcoesCartao, descreverPagamento, formatarNumero, TAXAS_CARTAO } from '../public/shared/calc.js';
+
+function taxasCartaoSalvas(orc, metodo) {
+  try {
+    const taxas = JSON.parse(orc.pagamento_cartao_taxas || '');
+    if (
+      taxas &&
+      Array.isArray(taxas.credito) &&
+      taxas.credito.length === 12 &&
+      taxas.credito.every((taxa) => Number.isInteger(taxa) && taxa >= 0 && taxa < 10_000) &&
+      (metodo !== 'tap_to_pay' || Number.isInteger(taxas.debito))
+    ) return taxas;
+  } catch {
+    // Um registro antigo ou incompleto usa a tabela atual do canal escolhido.
+  }
+  return TAXAS_CARTAO[metodo];
+}
 
 /**
  * Tudo o que o cliente pode ver de um orçamento — e nada além disso.
@@ -64,6 +80,14 @@ export function visaoCliente(orc, empresa) {
         entrada_valor: orc.pagamento_entrada_valor,
         parcelas: orc.pagamento_parcelas,
       }),
+      cartao: orc.pagamento_cartao_metodo && orc.pagamento_cartao_metodo !== 'nenhum' && orc.total_cents > 0
+        ? calcularOpcoesCartao(
+            orc.total_cents,
+            orc.pagamento_cartao_metodo,
+            orc.pagamento_cartao_parcelas,
+            taxasCartaoSalvas(orc, orc.pagamento_cartao_metodo),
+          )
+        : null,
     },
     prazo_entrega: orc.prazo_entrega,
     observacoes: orc.observacoes,
