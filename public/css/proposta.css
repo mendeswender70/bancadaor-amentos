@@ -64,13 +64,12 @@ button { cursor: pointer; }
 .p-valor { white-space: nowrap; font-variant-numeric: lining-nums tabular-nums; }
 .p-suave { color: var(--suave); }
 .p-pequeno { font-size: 11px; }
-.p-pagina { width: 100%; padding: 0 0 calc(142px + env(safe-area-inset-bottom)); }
+.p-pagina { position: relative; isolation: isolate; width: 100%; padding: 0 0 calc(142px + env(safe-area-inset-bottom)); }
+.p-pagina::before, .p-pagina::after { content: ''; position: fixed; inset: 0; pointer-events: none; }
+.p-pagina::before { z-index: -2; background: url('/images/figma-madeira-original.jpg') center / cover no-repeat; }
+.p-pagina::after { z-index: -1; background: linear-gradient(110deg, rgb(8 7 6 / 22%), rgb(8 7 6 / 24%) 45%, rgb(8 7 6 / 66%)), linear-gradient(180deg, transparent 35%, rgb(16 13 11 / 38%)); }
 .p-folha { position: relative; isolation: isolate; width: min(100%, 840px); margin: 0 auto; padding: 48px 56px; }
-.p-folha::before, .p-folha::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; }
-.p-folha::before { background: url('/images/figma-madeira-original.jpg') center / cover; }
-.p-folha::after { background: rgb(16 13 11 / 72%); }
 .p-folha-capa { display: flex; flex-direction: column; min-height: 1090px; padding: 66px 56px 48px; }
-.p-folha-capa::after { background: linear-gradient(104.1038deg, rgb(8 7 6 / 22%) 6.5574%, rgb(8 7 6 / 18%) 40.984%, rgb(8 7 6 / 63%) 88.525%); }
 .p-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .p-marca { display: flex; align-items: center; max-width: 65%; }
 .p-logo { display: block; max-width: 100%; width: auto; max-height: 60px; object-fit: contain; object-position: left center; }
@@ -93,15 +92,15 @@ button { cursor: pointer; }
 .p-meta { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; margin-top: 24px; padding: 23px 0 28px; border-block: 1px solid var(--linha); }
 .p-meta dt, .p-par dt { margin-bottom: 6px; color: var(--suave); font-size: 10px; line-height: 1.4; text-transform: uppercase; }
 .p-meta dd { color: var(--tinta); font-size: 14px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
-.p-capa-investimento { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding-top: 23px; }
+.p-capa-investimento { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; padding-top: 23px; }
 .p-capa-investimento strong { display: block; margin-top: 8px; font-size: 36px; font-weight: 600; line-height: 1.2; letter-spacing: -.025em; }
 .p-escopo { padding-bottom: 2px; color: var(--suave); font-size: 11px; white-space: nowrap; }
 .p-link-pdf { display: inline-flex; align-items: center; align-self: end; gap: 8px; margin-top: 24px; color: var(--madeira-clara); font-size: 12px; text-decoration: none; }
 .p-folha-detalhes { padding-top: 50px; }
-.p-folha-detalhes::before { background-size: 100% auto; background-repeat: repeat-y; background-position: center top; }
-.p-cabecalho-detalhes { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 26px; margin-bottom: 30px; border-bottom: 1px solid var(--linha); }
-.p-cabecalho-detalhes > span:first-child { font: 500 18px/1.4 'Playfair Display', Georgia, serif; text-transform: uppercase; }
-.p-cabecalho-detalhes > span:last-child { color: var(--madeira-clara); font-size: 9px; text-transform: uppercase; white-space: nowrap; }
+.p-cabecalho-detalhes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-bottom: 26px; margin-bottom: 30px; border-bottom: 1px solid var(--linha); }
+.p-cabecalho-detalhes > span:first-child { min-width: 0; font: 500 18px/1.4 'Playfair Display', Georgia, serif; text-transform: uppercase; overflow-wrap: anywhere; }
+.p-cabecalho-detalhes > span:last-child { flex: none; color: var(--madeira-clara); font-size: 9px; text-transform: uppercase; white-space: nowrap; }
+.p-projeto, .p-resumo-proposta { min-width: 0; }
 .p-secao { margin: 0; }
 .p-titulo-secao { margin: 12px 0 24px; font: 500 42px/1.2 'Playfair Display', Georgia, serif; }
 .p-ambiente { margin-bottom: 24px; padding: 22px 30px 16px; }
@@ -170,6 +169,38 @@ button { cursor: pointer; }
 .p-falha p { max-width: 400px; color: var(--suave); }
 .p-spinner { width: 28px; height: 28px; border: 1px solid rgb(226 195 151 / 20%); border-top-color: var(--madeira-clara); border-radius: 50%; animation: girar 900ms linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
+
+/* A proposta ocupa a largura do computador; o celular mantém a leitura linear. */
+@media (min-width: 1000px) {
+  .p-folha { width: min(100%, 1280px); padding-inline: 48px; }
+  .p-folha-capa { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(0,1fr); grid-template-rows: auto 1fr auto; grid-template-areas: 'marca marca' 'apresentacao resumo' '. download'; align-items: center; gap: 28px 64px; min-height: 680px; padding-block: 44px 40px; }
+  .p-topo { grid-area: marca; }
+  .p-apresentacao { grid-area: apresentacao; margin: 36px 0; }
+  .p-apresentacao h1 { font-size: clamp(48px, 4.7vw, 68px); }
+  .p-intro { font-size: 16px; }
+  .p-capa-resumo { grid-area: resumo; min-width: 0; padding: 28px; }
+  .p-cliente-nome { font-size: 32px; }
+  .p-meta { gap: 14px; }
+  .p-meta dd { font-size: 13px; }
+  .p-capa-investimento { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .p-capa-investimento strong { font-size: 34px; }
+  .p-link-pdf { grid-area: download; justify-self: end; margin: 0; }
+  .p-folha-detalhes { display: grid; grid-template-columns: minmax(0,1.65fr) minmax(0,1fr); gap: 28px 40px; align-items: start; padding-top: 28px; }
+  .p-cabecalho-detalhes { grid-column: 1 / -1; margin: 0; }
+  .p-projeto { grid-column: 1; }
+  .p-resumo-proposta { grid-column: 2; }
+  .p-titulo-secao { margin-bottom: 28px; }
+  .p-investimento { margin-top: 0; }
+  .p-total { flex-wrap: wrap; justify-content: flex-start; gap: 12px; padding: 24px; }
+  .p-total strong { font-size: clamp(26px, 2.3vw, 32px); }
+  .p-condicoes-painel { padding: 24px; }
+  .p-condicoes-painel h2 { font-size: 24px; }
+  .p-condicoes { gap: 24px 18px; }
+  .p-par dd { font-size: 13px; }
+  .p-rodape { grid-column: 1 / -1; margin-top: 20px; }
+  .p-barra { bottom: 24px; width: min(1184px, calc(100% - 96px)); min-height: 88px; padding: 16px 24px; }
+  .p-barra .p-botao { min-height: 48px; padding-inline: 22px; }
+}
 @media (max-width: 600px) {
   .p-pagina { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
   .p-folha { padding-inline: 24px; }
