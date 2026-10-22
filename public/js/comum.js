@@ -9,7 +9,6 @@ import {
   aviso,
   debounce,
   substituir,
-  vazio,
   icone,
   carregando,
   iniciais,
@@ -198,8 +197,10 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
               o.data_validade && ['enviado', 'negociacao'].includes(o.status) ? h('small', {}, `Válida até ${formatarData(o.data_validade)}`) : null,
             ),
             h('time', { class: 'orcamento-data', datetime: o.data }, formatarData(o.data)),
-            h('span', { class: 'orcamento-status' }, selo(o.status)),
-            h('strong', { class: 'orcamento-total valor' }, formatarDinheiro(o.total_cents)),
+            h('span', { class: 'orcamento-financeiro' },
+              h('span', { class: 'orcamento-status' }, selo(o.status)),
+              h('strong', { class: 'orcamento-total valor' }, formatarDinheiro(o.total_cents)),
+            ),
           )
         : h(
             'a',
@@ -326,6 +327,7 @@ export function modalNovoCliente(inicial = {}) {
 /** Busca de clientes com lista clicável. */
 export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
   const lista = h('div', { class: 'lista' });
+  let buscaAtual = 0;
   const busca = h('input', {
     type: 'search',
     class: 'busca',
@@ -334,9 +336,11 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
     'aria-label': 'Procurar cliente',
   });
   const procurar = async () => {
+    const sequencia = ++buscaAtual;
     substituir(lista, carregando());
     try {
       const clientes = await api.get(`/clientes?q=${encodeURIComponent(busca.value)}`);
+      if (sequencia !== buscaAtual) return;
       if (!clientes.length) {
         substituir(
           lista,
@@ -364,7 +368,10 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
         ),
       );
     } catch (erro) {
-      substituir(lista, vazio(erro.message));
+      if (sequencia !== buscaAtual) return;
+      substituir(lista, vazioIlustrado('alerta', 'Não foi possível carregar os clientes', erro.message,
+        h('button', { type: 'button', class: 'botao', onclick: procurar }, 'Tentar novamente'),
+      ));
     }
   };
   const novo = async () => {

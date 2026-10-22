@@ -2,6 +2,18 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-refino-interface-navegacao',
+    data: '22 de outubro de 2026',
+    titulo: 'Mais cuidado nos detalhes do esquadro',
+    itens: [
+      'Cartões de clientes, indicadores dos orçamentos e divisórias dos móveis ganharam ajustes de alinhamento.',
+      'Valores maiores e botões da proposta se acomodam sem sobreposição em telas pequenas.',
+      'As buscas mantêm o resultado mais recente e permitem tentar novamente quando a conexão falha.',
+      'Orçamentos novos sem alterações podem ser fechados diretamente; os que têm alterações continuam protegidos contra descarte.',
+      'Menus e diálogos ficaram mais fáceis de usar pelo teclado.',
+    ],
+  },
+  {
     id: '2026-10-icones-estados-vazios',
     data: '21 de outubro de 2026',
     titulo: 'Correção nas telas sem resultados',

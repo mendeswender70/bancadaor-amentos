@@ -23,6 +23,7 @@ export async function paginaOrcamentos(query) {
     max: '',
   };
   let deslocamento = 0;
+  let buscaAtual = 0;
   const resultado = h('div', {});
   const contador = h('p', { class: 'suave contador' });
 
@@ -42,37 +43,54 @@ export async function paginaOrcamentos(query) {
   };
 
   const carregar = async (acrescentar = false) => {
+    const sequencia = ++buscaAtual;
+    resultado.querySelector('.carregar-erro')?.remove();
     if (!acrescentar) {
       deslocamento = 0;
       substituir(resultado, carregando());
     }
-    const r = await api.get(`/orcamentos?${montarBusca()}`);
-    contador.textContent = r.total === 1 ? '1 proposta' : `${r.total} propostas`;
-    const lista = listaOrcamentos(r.orcamentos, { aoMudar: () => carregar(), variante: 'tabela' });
-    if (!acrescentar) substituir(resultado);
-    resultado.querySelector('.carregar-mais')?.remove();
-    if (!r.total) {
-      substituir(
-        resultado,
-        h(
-          'div',
-          { class: 'lista' },
-          vazioIlustrado(
-            'busca',
-            'Nenhum orçamento encontrado',
-            'Tente outro nome, número ou filtro.',
-            h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario' }, icone('mais'), 'Novo orçamento'),
+    try {
+      const r = await api.get(`/orcamentos?${montarBusca()}`);
+      if (sequencia !== buscaAtual) return;
+      contador.textContent = r.total === 1 ? '1 proposta' : `${r.total} propostas`;
+      const lista = listaOrcamentos(r.orcamentos, { aoMudar: () => carregar(), variante: 'tabela' });
+      if (!acrescentar) substituir(resultado);
+      resultado.querySelector('.carregar-mais')?.remove();
+      if (!r.total) {
+        substituir(
+          resultado,
+          h(
+            'div',
+            { class: 'lista' },
+            vazioIlustrado(
+              'busca',
+              'Nenhum orçamento encontrado',
+              'Tente outro nome, número ou filtro.',
+              h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario' }, icone('mais'), 'Novo orçamento'),
+            ),
           ),
-        ),
-      );
-      return;
-    }
-    resultado.append(lista);
-    deslocamento += r.orcamentos.length;
-    if (deslocamento < r.total) {
-      resultado.append(
-        h('button', { type: 'button', class: 'botao botao-bloco carregar-mais', onclick: () => carregar(true) }, 'Carregar mais'),
-      );
+        );
+        return;
+      }
+      resultado.append(lista);
+      deslocamento += r.orcamentos.length;
+      if (deslocamento < r.total) {
+        resultado.append(
+          h('button', { type: 'button', class: 'botao botao-bloco carregar-mais', onclick: () => carregar(true) }, 'Carregar mais'),
+        );
+      }
+    } catch (erro) {
+      if (sequencia !== buscaAtual) return;
+      const tentarNovamente = h('button', { type: 'button', class: 'botao', onclick: () => carregar(acrescentar) }, 'Tentar novamente');
+      if (acrescentar) {
+        resultado.querySelector('.carregar-mais')?.remove();
+        const falha = vazio(erro.message, tentarNovamente);
+        falha.classList.add('carregar-erro');
+        resultado.append(falha);
+      } else {
+        contador.textContent = '';
+        substituir(resultado, vazioIlustrado('alerta', 'Não foi possível carregar os orçamentos', erro.message, tentarNovamente));
+      }
     }
   };
 
@@ -145,7 +163,7 @@ export async function paginaOrcamentos(query) {
   );
   atualizarRotuloFiltro();
 
-  carregar().catch((erro) => substituir(resultado, vazio(erro.message)));
+  carregar();
 
   return h(
     'div',

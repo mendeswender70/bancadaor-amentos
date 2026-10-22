@@ -558,6 +558,7 @@ body {
 .lista-orcamentos-tabela { display: flex; flex-direction: column; gap: 10px; overflow: visible; border: 0; background: transparent; }
 .linha-orcamento-tabela { position: relative; display: grid; grid-template-columns: minmax(0,1fr) 44px; min-height: 141px; height: 141px; padding: 12px 10px 11px 14px; border: 1px solid rgb(81 64 49 / 84%); border-radius: 19px; background: #1c1713; box-shadow: none; }
 .orcamento-link-tabela { display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-rows: 38px 10px 49px 16px; align-items: center; gap: 0 8px; min-width: 0; padding: 0; }
+.orcamento-financeiro { display: contents; }
 .orcamento-cliente { grid-column: 1; grid-row: 1; gap: 10px; }
 .orcamento-cliente .avatar-linha { display: inline-grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; background: #c39a69; color: #f5efe6; font-size: 11px; }
 .orcamento-cliente-texto strong { color: #f5efe6; font-size: 12px; }
@@ -1488,7 +1489,11 @@ body {
 }
 
 .pagina-editor .ambiente-corpo > .ambiente-separador {
-  display: none;
+  display: block;
+  flex: none;
+  width: 100%;
+  height: 1px;
+  background: rgb(226 195 151 / 10%);
 }
 
 .pagina-editor .ambiente-corpo > .item {
@@ -1694,8 +1699,8 @@ body {
 .barra-busca { padding-inline: 18px; }
 .barra-busca .icone-busca { position: static; transform: none; margin: 0; }
 .linha-cliente-ui, .linha-orcamento-tabela { box-shadow: none; }
-.cliente-link { align-items: start; padding-top: 18px; }
-.cliente-link .linha-principal { align-self: start; }
+.cliente-link { align-items: center; padding-top: 18px; }
+.cliente-link .linha-principal { align-self: center; }
 .config-overview > h2 { height: 20px; line-height: 23px; }
 @media (max-width: 767px) {
   .pagina-clientes { gap: 20px; }
@@ -1712,14 +1717,19 @@ body {
   .menu-inferior .menu-link:not(.botao-central) { justify-content: flex-start; padding-top: 4px; }
   .menu-inferior .menu-link .icone { padding: 6px 9px; }
   .config-opcao-icone .icone { width: 24px; height: 24px; }
-  .pagina-orcamentos .linha-orcamento-tabela { height: 142px; min-height: 142px; border-radius: 20px; }
+  .pagina-orcamentos .linha-orcamento-tabela { height: auto; min-height: 142px; border-radius: 20px; }
+  .pagina-orcamentos .orcamento-link-tabela { grid-template-rows: 38px 10px minmax(49px,auto) 16px; }
+  .pagina-orcamentos .orcamento-financeiro { display: flex; flex-wrap: wrap; grid-column: 1 / -1; grid-row: 3; align-items: center; align-self: start; gap: 8px; transform: translateY(-4px); }
+  .pagina-orcamentos .orcamento-total { order: -1; flex: 1 0 auto; transform: none; }
+  .pagina-orcamentos .orcamento-status { flex: none; margin: 0; }
+  .pagina-orcamentos .orcamento-cliente { grid-column: 1 / -1; padding-right: 52px; }
   .pagina-orcamentos .orcamento-cliente-texto { transform: translateY(-1px); }
   .pagina-orcamentos .orcamento-status .selo { display: inline-flex; justify-content: flex-start; width: 103px; min-width: 103px; height: 24px; padding: 0 8px; font-weight: 500; }
   .pagina-orcamentos .orcamento-total::before { letter-spacing: 0; }
-  .pagina-orcamentos .orcamento-atividade { transform: translateY(-4px); }
+  .pagina-orcamentos .orcamento-atividade { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 7px; transform: translateY(-4px); }
   .pagina-orcamentos .orcamento-atividade strong { display: inline; }
   .pagina-orcamentos .lista-orcamentos-tabela { gap: 8px; }
-  .pagina-orcamentos .orcamento-atividade::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; background: #e5b77b; vertical-align: 1px; }
+  .pagina-orcamentos .orcamento-atividade::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: #e5b77b; }
   .pagina-orcamentos .orcamento-atividade[data-status=aprovado]::before { background: #92cba5; }
   .pagina-orcamentos .orcamento-atividade[data-status=rascunho]::before { background: #b9ad9e; }
   .pagina-orcamentos .selo::before, .pagina-dashboard .selo::before { width: 3.5px; height: 3.5px; }
