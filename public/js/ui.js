@@ -114,13 +114,16 @@ export function avisoErro(erro) {
 
 // --------------------------------------------------------------------- Modais
 
+let contadorModais = 0;
+
 /**
  * Abre um diálogo. `montar(fechar)` devolve o conteúdo; `fechar(valor)`
  * encerra o diálogo e resolve a Promise com `valor`.
  */
 export function abrirModal(titulo, montar, { largo = false, contexto = '', subtitulo = '', classe = '' } = {}) {
   return new Promise((resolve) => {
-    const dialogo = h('dialog', { class: `modal${largo ? ' modal-largo' : ''}${contexto ? ' modal-contextual' : ''}${classe ? ` ${classe}` : ''}` });
+    const idTitulo = `modal-titulo-${++contadorModais}`;
+    const dialogo = h('dialog', { 'aria-labelledby': idTitulo, class: `modal${largo ? ' modal-largo' : ''}${contexto ? ' modal-contextual' : ''}${classe ? ` ${classe}` : ''}` });
     let encerrado = false;
     const fechar = (valor) => {
       if (encerrado) return;
@@ -136,7 +139,7 @@ export function abrirModal(titulo, montar, { largo = false, contexto = '', subti
     const cabecalho = h(
       'div',
       { class: 'modal-cabecalho' },
-      h('div', { class: 'modal-titulos' }, contexto ? h('span', { class: 'contexto-interno' }, contexto) : null, h('h2', {}, titulo)),
+      h('div', { class: 'modal-titulos' }, contexto ? h('span', { class: 'contexto-interno' }, contexto) : null, h('h2', { id: idTitulo }, titulo)),
       h('button', { type: 'button', class: 'botao-icone', 'aria-label': 'Fechar', onclick: () => fechar(undefined) }, '×'),
     );
     dialogo.append(cabecalho);
@@ -356,6 +359,13 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
     title: rotulo,
     'aria-haspopup': 'menu',
     'aria-expanded': 'false',
+    onkeydown: (e) => {
+      if (!['ArrowDown', 'ArrowUp'].includes(e.key)) return;
+      e.preventDefault();
+      if (menuAberto?.raiz !== raiz) botao.click();
+      const itens = menuAberto?.lista.querySelectorAll('button:not(:disabled)');
+      (e.key === 'ArrowUp' ? itens?.[itens.length - 1] : itens?.[0])?.focus();
+    },
     onclick: (e) => {
       e.stopPropagation();
       const estavaAberto = menuAberto?.raiz === raiz;
@@ -372,10 +382,12 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
                 {
                   type: 'button',
                   role: 'menuitem',
+                  tabindex: '-1',
                   class: op[3]?.perigo ? 'perigo' : '',
                   disabled: Boolean(op[3]?.desativado),
                   onclick: () => {
                     fecharMenu();
+                    botao.focus({ preventScroll: true });
                     op[2]();
                   },
                 },
@@ -384,6 +396,20 @@ export function menuSuspenso(opcoes, { rotulo = 'Mais opções' } = {}) {
               ),
         ),
       );
+      lista.addEventListener('keydown', (evento) => {
+        if (evento.key === 'Tab') {
+          fecharMenu();
+          botao.focus({ preventScroll: true });
+          return;
+        }
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(evento.key)) return;
+        evento.preventDefault();
+        const itens = [...lista.querySelectorAll('button:not(:disabled)')];
+        const atual = itens.indexOf(document.activeElement);
+        const proximo = evento.key === 'Home' ? 0 : evento.key === 'End' ? itens.length - 1
+          : (atual + (evento.key === 'ArrowDown' ? 1 : -1) + itens.length) % itens.length;
+        itens[proximo]?.focus();
+      });
       document.body.append(lista);
       posicionarMenu(lista, botao);
       botao.setAttribute('aria-expanded', 'true');

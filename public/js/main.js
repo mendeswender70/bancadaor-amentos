@@ -31,22 +31,31 @@ const ROTAS = [
 
 // Uma página pode registrar uma verificação antes de sair (ex.: alterações não salvas).
 let verificarSaida = null;
-export function aoSairDaPagina(fn) {
-  verificarSaida = fn;
+export function aoSairDaPagina(fn, rota = location.hash) {
+  if (rota === location.hash) verificarSaida = fn;
 }
 
 let hashAtual = location.hash;
 let ignorarProxima = false;
+let sequenciaRota = 0;
+let saidaEmAndamento = null;
 
 async function rotear() {
   if (ignorarProxima) {
     ignorarProxima = false;
     return;
   }
-  if (verificarSaida && !(await verificarSaida())) {
-    ignorarProxima = true;
-    location.hash = hashAtual;
-    return;
+  const sequencia = ++sequenciaRota;
+  if (verificarSaida) {
+    // Toques rápidos no menu compartilham a mesma confirmação de descarte.
+    saidaEmAndamento ??= verificarSaida().finally(() => { saidaEmAndamento = null; });
+    const podeSair = await saidaEmAndamento;
+    if (sequencia !== sequenciaRota) return;
+    if (!podeSair) {
+      ignorarProxima = true;
+      location.hash = hashAtual;
+      return;
+    }
   }
   verificarSaida = null;
   const hashDaRota = location.hash;
@@ -69,12 +78,12 @@ async function rotear() {
     if (!m) continue;
     try {
       const el = await pagina(m.slice(1), new URLSearchParams(busca));
-      if (hashDaRota === location.hash) substituir(alvo, el);
+      if (sequencia === sequenciaRota && hashDaRota === location.hash) substituir(alvo, el);
     } catch (erro) {
       if (erro.status === 401) return;
-      if (hashDaRota === location.hash) substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
+      if (sequencia === sequenciaRota && hashDaRota === location.hash) substituir(alvo, h('div', { class: 'vazio' }, h('p', {}, erro.message)));
     } finally {
-      if (hashDaRota === location.hash) alvo.removeAttribute('aria-busy');
+      if (sequencia === sequenciaRota && hashDaRota === location.hash) alvo.removeAttribute('aria-busy');
     }
     return;
   }

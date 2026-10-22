@@ -13,11 +13,14 @@ export async function paginaClientes() {
     'aria-label': 'Procurar cliente',
   });
   const contador = h('p', { class: 'contador-clientes' });
+  let buscaAtual = 0;
 
   const carregar = async () => {
+    const sequencia = ++buscaAtual;
     substituir(lista, carregando());
     try {
       const clientes = await api.get(`/clientes?q=${encodeURIComponent(busca.value)}`);
+      if (sequencia !== buscaAtual) return;
       contador.textContent = `${clientes.length} ${clientes.length === 1 ? 'cliente' : 'clientes'}`;
       if (!clientes.length) {
         substituir(
@@ -74,7 +77,10 @@ export async function paginaClientes() {
         ),
       );
     } catch (erro) {
-      substituir(lista, vazio(erro.message));
+      if (sequencia !== buscaAtual) return;
+      substituir(lista, vazioIlustrado('alerta', 'Não foi possível carregar os clientes', erro.message,
+        h('button', { type: 'button', class: 'botao', onclick: carregar }, 'Tentar novamente'),
+      ));
     }
   };
   busca.addEventListener('input', debounce(carregar));

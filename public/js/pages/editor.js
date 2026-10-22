@@ -120,6 +120,7 @@ function linhaResumo(rotulo, valor, classe = '') {
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 
 export async function paginaEditor({ id, clienteId }) {
+  const rotaDoEditor = location.hash;
   const [tipos, condicoes] = await Promise.all([
     api.get('/tipos-moveis'),
     api.get('/condicoes-pagamento'),
@@ -138,7 +139,8 @@ export async function paginaEditor({ id, clienteId }) {
   // ------------------------------------------------------ Salvamento automático
   // `salvo` guarda o que o servidor já tem; qualquer diferença é salva sozinha
   // pouco depois da última alteração.
-  let salvo = id ? JSON.stringify(montarPayload(orc)) : null;
+  const inicial = JSON.stringify(montarPayload(orc));
+  let salvo = id ? inicial : null;
   let salvoEm = id ? new Date() : null;
   let estado = id ? 'salvo' : 'novo'; // novo | pendente | salvando | salvo | incompleto | erro
   let motivoIncompleto = '';
@@ -147,7 +149,7 @@ export async function paginaEditor({ id, clienteId }) {
   let timer = 0;
   let conflito = false;
 
-  const alterado = () => salvo !== JSON.stringify(montarPayload(orc));
+  const alterado = () => (salvo ?? inicial) !== JSON.stringify(montarPayload(orc));
 
   function problemaParaSalvar() {
     if (!orc.ambientes.some((a) => a.itens.length) && !orc.servicos.length) return 'Adicione um móvel para salvar';
@@ -244,7 +246,7 @@ export async function paginaEditor({ id, clienteId }) {
     });
   };
   verificar.sincrono = () => !alterado();
-  aoSairDaPagina(verificar);
+  aoSairDaPagina(verificar, rotaDoEditor);
 
   const atalhoTeclado = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
