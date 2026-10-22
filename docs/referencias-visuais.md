@@ -24,6 +24,18 @@ O link público de aprovação segue a apresentação do PDF: mesma madeira,
 capa, identificação, ambientes, investimento e condições, adaptados à tela.
 A aprovação, o WhatsApp e o download continuam disponíveis na barra de ações.
 
+No navegador, a partir de 1000 px, a capa distribui apresentação e identificação
+do cliente em duas colunas. Os ambientes ficam ao lado do investimento e das
+condições, em uma área de até 1280 px. Abaixo desse limite, a leitura é linear.
+Uma única imagem de madeira cobre a tela durante a rolagem, sem reiniciar na
+passagem da capa para os detalhes. O PDF usa sua composição em A4.
+
+Essa adaptação foi conferida em 34 estados de layout, com larguras de 320, 375,
+390, 430, 600, 601, 768, 999, 1000, 1024, 1280, 1440 e 1920 px, incluindo nomes
+longos, seis ambientes, 48 itens e mudança de largura sem recarregar. A aprovação
+com aceite e o download do PDF foram exercitados no celular e no computador,
+usando a aplicação e a API locais com dados fictícios no Chromium.
+
 ## Assets e materiais
 
 - `public/images/figma-madeira-original.jpg`: imagem original do arquivo, 520 × 924 px;

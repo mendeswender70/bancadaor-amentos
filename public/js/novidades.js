@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-proposta-desktop-fundo-continuo',
+    data: '22 de outubro de 2026',
+    titulo: 'Proposta adaptada ao computador',
+    itens: [
+      'O link enviado ao cliente aproveita a largura do computador, com apresentação, resumo e condições em colunas.',
+      'O fundo de madeira continua entre a capa e os detalhes, sem o corte na imagem.',
+      'Nomes maiores da marcenaria se ajustam ao cabeçalho da proposta.',
+    ],
+  },
+  {
     id: '2026-10-refino-interface-navegacao',
     data: '22 de outubro de 2026',
     titulo: 'Mais cuidado nos detalhes do esquadro',
