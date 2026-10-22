@@ -361,11 +361,9 @@ async function gravarFilhos(db, orcamentoId, orc) {
 }
 
 async function inserir(db, orc, duplicadoDeId = null) {
-  const { n: numero } = await db.get('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM orcamentos');
   const resultado = await db.run(
-    `INSERT INTO orcamentos (numero, duplicado_de_id, ${COLUNAS.join(', ')})
-     VALUES (?, ?, ${COLUNAS.map(() => '?').join(', ')}) RETURNING id`,
-    numero,
+    `INSERT INTO orcamentos (duplicado_de_id, ${COLUNAS.join(', ')})
+     VALUES (?, ${COLUNAS.map(() => '?').join(', ')}) RETURNING id`,
     duplicadoDeId,
     ...COLUNAS.map((c) => orc[c]),
   );

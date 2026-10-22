@@ -27,10 +27,10 @@ Configuração conferida na Neon em 20/10/2026:
 | Branch principal | `production` |
 | Banco | `neondb` |
 
-O banco contém as 13 tabelas da aplicação, incluindo clientes, orçamentos,
-itens, histórico, usuários, sessões e controle de migrações. Na conferência,
-a última migração aplicada era a versão **3**, correspondente às migrações
-definidas em `server/db.js`.
+O banco contém as tabelas de clientes, orçamentos, itens, histórico, usuários,
+sessões e notificações, além do controle de migrações e da marca de configuração
+inicial. As migrações atuais estão na versão **8** (`server/db.js`) e são
+aplicadas automaticamente ao acessar a API.
 
 1. **Neon Console → projeto esquadro → Connect**: selecione a branch
    `production`, o banco `neondb` e a role usada pela aplicação.
@@ -43,6 +43,14 @@ definidas em `server/db.js`.
    que testes alterem os dados de produção.
 4. **Deployments → ⋯ → Redeploy**. O servidor aplica automaticamente as
    migrações pendentes na primeira requisição que acessa a API.
+
+Em uma instalação nova, a criação do primeiro administrador exige a variável
+`INITIAL_ADMIN_SETUP_SECRET` no ambiente **Production** da Vercel. Use uma
+chave aleatória com pelo menos 32 caracteres. Depois do deploy, informe essa
+chave uma única vez na tela de configuração inicial. O banco grava que a
+configuração terminou; a chave pode então ser removida da Vercel. A migração
+marca automaticamente como configurados os bancos que já têm usuários, então
+essa etapa não interrompe instalações existentes.
 
 O servidor usa o driver `postgres` e conecta diretamente ao Postgres; não
 depende do SDK nem do serviço de autenticação da Neon. O login da aplicação
@@ -109,9 +117,14 @@ Abra <http://localhost:3000>. Sem configuração, os dados ficam em um Postgres
 embutido (PGlite) na pasta `data/pglite`. Para usar um banco da Neon, defina
 `DATABASE_URL` antes do `npm start`.
 
+Em um banco novo, defina também `INITIAL_ADMIN_SETUP_SECRET` antes de criar o
+primeiro acesso; a chave pode ser removida depois que o administrador for
+cadastrado.
+
 | Variável        | Para que serve                                                |
 | --------------- | ------------------------------------------------------------- |
 | `DATABASE_URL`  | Endereço Postgres (Neon). Também aceita `POSTGRES_URL`    |
+| `INITIAL_ADMIN_SETUP_SECRET` | Autoriza uma única vez a criação inicial do administrador |
 | `PORT`          | Porta HTTP local (padrão `3000`)                              |
 | `TZ_EMPRESA`    | Fuso usado para "hoje" (padrão `America/Sao_Paulo`)           |
 | `COOKIE_SECURE` | `1` para cookie `Secure` fora da Vercel (HTTPS)               |
@@ -149,6 +162,8 @@ um banco descartável, exclusivo para testes.
   PDF mostra (sem telefone/documento do cliente) e conta as visitas — as da
   própria empresa, logada, não contam.
 - Clientes: cadastro simples e busca por nome, telefone ou WhatsApp.
+- A lista de clientes carrega 50 por vez e informa quantos já foram exibidos;
+  use **Carregar mais** para continuar sem trazer todo o histórico de uma vez.
 - **Móveis e preços**: tipos de móveis com método de cálculo e preço padrão,
   editáveis na mesma lista.
 - **Ambientes**: os móveis ficam agrupados por cômodo (Quarto do casal, Sala,
@@ -167,11 +182,16 @@ um banco descartável, exclusivo para testes.
   Expirado (enviados/em negociação expiram sozinhos quando a validade passa).
 - Histórico de orçamentos com busca por cliente, número, data, status e valor.
 - **Duplicar** orçamento (novo número, mesmos itens e preços).
+- A numeração usa uma sequência do Postgres para evitar colisões em criações
+  simultâneas e não reutilizar números excluídos. Ela pode ter lacunas quando
+  uma gravação é cancelada.
 - **Histórico de alterações** de cada orçamento (evento, data e total), com uma
   cópia completa do orçamento guardada em cada registro.
 - PDF profissional com logo e dados da empresa.
 - Configurações da empresa: dados, logo, validade/prazo/condição padrão,
   texto padrão das observações e mensagem do WhatsApp.
+- Trocar a senha encerra sessões dos outros dispositivos; em **Ajustes → Minha
+  conta** também é possível encerrar todas as sessões, inclusive a atual.
 
 ## Decisões importantes
 

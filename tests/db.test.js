@@ -71,7 +71,8 @@ test('atualiza um banco v3 preservando os orçamentos e aprovações existentes'
         for (const sql of comandos) await antigo.exec(sql);
         await antigo.query('INSERT INTO migracoes (versao) VALUES ($1)', [i + 1]);
       }
-      await antigo.exec(`INSERT INTO clientes (nome) VALUES ('Cliente existente');
+      await antigo.exec(`INSERT INTO usuarios (nome, email, senha_hash) VALUES ('Admin existente', 'admin@exemplo.com', 'hash-de-teste');
+        INSERT INTO clientes (nome) VALUES ('Cliente existente');
         INSERT INTO orcamentos (numero, cliente_id, data, validade_dias, data_validade, status,
           total_cents, aprovado_em, aprovado_por, aprovado_pelo_link)
         VALUES (1, 1, '2026-09-24', 10, '2026-10-04', 'aprovado', 12345,
@@ -82,11 +83,14 @@ test('atualiza um banco v3 preservando os orçamentos e aprovações existentes'
     banco = await abrirBanco({ url: `pglite:${pasta}` });
     const orc = await banco.get('SELECT status, total_cents, aprovado_por, aprovado_pelo_link, versao, versao_proposta FROM orcamentos WHERE numero = 1');
     assert.deepEqual(orc, { status: 'aprovado', total_cents: 12345, aprovado_por: 'Cliente existente', aprovado_pelo_link: 1, versao: 1, versao_proposta: 1 });
-    assert.equal((await banco.get('SELECT MAX(versao) AS versao FROM migracoes')).versao, 6);
+    assert.equal((await banco.get('SELECT MAX(versao) AS versao FROM migracoes')).versao, MIGRACOES.length);
+    assert.equal((await banco.get('SELECT nextval(\'orcamentos_numero_seq\') AS numero')).numero, 2);
+    assert.ok((await banco.get('SELECT concluida_em FROM configuracao_inicial WHERE id = 1')).concluida_em,
+      'bancos com administrador existente são marcados como configurados');
     const tabelasNotificacoes = await banco.all("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('inscricoes_push', 'notificacoes_deploy', 'notificacoes_lembrete') ORDER BY tablename");
     assert.deepEqual(tabelasNotificacoes.map((t) => t.tablename), ['inscricoes_push', 'notificacoes_deploy', 'notificacoes_lembrete']);
-    const rlsPush = await banco.all("SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('inscricoes_push', 'notificacoes_deploy', 'notificacoes_lembrete') AND relrowsecurity");
-    assert.equal(rlsPush.length, 3);
+    const rlsPush = await banco.all("SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('inscricoes_push', 'notificacoes_deploy', 'notificacoes_lembrete', 'configuracao_inicial') AND relrowsecurity");
+    assert.equal(rlsPush.length, 4);
     await banco.close();
     banco = await abrirBanco({ url: `pglite:${pasta}` });
     assert.equal((await banco.get('SELECT COUNT(*) AS n FROM orcamentos')).n, 1);

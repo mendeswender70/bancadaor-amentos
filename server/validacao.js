@@ -31,7 +31,11 @@ export function umDe(valor, opcoes, campo = 'Valor') {
 
 export function dataIso(valor, campo = 'Data') {
   const s = String(valor ?? '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(Date.parse(`${s}T00:00:00Z`))) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || s.startsWith('0000-')) {
+    throw invalido(`${campo} inválida.`);
+  }
+  const data = new Date(`${s}T00:00:00.000Z`);
+  if (Number.isNaN(data.valueOf()) || data.toISOString().slice(0, 10) !== s) {
     throw invalido(`${campo} inválida.`);
   }
   return s;
