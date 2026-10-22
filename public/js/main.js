@@ -365,7 +365,7 @@ async function mostrarAcesso() {
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
-  substituir(raiz, estado.precisa_configurar ? telaConfigurar() : telaEntrar());
+  substituir(raiz, estado.precisa_configurar ? telaConfigurar(estado.configuracao_inicial_habilitada) : telaEntrar());
 }
 
 function medidorAcesso(input, controle = input, limite = 30) {
@@ -473,7 +473,20 @@ function telaEntrar() {
   });
 }
 
-function telaConfigurar() {
+function telaConfigurar(habilitada) {
+  if (!habilitada) {
+    const avisoConfiguracao = h(
+      'div',
+      { class: 'formulario' },
+      h('p', { class: 'suave' }, 'A criação do primeiro administrador está bloqueada até que a pessoa responsável autorize a configuração inicial.'),
+      h('p', { class: 'suave pequeno' }, 'Configure INITIAL_ADMIN_SETUP_SECRET nas variáveis da Vercel e recarregue esta página.'),
+    );
+    return cartaoAcesso('Configuração protegida', 'O primeiro acesso exige uma autorização de uso único.', avisoConfiguracao, {
+      etiqueta: 'PRIMEIRO ACESSO',
+      classe: 'acesso-configuracao',
+    });
+  }
+  const chave = h('input', { type: 'password', autocomplete: 'off', required: true });
   const empresa = h('input', { type: 'text', autocomplete: 'organization', placeholder: 'Nome da marcenaria' });
   const nome = h('input', { type: 'text', autocomplete: 'name', placeholder: 'Seu nome completo', required: true });
   const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'voce@suaempresa.com.br', required: true });
@@ -490,6 +503,7 @@ function telaConfigurar() {
         botao.disabled = true;
         try {
           await api.post('/auth/configurar', {
+            chave_configuracao: chave.value,
             empresa: empresa.value,
             nome: nome.value,
             email: email.value,
@@ -504,6 +518,7 @@ function telaConfigurar() {
         }
       },
     },
+    campo('Chave de configuração inicial', chave, { dica: 'Use a chave de uso único definida na Vercel.' }),
     campo('Empresa', empresa),
     campo('Seu nome', nome),
     campo('E-mail', email),

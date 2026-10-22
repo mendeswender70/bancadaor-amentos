@@ -65,6 +65,17 @@ export async function encerrarSessao(db, req, res) {
   res.setHeader('Set-Cookie', `${COOKIE}=; Max-Age=0; ${opcoesCookie(req)}`);
 }
 
+/** Mantém o navegador atual autenticado e revoga as outras sessões da conta. */
+export async function revogarOutrasSessoes(db, req, usuarioId) {
+  const token = lerCookies(req)[COOKIE];
+  if (!token) throw new ErroHttp(401, 'Faça login para continuar.');
+  return db.run(
+    'DELETE FROM sessoes WHERE usuario_id = ? AND token_hash <> ?',
+    usuarioId,
+    hashToken(token),
+  );
+}
+
 export async function usuarioDaSessao(db, req) {
   const token = lerCookies(req)[COOKIE];
   if (!token) return null;

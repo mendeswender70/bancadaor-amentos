@@ -619,6 +619,15 @@ async function abaConta({ soSenha = false } = {}) {
   const atual = h('input', { type: 'password', required: true, autocomplete: 'current-password' });
   const nova = h('input', { type: 'password', required: true, minlength: '6', autocomplete: 'new-password' });
   const confirmacao = h('input', { type: 'password', required: true, minlength: '6', autocomplete: 'new-password' });
+  const sairTodos = async () => {
+    if (!(await confirmar('Isso encerrará sua sessão neste aparelho e nos demais dispositivos. Será necessário entrar novamente.', { sim: 'Sair de todos' }))) return;
+    try {
+      await api.post('/conta/sessoes/revogar-todas');
+      await sair();
+    } catch (erro) {
+      avisoErro(erro);
+    }
+  };
 
   return h(
     'div',
@@ -659,7 +668,7 @@ async function abaConta({ soSenha = false } = {}) {
           if (nova.value !== confirmacao.value) return aviso('As senhas não conferem.', 'erro');
           try {
             await api.put('/conta/senha', { senha_atual: atual.value, nova_senha: nova.value });
-            aviso('Senha alterada.');
+            aviso('Senha alterada. As sessões dos outros dispositivos foram encerradas.');
             e.target.reset();
           } catch (erro) {
             avisoErro(erro);
@@ -676,8 +685,13 @@ async function abaConta({ soSenha = false } = {}) {
       'section',
       { class: 'cartao cartao-sair' },
       h('h2', {}, 'Sair da conta'),
-      h('p', { class: 'suave' }, 'Para entrar de novo, use seu e-mail e senha.'),
-      h('div', { class: 'acoes-formulario' }, h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: sair }, 'Sair da conta')),
+      h('p', { class: 'suave' }, 'Encerre a sessão neste aparelho ou em todos os dispositivos.'),
+      h(
+        'div',
+        { class: 'acoes-formulario' },
+        h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: sair }, 'Sair da conta'),
+        h('button', { type: 'button', class: 'botao botao-secundario', onclick: sairTodos }, 'Sair de todos os dispositivos'),
+      ),
     ),
     h('a', { href: '#/config/senha', class: 'botao config-abrir-senha' }, 'Alterar senha'),
   );

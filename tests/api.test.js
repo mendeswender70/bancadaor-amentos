@@ -18,9 +18,10 @@ let pastaTemp;
 let pgliteServidor;
 let socketServidor;
 
-async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false, autorizacao } = {}) {
+async function chamar(metodo, caminho, corpo, { semCookie = false, semCabecalho = false, autorizacao, cookieOverride } = {}) {
   const headers = {};
-  if (!semCookie && cookie) headers.cookie = cookie;
+  if (cookieOverride !== undefined) headers.cookie = cookieOverride;
+  else if (!semCookie && cookie) headers.cookie = cookie;
   if (!semCabecalho) headers['X-Requested-With'] = 'fetch';
   if (autorizacao) headers.authorization = `Bearer ${autorizacao}`;
   if (corpo !== undefined) headers['Content-Type'] = 'application/json';
@@ -71,19 +72,46 @@ let tipos;
 let orcamentoId;
 
 test('primeiro acesso cria o administrador', async () => {
-  let r = await chamar('GET', '/auth/estado');
-  assert.equal(r.dados.precisa_configurar, true);
-  r = await chamar('GET', '/clientes');
-  assert.equal(r.status, 401);
-  r = await chamar('POST', '/auth/configurar', {
-    nome: 'Admin',
-    email: 'admin@marcenaria.com',
-    senha: 'segredo123',
-    empresa: 'Marcenaria Teste',
-  });
-  assert.equal(r.status, 201);
-  r = await chamar('POST', '/auth/configurar', { nome: 'Outro', email: 'x@y.com', senha: 'segredo123' });
-  assert.equal(r.status, 403, 'não pode configurar duas vezes');
+  const anterior = process.env.INITIAL_ADMIN_SETUP_SECRET;
+  delete process.env.INITIAL_ADMIN_SETUP_SECRET;
+  try {
+    let r = await chamar('GET', '/auth/estado');
+    assert.equal(r.dados.precisa_configurar, true);
+    assert.equal(r.dados.configuracao_inicial_habilitada, false);
+    r = await chamar('GET', '/clientes');
+    assert.equal(r.status, 401);
+    r = await chamar('POST', '/auth/configurar', { nome: 'Admin', email: 'admin@marcenaria.com', senha: 'segredo123' });
+    assert.equal(r.status, 503, 'sem autorização, o primeiro administrador não pode ser criado');
+
+    process.env.INITIAL_ADMIN_SETUP_SECRET = 'chave-inicial-de-teste-comprida';
+    r = await chamar('GET', '/auth/estado');
+    assert.equal(r.dados.configuracao_inicial_habilitada, true);
+    r = await chamar('POST', '/auth/configurar', {
+      chave_configuracao: 'chave-errada',
+      nome: 'Admin',
+      email: 'admin@marcenaria.com',
+      senha: 'segredo123',
+    });
+    assert.equal(r.status, 403, 'a chave incorreta não cria administrador');
+    r = await chamar('POST', '/auth/configurar', {
+      chave_configuracao: process.env.INITIAL_ADMIN_SETUP_SECRET,
+      nome: 'Admin',
+      email: 'admin@marcenaria.com',
+      senha: 'segredo123',
+      empresa: 'Marcenaria Teste',
+    });
+    assert.equal(r.status, 201);
+    r = await chamar('POST', '/auth/configurar', {
+      chave_configuracao: process.env.INITIAL_ADMIN_SETUP_SECRET,
+      nome: 'Outro',
+      email: 'x@y.com',
+      senha: 'segredo123',
+    });
+    assert.equal(r.status, 403, 'não pode configurar duas vezes');
+  } finally {
+    if (anterior === undefined) delete process.env.INITIAL_ADMIN_SETUP_SECRET;
+    else process.env.INITIAL_ADMIN_SETUP_SECRET = anterior;
+  }
 });
 
 test('login, logout e senha errada', async () => {
@@ -96,6 +124,22 @@ test('login, logout e senha errada', async () => {
   assert.equal(r.status, 200);
   r = await chamar('GET', '/auth/estado');
   assert.equal(r.dados.usuario.nome, 'Admin');
+});
+
+test('trocar a senha encerra outras sessões e preserva a atual', async () => {
+  const sessaoAtual = cookie;
+  let r = await chamar('POST', '/auth/entrar', { email: 'admin@marcenaria.com', senha: 'segredo123' }, { semCookie: true });
+  assert.equal(r.status, 200);
+  const sessaoSecundaria = cookie;
+  cookie = sessaoAtual;
+
+  r = await chamar('PUT', '/conta/senha', { senha_atual: 'segredo123', nova_senha: 'senha-nova123' });
+  assert.equal(r.status, 200);
+  assert.equal((await chamar('GET', '/clientes')).status, 200, 'a sessão que alterou a senha continua ativa');
+  assert.equal((await chamar('GET', '/clientes', undefined, { cookieOverride: sessaoSecundaria })).status, 401);
+
+  r = await chamar('PUT', '/conta/senha', { senha_atual: 'senha-nova123', nova_senha: 'segredo123' });
+  assert.equal(r.status, 200, 'restaura a senha usada pelos testes seguintes');
 });
 
 test('detecta nova versão para a aba autenticada e mostra configuração do push', async () => {
@@ -144,6 +188,8 @@ test('endpoint de deploy exige segredo e ignora eventos repetidos', async () => 
     r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
     assert.equal(r.status, 200);
     assert.equal(r.dados.enviadas, 0);
+    const db = await app.locals.obterDb();
+    await db.run("UPDATE notificacoes_deploy SET iniciado_em = now() - interval '6 minutes' WHERE deployment_id = ?", deploy.deployment_id);
     r = await chamar('POST', '/deploy/notificar', deploy, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
     assert.equal(r.status, 200);
     assert.equal(r.dados.duplicado, true);
@@ -167,11 +213,35 @@ test('cadastra e procura clientes por nome, telefone e WhatsApp', async () => {
   assert.equal(r.status, 400);
 
   r = await chamar('GET', '/clientes?q=joao');
-  assert.deepEqual(r.dados.map((c) => c.nome), ['João da Silva']);
+  assert.deepEqual(r.dados.clientes.map((c) => c.nome), ['João da Silva']);
   r = await chamar('GET', '/clientes?q=98888');
-  assert.deepEqual(r.dados.map((c) => c.nome), ['João da Silva']);
+  assert.deepEqual(r.dados.clientes.map((c) => c.nome), ['João da Silva']);
   r = await chamar('GET', '/clientes?q=2222');
-  assert.deepEqual(r.dados.map((c) => c.nome), ['Maria Souza']);
+  assert.deepEqual(r.dados.clientes.map((c) => c.nome), ['Maria Souza']);
+});
+
+test('clientes são paginados em ordem estável e informam o total', async () => {
+  const db = await app.locals.obterDb();
+  for (let i = 0; i < 105; i++) {
+    const nome = `Paginacao Revisao ${String(i).padStart(3, '0')}`;
+    await db.run('INSERT INTO clientes (nome, nome_busca) VALUES (?, ?)', nome, nome.toLowerCase());
+  }
+  const query = '/clientes?q=paginacao%20revisao';
+  const primeira = await chamar('GET', query);
+  const segunda = await chamar('GET', `${query}&limite=50&deslocamento=50`);
+  const terceira = await chamar('GET', `${query}&limite=50&deslocamento=100`);
+  assert.equal(primeira.dados.total, 105);
+  assert.equal(primeira.dados.limite, 50);
+  assert.equal(primeira.dados.deslocamento, 0);
+  assert.equal(primeira.dados.clientes.length, 50);
+  assert.equal(primeira.dados.tem_mais, true);
+  assert.equal(segunda.dados.clientes.length, 50);
+  assert.equal(segunda.dados.tem_mais, true);
+  assert.equal(terceira.dados.clientes.length, 5);
+  assert.equal(terceira.dados.tem_mais, false);
+  const todos = [...primeira.dados.clientes, ...segunda.dados.clientes, ...terceira.dados.clientes];
+  assert.equal(new Set(todos.map((c) => c.id)).size, 105, 'não repete clientes entre páginas');
+  assert.deepEqual(todos.map((c) => c.nome), [...todos.map((c) => c.nome)].sort((a, b) => a.localeCompare(b)));
 });
 
 test('tipos de móveis vêm com preços padrão', async () => {
@@ -586,7 +656,7 @@ test('cliente aprova a proposta pelo link', async () => {
   assert.equal(hist.filter((h) => h.evento.startsWith('Aprovado pelo cliente')).length, 1);
   const painel = (await chamar('GET', '/dashboard')).dados;
   assert.ok(painel.atencao.some((a) => a.id === orcamentoAmbientesId && a.motivo === 'aprovado'));
-  const clientes = (await chamar('GET', '/clientes?q=joao')).dados;
+  const clientes = (await chamar('GET', '/clientes?q=joao')).dados.clientes;
   assert.ok(clientes[0].aprovado_cents >= orc.total_cents);
 });
 
@@ -780,10 +850,12 @@ test('lembretes push avisam propostas sem resposta e perto do vencimento uma vez
     assert.equal(semResposta.caminho, `/#/orcamentos/${semRetorno.id}`);
     assert.equal(vencimento.caminho, `/#/orcamentos/${pertoDoVencimento.id}`);
 
+    await db.run("UPDATE notificacoes_lembrete SET estado = 'enviando', iniciado_em = now() - interval '6 minutes', enviado_em = NULL");
     r = await chamar('POST', '/lembretes/notificar', {}, { semCookie: true, autorizacao: process.env.DEPLOY_NOTIFICATION_SECRET });
     assert.equal(r.status, 200);
-    assert.equal(r.dados.encontrados, 0, 'não seleciona eventos já enviados');
+    assert.equal(r.dados.encontrados, 2);
     assert.equal(r.dados.processados, 0);
+    assert.equal(r.dados.duplicados, 2, 'não retoma automaticamente um envio iniciado há mais de cinco minutos');
     assert.equal(envios.length, 2);
     assert.equal((await db.get('SELECT COUNT(*) AS n FROM notificacoes_lembrete')).n, 2);
   } finally {
@@ -947,4 +1019,42 @@ test('exclui orçamento e os dados relacionados somente com sessão autenticada'
   assert.equal(filhaPreservada.duplicado_de_id, null);
   assert.equal((await semLogin('GET', `/publico/propostas/${token}`)).status, 404);
   assert.equal((await chamar('DELETE', `/orcamentos/${orc.id}`)).status, 404);
+
+  const excluidaMaisRecente = await chamar('DELETE', `/orcamentos/${filha.dados.id}`);
+  assert.equal(excluidaMaisRecente.status, 200);
+  const novo = await novaProposta({ abrir: false });
+  assert.equal(novo.orc.numero, filha.dados.numero + 1, 'a exclusão do maior número não faz o número ser reutilizado');
+});
+
+test('encerrar todas as sessões remove também a sessão atual', async () => {
+  const sessaoAtual = cookie;
+  const login = await chamar('POST', '/auth/entrar', { email: 'admin@marcenaria.com', senha: 'segredo123' }, { semCookie: true });
+  assert.equal(login.status, 200);
+  const sessaoSecundaria = cookie;
+  cookie = sessaoAtual;
+
+  const resposta = await chamar('POST', '/conta/sessoes/revogar-todas');
+  assert.equal(resposta.status, 200);
+  cookie = '';
+  assert.equal((await chamar('GET', '/clientes', undefined, { cookieOverride: sessaoAtual })).status, 401);
+  assert.equal((await chamar('GET', '/clientes', undefined, { cookieOverride: sessaoSecundaria })).status, 401);
+});
+
+test('a marca de configuração impede recriar o administrador após apagar usuários', async () => {
+  const anterior = process.env.INITIAL_ADMIN_SETUP_SECRET;
+  process.env.INITIAL_ADMIN_SETUP_SECRET = 'chave-inicial-de-teste-comprida';
+  const db = await app.locals.obterDb();
+  await db.run('DELETE FROM usuarios');
+  const estado = await chamar('GET', '/auth/estado');
+  assert.equal(estado.dados.precisa_configurar, false);
+  assert.equal(estado.dados.usuario, null);
+  const recriar = await chamar('POST', '/auth/configurar', {
+    chave_configuracao: process.env.INITIAL_ADMIN_SETUP_SECRET,
+    nome: 'Admin recriado',
+    email: 'recriado@marcenaria.com',
+    senha: 'segredo123',
+  });
+  assert.equal(recriar.status, 403, 'apagar a tabela usuarios não reabre o primeiro acesso');
+  if (anterior === undefined) delete process.env.INITIAL_ADMIN_SETUP_SECRET;
+  else process.env.INITIAL_ADMIN_SETUP_SECRET = anterior;
 });

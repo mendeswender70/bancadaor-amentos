@@ -327,7 +327,10 @@ export function modalNovoCliente(inicial = {}) {
 /** Busca de clientes com lista clicável. */
 export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
   const lista = h('div', { class: 'lista' });
+  const porPagina = 50;
+  let deslocamento = 0;
   let buscaAtual = 0;
+  let carregandoMais = false;
   const busca = h('input', {
     type: 'search',
     class: 'busca',
@@ -335,13 +338,27 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
     value: textoBusca,
     'aria-label': 'Procurar cliente',
   });
-  const procurar = async () => {
+  const procurar = async (acrescentar = false) => {
+    if (carregandoMais && acrescentar) return;
     const sequencia = ++buscaAtual;
-    substituir(lista, carregando());
+    lista.querySelector('.carregar-erro')?.remove();
+    if (!acrescentar) {
+      deslocamento = 0;
+      substituir(lista, carregando());
+    } else {
+      carregandoMais = true;
+      const botao = lista.querySelector('.carregar-mais');
+      if (botao) {
+        botao.disabled = true;
+        botao.textContent = 'Carregando…';
+      }
+    }
     try {
-      const clientes = await api.get(`/clientes?q=${encodeURIComponent(busca.value)}`);
+      const parametros = new URLSearchParams({ q: busca.value, limite: String(porPagina), deslocamento: String(deslocamento) });
+      const resposta = await api.get(`/clientes?${parametros}`);
       if (sequencia !== buscaAtual) return;
-      if (!clientes.length) {
+      const clientes = resposta.clientes;
+      if (!clientes.length && !acrescentar) {
         substituir(
           lista,
           busca.value
@@ -350,9 +367,8 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
         );
         return;
       }
-      substituir(
-        lista,
-        clientes.map((c) =>
+      lista.querySelector('.carregar-mais')?.remove();
+      lista.append(...clientes.map((c) =>
           h(
             'button',
             { type: 'button', class: 'linha-orcamento', onclick: () => aoEscolher(c) },
@@ -365,13 +381,24 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
             ),
             icone('seta', 'icone linha-seta'),
           ),
-        ),
-      );
+        ));
+      deslocamento += clientes.length;
+      if (deslocamento < resposta.total) {
+        lista.append(h('button', { type: 'button', class: 'botao botao-bloco carregar-mais', onclick: () => procurar(true) }, 'Carregar mais'));
+      }
     } catch (erro) {
       if (sequencia !== buscaAtual) return;
-      substituir(lista, vazioIlustrado('alerta', 'Não foi possível carregar os clientes', erro.message,
-        h('button', { type: 'button', class: 'botao', onclick: procurar }, 'Tentar novamente'),
-      ));
+      const tentarNovamente = h('button', { type: 'button', class: 'botao', onclick: () => procurar(acrescentar) }, 'Tentar novamente');
+      if (acrescentar) {
+        lista.querySelector('.carregar-mais')?.remove();
+        const falha = vazio(erro.message, tentarNovamente);
+        falha.classList.add('carregar-erro');
+        lista.append(falha);
+      } else {
+        substituir(lista, vazioIlustrado('alerta', 'Não foi possível carregar os clientes', erro.message, tentarNovamente));
+      }
+    } finally {
+      carregandoMais = false;
     }
   };
   const novo = async () => {

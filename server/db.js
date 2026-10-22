@@ -287,6 +287,29 @@ export const MIGRACOES = [
     )`,
     `ALTER TABLE notificacoes_lembrete ENABLE ROW LEVEL SECURITY`,
   ],
+  // v7: números de orçamento monotônicos, seguros em criações simultâneas.
+  [
+    `CREATE SEQUENCE orcamentos_numero_seq START WITH 1`,
+    `SELECT setval(
+      'orcamentos_numero_seq',
+      GREATEST(COALESCE((SELECT MAX(numero) FROM orcamentos), 0) + 1, 1),
+      false
+    )`,
+    `ALTER TABLE orcamentos ALTER COLUMN numero SET DEFAULT nextval('orcamentos_numero_seq')`,
+    `ALTER SEQUENCE orcamentos_numero_seq OWNED BY orcamentos.numero`,
+  ],
+  // v8: o primeiro administrador só pode ser criado uma vez, mesmo se a
+  // tabela de usuários for apagada posteriormente. Bancos já configurados
+  // recebem a marcação durante a migração.
+  [
+    `CREATE TABLE configuracao_inicial (
+      id integer PRIMARY KEY CHECK (id = 1),
+      concluida_em timestamptz
+    )`,
+    `INSERT INTO configuracao_inicial (id, concluida_em)
+     SELECT 1, CASE WHEN EXISTS (SELECT 1 FROM usuarios) THEN now() ELSE NULL END`,
+    `ALTER TABLE configuracao_inicial ENABLE ROW LEVEL SECURITY`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------

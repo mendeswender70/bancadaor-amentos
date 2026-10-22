@@ -507,7 +507,8 @@ body {
 .barra-busca .busca { flex: 1; min-width: 0; width: 100%; height: 46px; padding: 0 0 0 46px; border: 0; outline: 0; background: transparent; color: #f5efe6; font-size: 12px; }
 .barra-busca .busca::placeholder { color: #b9ad9e; opacity: .9; }
 .lista-clientes { display: flex; flex-direction: column; gap: 14px; overflow: visible; border: 0; background: transparent; }
-.contador-clientes { display: none; }
+.contador-clientes { display: block; min-height: 15px; margin: 0 0 -6px; color: #c39a69; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.pagina-clientes .carregar-mais { min-height: 46px; margin-top: 2px; border-color: rgb(81 64 49 / 84%); border-radius: 15px; background: rgb(28 23 19 / 76%); color: #e2c397; }
 .linha-cliente-ui { min-height: 96px; height: 96px; padding: 0; overflow: hidden; border-radius: 18px; background: #1c1713; box-shadow: none; }
 .cliente-link { display: grid; grid-template-columns: 54px minmax(0,1fr) 16px; align-items: center; gap: 12px; width: 100%; height: 100%; padding: 12px 15px; }
 .cliente-avatar { display: inline-grid !important; place-items: center; width: 54px; height: 54px; border: 1px solid rgb(195 154 105 / 28%); border-radius: 15px; background: #292119; color: #c39a69; font-size: 14px; font-weight: 600; }
@@ -808,10 +809,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .acesso-cartao { animation: none; }
-}
-
-@media (max-width: 767px) {
-  .contador-clientes { display: none; }
 }
 
 @media (min-width: 768px) {

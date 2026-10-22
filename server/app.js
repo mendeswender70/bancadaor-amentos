@@ -12,6 +12,7 @@ import {
   exigirCabecalhoFetch,
   exigirLogin,
   gerarHashSenha,
+  revogarOutrasSessoes,
   usuarioDaSessao,
   validarEmail,
   validarSenha,
@@ -184,27 +185,45 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   const existeUsuario = async () => Boolean(await db.get('SELECT 1 AS ok FROM usuarios LIMIT 1'));
 
   api.get('/auth/estado', async (req, res) => {
-    res.json({ precisa_configurar: !(await existeUsuario()), usuario: await usuarioDaSessao(db, req) });
+    const instalacao = await db.get('SELECT concluida_em FROM configuracao_inicial WHERE id = 1');
+    const configuracaoConcluida = Boolean(instalacao?.concluida_em) || await existeUsuario();
+    res.json({
+      precisa_configurar: !configuracaoConcluida,
+      configuracao_inicial_habilitada: Boolean(process.env.INITIAL_ADMIN_SETUP_SECRET),
+      usuario: await usuarioDaSessao(db, req),
+    });
   });
 
-  // Primeiro acesso: cria o administrador. Depois disso, a rota fica fechada.
+  // Primeiro acesso: exige uma chave fora do banco e consome a autorização
+  // dentro da mesma transação que cria o administrador.
   api.post('/auth/configurar', async (req, res) => {
-    if (await existeUsuario()) throw new ErroHttp(403, 'O sistema já foi configurado.');
+    const instalacao = await db.get('SELECT concluida_em FROM configuracao_inicial WHERE id = 1');
+    if (instalacao?.concluida_em || await existeUsuario()) throw new ErroHttp(403, 'O sistema já foi configurado.');
+    const chave = process.env.INITIAL_ADMIN_SETUP_SECRET;
+    if (!chave) throw new ErroHttp(503, 'A configuração inicial ainda não foi autorizada pela pessoa responsável pelo sistema.');
+    if (!segredoCorreto(req.body.chave_configuracao, chave)) throw new ErroHttp(403, 'Chave de configuração inicial inválida.');
     const nome = texto(req.body.nome, { max: 100, obrigatorio: true, campo: 'Nome' });
     const email = validarEmail(req.body.email);
     const senha = validarSenha(req.body.senha);
-    const r = await db.run(
-      `INSERT INTO usuarios (nome, email, senha_hash, tipo)
-       SELECT ?::text, ?::text, ?::text, 'administrador' WHERE NOT EXISTS (SELECT 1 FROM usuarios)
-       RETURNING id`,
-      nome,
-      email,
-      gerarHashSenha(senha),
-    );
-    if (!r.changes) throw new ErroHttp(403, 'O sistema já foi configurado.');
     const empresa = texto(req.body.empresa, { max: 200 });
-    if (empresa) await db.run('UPDATE empresa SET nome = ? WHERE id = 1', empresa);
-    await criarSessao(db, req, res, r.lastInsertRowid);
+    const usuarioId = await db.transacao(async (t) => {
+      const autorizacaoConsumida = await t.run(
+        'UPDATE configuracao_inicial SET concluida_em = now() WHERE id = 1 AND concluida_em IS NULL RETURNING id',
+      );
+      if (!autorizacaoConsumida.changes) throw new ErroHttp(403, 'O sistema já foi configurado.');
+      const r = await t.run(
+        `INSERT INTO usuarios (nome, email, senha_hash, tipo)
+         SELECT ?::text, ?::text, ?::text, 'administrador' WHERE NOT EXISTS (SELECT 1 FROM usuarios)
+         RETURNING id`,
+        nome,
+        email,
+        gerarHashSenha(senha),
+      );
+      if (!r.changes) throw new ErroHttp(403, 'O sistema já foi configurado.');
+      if (empresa) await t.run('UPDATE empresa SET nome = ? WHERE id = 1', empresa);
+      return r.lastInsertRowid;
+    });
+    await criarSessao(db, req, res, usuarioId);
     res.status(201).json({ ok: true });
   });
 
@@ -311,7 +330,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     const registro = await db.run(
       `INSERT INTO notificacoes_deploy (deployment_id, commit_sha) VALUES (?, ?)
        ON CONFLICT (deployment_id) DO UPDATE SET commit_sha = EXCLUDED.commit_sha, estado = 'enviando', iniciado_em = now(), enviado_em = NULL
-       WHERE notificacoes_deploy.estado = 'erro' OR notificacoes_deploy.iniciado_em < now() - interval '5 minutes'`,
+       WHERE notificacoes_deploy.estado = 'erro'`,
       deploymentId,
       commit,
     );
@@ -347,8 +366,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
          VALUES (?, ?, ?)
          ON CONFLICT (orcamento_id, tipo, referencia) DO UPDATE
          SET estado = 'enviando', iniciado_em = now(), enviado_em = NULL
-         WHERE notificacoes_lembrete.estado = 'erro'
-            OR notificacoes_lembrete.iniciado_em < now() - interval '5 minutes'`,
+         WHERE notificacoes_lembrete.estado = 'erro'`,
         lembrete.id,
         lembrete.tipo,
         lembrete.referencia,
@@ -464,7 +482,16 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     const atual = await db.get('SELECT senha_hash FROM usuarios WHERE id = ?', req.usuario.id);
     if (!conferirSenha(String(req.body.senha_atual ?? ''), atual.senha_hash)) throw invalido('Senha atual incorreta.');
     const nova = validarSenha(req.body.nova_senha);
-    await db.run('UPDATE usuarios SET senha_hash = ? WHERE id = ?', gerarHashSenha(nova), req.usuario.id);
+    await db.transacao(async (t) => {
+      await t.run('UPDATE usuarios SET senha_hash = ? WHERE id = ?', gerarHashSenha(nova), req.usuario.id);
+      await revogarOutrasSessoes(t, req, req.usuario.id);
+    });
+    res.json({ ok: true });
+  });
+
+  api.post('/conta/sessoes/revogar-todas', async (req, res) => {
+    await db.run('DELETE FROM sessoes WHERE usuario_id = ?', req.usuario.id);
+    await encerrarSessao(db, req, res);
     res.json({ ok: true });
   });
 
@@ -514,17 +541,34 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       }
       onde.push(`(${partes.join(' OR ')})`);
     }
-    const limite = Math.min(Math.max(Number(req.query.limite) || 100, 1), 500);
+    const limiteSolicitado = Number(req.query.limite);
+    const limite = Number.isInteger(limiteSolicitado) ? Math.min(Math.max(limiteSolicitado, 1), 100) : 50;
+    const deslocamentoSolicitado = Number(req.query.deslocamento);
+    const deslocamento = Number.isSafeInteger(deslocamentoSolicitado) && deslocamentoSolicitado > 0
+      ? Math.min(deslocamentoSolicitado, 10_000_000)
+      : 0;
+    const where = onde.length ? `WHERE ${onde.join(' AND ')}` : '';
+    const { total } = await db.get(
+      `SELECT COUNT(*) AS total FROM clientes c ${where}`,
+      ...params,
+    );
     const clientes = await db.all(
       `SELECT c.*, COUNT(o.id) AS orcamentos, MAX(o.data) AS ultimo_orcamento,
               COALESCE(SUM(CASE WHEN o.status = 'aprovado' THEN o.total_cents END), 0) AS aprovado_cents
        FROM clientes c LEFT JOIN orcamentos o ON o.cliente_id = c.id
-       ${onde.length ? `WHERE ${onde.join(' AND ')}` : ''}
-       GROUP BY c.id ORDER BY lower(c.nome) LIMIT ?`,
+       ${where}
+       GROUP BY c.id ORDER BY lower(c.nome), c.id LIMIT ? OFFSET ?`,
       ...params,
       limite,
+      deslocamento,
     );
-    res.json(clientes.map(SEM_BUSCA));
+    res.json({
+      clientes: clientes.map(SEM_BUSCA),
+      total,
+      limite,
+      deslocamento,
+      tem_mais: deslocamento + clientes.length < total,
+    });
   });
 
   api.post('/clientes', async (req, res) => {
