@@ -64,6 +64,7 @@ button { cursor: pointer; }
 .p-valor { white-space: nowrap; font-variant-numeric: lining-nums tabular-nums; }
 .p-suave { color: var(--suave); }
 .p-pequeno { font-size: 11px; }
+/* Um único plano de madeira evita emendas entre as seções durante a rolagem. */
 .p-pagina { position: relative; isolation: isolate; width: 100%; padding: 0 0 calc(142px + env(safe-area-inset-bottom)); }
 .p-pagina::before, .p-pagina::after { content: ''; position: fixed; inset: 0; pointer-events: none; }
 .p-pagina::before { z-index: -2; background: url('/images/figma-madeira-original.jpg') center / cover no-repeat; }
