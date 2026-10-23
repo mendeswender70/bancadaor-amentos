@@ -851,6 +851,8 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       pagamento_entrada_tipo: condicao?.entrada_tipo ?? 'nenhum',
       pagamento_entrada_valor: condicao?.entrada_valor ?? 0,
       pagamento_parcelas: condicao?.parcelas ?? 0,
+      pagamento_cartao_metodo: 'nenhum',
+      pagamento_cartao_parcelas: 12,
       prazo_entrega: e.prazo_padrao,
       observacoes: e.texto_padrao,
       observacoes_internas: '',

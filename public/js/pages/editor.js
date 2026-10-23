@@ -4,6 +4,7 @@ import {
   METODOS,
   STATUS,
   calcularItem,
+  calcularOpcoesCartao,
   calcularServico,
   calcularTotais,
   descreverCalculo,
@@ -20,6 +21,7 @@ import {
   lerPercentual,
   somarDias,
   subtotalAmbiente,
+  TAXAS_CARTAO,
   textoPagamento,
 } from '/shared/calc.js';
 import { api, baixarBlob, cache } from '../api.js';
@@ -76,6 +78,8 @@ function montarPayload(orc) {
     pagamento_entrada_tipo: orc.pagamento_entrada_tipo,
     pagamento_entrada_valor: orc.pagamento_entrada_valor,
     pagamento_parcelas: orc.pagamento_parcelas,
+    pagamento_cartao_metodo: orc.pagamento_cartao_metodo || 'nenhum',
+    pagamento_cartao_parcelas: orc.pagamento_cartao_parcelas || 0,
     prazo_entrega: orc.prazo_entrega,
     observacoes: orc.observacoes,
     observacoes_internas: orc.observacoes_internas,
@@ -193,7 +197,7 @@ export async function paginaEditor({ id, clienteId }) {
         const resposta = orc.id ? await api.put(`/orcamentos/${orc.id}`, { ...payload, versao: orc.versao }) : await api.post('/orcamentos', payload);
         // Não troca `orc` pela resposta: o usuário pode ter continuado digitando.
         const perdeuAceite = orc.status === 'aprovado' && resposta.status === 'negociacao';
-        for (const campoServidor of ['id', 'numero', 'criado_em', 'data_validade', 'status', 'duplicado_de_numero', 'total_cents', 'versao', 'versao_proposta', 'aprovado_em', 'aprovado_por', 'aprovado_pelo_link']) {
+        for (const campoServidor of ['id', 'numero', 'criado_em', 'data_validade', 'status', 'duplicado_de_numero', 'total_cents', 'versao', 'versao_proposta', 'aprovado_em', 'aprovado_por', 'aprovado_pelo_link', 'pagamento_cartao_taxas']) {
           orc[campoServidor] = resposta[campoServidor];
         }
         salvo = JSON.stringify({ ...payload, status: resposta.status });
@@ -274,6 +278,7 @@ export async function paginaEditor({ id, clienteId }) {
   const descontoCalculado = h('small', { class: 'dica' });
   const acrescimoCalculado = h('small', { class: 'dica' });
   const previaPagamento = h('div', { class: 'previa-pagamento' });
+  const previaCartao = h('div', { class: 'previa-cartao' });
   const historicoEl = h('div', {});
   const totalBarra = h('strong', { class: 'barra-total-valor' });
   const menuBarra = h('div', {});
@@ -483,6 +488,40 @@ export async function paginaEditor({ id, clienteId }) {
       parcelas: orc.pagamento_parcelas,
     });
     substituir(previaPagamento, linhas.length ? linhas.map((l) => h('div', {}, l)) : h('div', {}, `Total de ${formatarDinheiro(t.total_cents)} de uma vez`));
+    let taxasCartaoSalvas;
+    try { taxasCartaoSalvas = JSON.parse(orc.pagamento_cartao_taxas || ''); } catch { taxasCartaoSalvas = null; }
+    const cartao = orc.pagamento_cartao_metodo && orc.pagamento_cartao_metodo !== 'nenhum' && t.total_cents > 0
+      ? calcularOpcoesCartao(
+          t.total_cents,
+          orc.pagamento_cartao_metodo,
+          orc.pagamento_cartao_parcelas || 12,
+          taxasCartaoSalvas || TAXAS_CARTAO[orc.pagamento_cartao_metodo],
+        )
+      : null;
+    const valorDasParcelas = (opcao) => {
+      const valores = opcao.valores_parcelas_cents;
+      const minimo = Math.min(...valores);
+      const maximo = Math.max(...valores);
+      return minimo === maximo
+        ? `${valores.length}x de ${formatarDinheiro(minimo)}`
+        : `${valores.length}x · parcelas entre ${formatarDinheiro(minimo)} e ${formatarDinheiro(maximo)}`;
+    };
+    substituir(previaCartao, cartao
+      ? h('details', { class: 'editor-cartao-simulacao' },
+          h('summary', {}, `Conferir valores · ${cartao.nome}`),
+          h('p', { class: 'suave pequeno' }, `${cartao.recebimento}. Os valores cobrem a taxa informada pelo Nu Empresas.`),
+          cartao.debito
+            ? h('div', { class: 'editor-cartao-linha' },
+                h('span', {}, `Débito · ${formatarPercentual(cartao.debito.taxa_centesimos_percentual)}% · +${formatarDinheiro(cartao.debito.taxa_cents)}`),
+                h('strong', {}, formatarDinheiro(cartao.debito.total_cents)),
+              )
+            : null,
+          cartao.credito.map((opcao) => h('div', { class: 'editor-cartao-linha' },
+            h('span', {}, `${opcao.tipo} · ${formatarPercentual(opcao.taxa_centesimos_percentual)}% · +${formatarDinheiro(opcao.taxa_cents)} · ${valorDasParcelas(opcao)}`),
+            h('strong', {}, formatarDinheiro(opcao.total_cents)),
+          )),
+        )
+      : null);
     const resumoCondicao = secaoPagamento.querySelector('.editor-pagamento-opcoes > summary');
     if (resumoCondicao) resumoCondicao.textContent = orc.pagamento_descricao || 'Personalizar condições';
     totalBarra.textContent = formatarDinheiro(t.total_cents);
@@ -950,6 +989,36 @@ export async function paginaEditor({ id, clienteId }) {
       ),
       campo('Parcelas', parcelas, { classe: 'campo-metade' }),
     );
+    const taxasCartaoPorMetodo = new Map();
+    if (orc.pagamento_cartao_metodo && orc.pagamento_cartao_taxas) {
+      taxasCartaoPorMetodo.set(orc.pagamento_cartao_metodo, orc.pagamento_cartao_taxas);
+    }
+    const metodoCartao = h('select', { id: 'pagamento-cartao-metodo' },
+      h('option', { value: 'nenhum', selected: !orc.pagamento_cartao_metodo || orc.pagamento_cartao_metodo === 'nenhum' }, 'Não oferecer cartão'),
+      h('option', { value: 'tap_to_pay', selected: orc.pagamento_cartao_metodo === 'tap_to_pay' }, 'Tap to Pay · presencial'),
+      h('option', { value: 'link_pagamento', selected: orc.pagamento_cartao_metodo === 'link_pagamento' }, 'Link de pagamento · online'),
+    );
+    const maxParcelasCartao = h('select', { id: 'pagamento-cartao-parcelas' },
+      Array.from({ length: 12 }, (_, i) => i + 1).map((n) =>
+        h('option', { value: String(n), selected: n === (orc.pagamento_cartao_parcelas || 12) }, n === 1 ? 'À vista (1x)' : `Até ${n}x`),
+      ),
+    );
+    const campoMaxParcelasCartao = campo('Parcelamento máximo', maxParcelasCartao, { classe: 'campo-metade' });
+    campoMaxParcelasCartao.hidden = !orc.pagamento_cartao_metodo || orc.pagamento_cartao_metodo === 'nenhum';
+    metodoCartao.addEventListener('change', () => {
+      const anterior = orc.pagamento_cartao_metodo || 'nenhum';
+      if (orc.pagamento_cartao_taxas) taxasCartaoPorMetodo.set(anterior, orc.pagamento_cartao_taxas);
+      orc.pagamento_cartao_metodo = metodoCartao.value;
+      orc.pagamento_cartao_taxas = taxasCartaoPorMetodo.get(metodoCartao.value) || '';
+      if (metodoCartao.value !== 'nenhum' && !orc.pagamento_cartao_parcelas) orc.pagamento_cartao_parcelas = 12;
+      maxParcelasCartao.value = String(orc.pagamento_cartao_parcelas || 12);
+      campoMaxParcelasCartao.hidden = metodoCartao.value === 'nenhum';
+      atualizarValores();
+    });
+    maxParcelasCartao.addEventListener('change', () => {
+      orc.pagamento_cartao_parcelas = Number(maxParcelasCartao.value) || 12;
+      atualizarValores();
+    });
     function marcarBotoes() {
       const atual = ativas.find((c) => mesmaCondicao(c) && c.descricao === orc.pagamento_descricao);
       for (const b of botoes) {
@@ -967,6 +1036,11 @@ export async function paginaEditor({ id, clienteId }) {
       h('div', { class: 'editor-pagamento-titulo' }, h('span', { class: 'botao-icone' }, icone('pagamento')), h('h2', {}, 'Pagamento')),
       ajustes,
       previaPagamento,
+      h('div', { class: 'grade-formulario editor-cartao-campos' },
+        campo('Cartão nesta proposta', metodoCartao, { classe: 'campo-inteiro' }),
+        campoMaxParcelasCartao,
+      ),
+      previaCartao,
       h('details', { class: 'editor-pagamento-opcoes' }, h('summary', {}, orc.pagamento_descricao || 'Personalizar condições'),
         h('div', { class: 'formulario' },
           h('div', { class: 'chips' }, botoes, botaoPersonalizar),

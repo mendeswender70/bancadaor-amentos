@@ -5,6 +5,7 @@ import {
   STATUS_ABERTOS,
   STATUS_PERDIDOS,
   TIPOS_AJUSTE,
+  TAXAS_CARTAO,
   calcularItem,
   calcularServico,
   calcularTotais,
@@ -41,6 +42,9 @@ const COLUNAS = [
   'pagamento_entrada_tipo',
   'pagamento_entrada_valor',
   'pagamento_parcelas',
+  'pagamento_cartao_metodo',
+  'pagamento_cartao_parcelas',
+  'pagamento_cartao_taxas',
   'prazo_entrega',
   'observacoes',
   'observacoes_internas',
@@ -138,7 +142,7 @@ function normalizarServico(servico, i) {
   return s;
 }
 
-export async function normalizarOrcamento(db, body) {
+export async function normalizarOrcamento(db, body, { cartaoAnterior = null } = {}) {
   const clienteId = inteiro(body?.cliente_id, { min: 1, campo: 'Cliente' });
   if (!(await db.get('SELECT 1 AS ok FROM clientes WHERE id = ?', clienteId))) throw invalido('Selecione um cliente.');
   // Formato antigo (lista simples de itens) vira um ambiente "Móveis".
@@ -156,6 +160,15 @@ export async function normalizarOrcamento(db, body) {
   const desconto = ajuste(body, 'desconto', 'Desconto');
   const acrescimo = ajuste(body, 'acrescimo', 'Acréscimo');
   const entrada = ajuste(body, 'pagamento_entrada', 'Entrada');
+  const cartaoMetodo = umDe(body.pagamento_cartao_metodo ?? 'nenhum', ['nenhum', ...Object.keys(TAXAS_CARTAO)], 'Forma de pagamento no cartão');
+  const cartaoParcelas = cartaoMetodo === 'nenhum'
+    ? 0
+    : inteiro(body.pagamento_cartao_parcelas ?? 12, { min: 1, max: 12, campo: 'Parcelas no cartão' });
+  const cartaoTaxas = cartaoMetodo === 'nenhum'
+    ? ''
+    : cartaoAnterior?.pagamento_cartao_metodo === cartaoMetodo && cartaoAnterior.pagamento_cartao_taxas
+      ? cartaoAnterior.pagamento_cartao_taxas
+      : JSON.stringify(TAXAS_CARTAO[cartaoMetodo]);
 
   const orc = {
     cliente_id: clienteId,
@@ -172,6 +185,9 @@ export async function normalizarOrcamento(db, body) {
     pagamento_entrada_tipo: entrada.tipo,
     pagamento_entrada_valor: entrada.valor,
     pagamento_parcelas: inteiro(body.pagamento_parcelas ?? 0, { max: LIMITES.parcelas, campo: 'Parcelas' }),
+    pagamento_cartao_metodo: cartaoMetodo,
+    pagamento_cartao_parcelas: cartaoParcelas,
+    pagamento_cartao_taxas: cartaoTaxas,
     prazo_entrega: texto(body.prazo_entrega, { max: 200, campo: 'Prazo de entrega' }),
     observacoes: texto(body.observacoes, { max: 5000, campo: 'Observações' }),
     observacoes_internas: texto(body.observacoes_internas, { max: 5000, campo: 'Observações internas' }),
@@ -307,6 +323,9 @@ export function descreverAlteracoes(anterior, novo) {
     'pagamento_entrada_tipo',
     'pagamento_entrada_valor',
     'pagamento_parcelas',
+    'pagamento_cartao_metodo',
+    'pagamento_cartao_parcelas',
+    'pagamento_cartao_taxas',
     'prazo_entrega',
     'observacoes',
     'observacoes_internas',
@@ -400,7 +419,7 @@ export function atualizarOrcamento(db, id, body, usuarioId, dataHoje) {
     const anterior = await carregarOrcamento(t, id);
     if (!anterior) throw naoEncontrado('Orçamento não encontrado.');
     conferirVersao(body.versao, anterior.versao);
-    const novo = await normalizarOrcamento(t, body);
+    const novo = await normalizarOrcamento(t, body, { cartaoAnterior: anterior });
     if (anterior.status === 'expirado' && novo.status === 'expirado' && novo.data_validade >= dataHoje) {
       novo.status = await statusAbertoAnterior(t, id);
     }
@@ -468,7 +487,7 @@ export function duplicarOrcamento(db, id, usuarioId, dataHoje) {
   return db.transacao(async (t) => {
     const original = await carregarOrcamento(t, id);
     if (!original) throw naoEncontrado('Orçamento não encontrado.');
-    const copia = await normalizarOrcamento(t, { ...original, data: dataHoje, status: 'rascunho' });
+    const copia = await normalizarOrcamento(t, { ...original, data: dataHoje, status: 'rascunho' }, { cartaoAnterior: original });
     const novoId = await inserir(t, copia, id);
     const { numero: novoNumero } = await t.get('SELECT numero FROM orcamentos WHERE id = ?', novoId);
     await registrarHistorico(t, novoId, `Orçamento criado a partir do nº ${formatarNumero(original.numero)}`, usuarioId);

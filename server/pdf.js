@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { readFileSync } from 'node:fs';
-import { formatarData, formatarDinheiro } from '../public/shared/calc.js';
+import { formatarData, formatarDinheiro, formatarPercentual } from '../public/shared/calc.js';
 
 const COR = {
   fundo: '#100d0b',
@@ -409,6 +409,52 @@ export function gerarPdf(v, logo) {
   campoResumo('Entrega', v.prazo_entrega || 'A combinar', x1, pagamentoY + 62 + primeiraLinhaH);
   campoResumo('Validade', validade, x2, pagamentoY + 62 + primeiraLinhaH);
   doc.y = pagamentoY + pagamentoH + 23;
+
+  const cartao = v.pagamento?.cartao;
+  if (cartao) {
+    const opcoes = [
+      ...(cartao.debito ? [cartao.debito] : []),
+      ...(cartao.credito || []),
+    ];
+    const cartaoH = 92 + opcoes.length * 20;
+    garantir(cartaoH + 18);
+    const cartaoY = doc.y;
+    painel(esq, cartaoY, largura, cartaoH, 18, 0.78);
+    escrever('Pagamento no cartão', esq + 20, cartaoY + 15, { f: 'serifMedia', t: 18, cor: COR.tinta });
+    escrever(`${cartao.nome} · ${cartao.recebimento}`, esq + 20, cartaoY + 39, { t: 8, cor: COR.dourado, width: largura - 40 });
+
+    const xOpcao = esq + 20;
+    const xTaxa = esq + 118;
+    const xParcela = esq + 214;
+    const xTotal = dir - 118;
+    const yCabecalho = cartaoY + 58;
+    rotulo('Forma', xOpcao, yCabecalho, { t: 6, width: 96 });
+    rotulo('Taxa · acréscimo', xTaxa, yCabecalho, { t: 5.5, width: 88, align: 'right' });
+    rotulo('Parcelamento', xParcela, yCabecalho, { t: 6, width: xTotal - xParcela - 8 });
+    rotulo('Total', xTotal, yCabecalho, { t: 6, width: 105, align: 'right' });
+    opcoes.forEach((opcao, i) => {
+      const y = cartaoY + 76 + i * 20;
+      const valores = opcao.valores_parcelas_cents || [];
+      const min = valores.length ? Math.min(...valores) : 0;
+      const max = valores.length ? Math.max(...valores) : 0;
+      const parcelas = valores.length <= 1
+        ? 'À vista'
+        : min === max
+          ? `${valores.length}x de ${formatarDinheiro(min)}`
+          : `${valores.length}x · ${formatarDinheiro(min)}–${formatarDinheiro(max)}`;
+      if (i) fio(y - 4, esq + 20, dir - 20, 'rgba(226,195,151,0.12)', 0.45);
+      escrever(opcao.tipo, xOpcao, y, { f: 'sansMedia', t: 7.5, cor: COR.texto, width: 96, lineBreak: false });
+      escrever(`${formatarPercentual(opcao.taxa_centesimos_percentual)}% + ${formatarDinheiro(opcao.taxa_cents)}`, xTaxa, y, { f: 'sansMedia', t: 6.5, cor: COR.texto, width: 88, align: 'right', lineBreak: false });
+      escrever(parcelas, xParcela, y, { f: 'sans', t: 7.5, cor: COR.suave, width: xTotal - xParcela - 8, lineBreak: false });
+      escrever(formatarDinheiro(opcao.total_cents), xTotal, y, { f: 'sansMedia', t: 7.5, cor: COR.dourado, width: 105, align: 'right', lineBreak: false });
+    });
+    doc.y = cartaoY + cartaoH + 18;
+    const notaCartao = 'Taxas informadas pelo Nu Empresas. A contratação e a cobrança são feitas diretamente pela marcenaria.';
+    const alturaNotaCartao = alturaTexto(notaCartao, largura, { t: 7 }) + 14;
+    garantir(alturaNotaCartao);
+    escrever(notaCartao, esq + 4, doc.y, { t: 7, cor: COR.suave, width: largura - 8 });
+    doc.y += alturaNotaCartao;
+  }
 
   const observacoes = String(v.observacoes || '').split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
   if (observacoes.length) {
