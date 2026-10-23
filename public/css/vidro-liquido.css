@@ -1,0 +1,217 @@
+/* Vidro de volume: menisco suave, luz ampla e elasticidade só na lente. */
+:root {
+  --gel-branco: 255 249 239;
+  --vidro-preenchimento: linear-gradient(145deg, rgb(255 249 239 / 9%), rgb(255 255 255 / 2%) 52%, rgb(218 200 174 / 5%)), rgb(118 104 87 / 8%);
+  --vidro-primario: linear-gradient(145deg, rgb(255 248 229 / 16%), rgb(242 210 164 / 3%) 55%, rgb(232 204 167 / 9%)), rgb(152 111 65 / 28%);
+  --vidro-sombra: inset 0 1px 1px rgb(255 249 239 / 23%), inset 0 -2px 5px rgb(255 242 222 / 7%), 0 6px 18px -10px rgb(0 0 0 / 65%);
+}
+
+/* O volume vem da transparência e da luz difusa, sem um aro metálico grosso. */
+
+.gel-superficie {
+  --gel-luz-x: 27%;
+  --gel-luz-y: 18%;
+  --gel-oposta-x: 73%;
+  --gel-oposta-y: 82%;
+  --gel-dx: 0px;
+  --gel-dy: 0px;
+  --gel-sx: 1;
+  --gel-sy: 1;
+  --gel-energia: .7;
+  --gel-tinta: rgb(42 35 29 / 32%);
+  --gel-borda: rgb(255 247 233 / 12%);
+  --gel-blur: 14px;
+  --gel-menisco: 8px;
+  isolation: isolate;
+}
+.gel-posicionada { position: relative; }
+.gel-controle { --gel-tinta: rgb(154 140 121 / 8%); --gel-menisco: 4px; --gel-blur: 9px; }
+.gel-flutuante { --gel-tinta: rgb(25 22 19 / 80%); --gel-menisco: 9px; --gel-blur: 28px; }
+.gel-madeira { --gel-tinta: rgb(16 13 11 / 12%); --gel-blur: 9px; }
+.gel-madeira.gel-controle { --gel-tinta: rgb(216 201 179 / 4%); }
+.gel-superficie:where(.menu-inferior, .p-barra, .acao-interna-fixa) { --gel-tinta: rgb(24 21 18 / 73%); --gel-blur: 24px; }
+
+#app .gel-superficie,
+#proposta .gel-superficie,
+dialog.gel-superficie,
+.modal.gel-superficie .gel-superficie,
+.p-modal.gel-superficie .gel-superficie,
+body > .menu-opcoes.gel-superficie,
+body > .sugestoes.gel-superficie {
+  border-color: var(--gel-borda);
+  background:
+    radial-gradient(ellipse 140% 100% at 18% -55%, rgb(var(--gel-branco) / 14%), transparent 72%),
+    linear-gradient(150deg, rgb(255 255 255 / 3.8%), rgb(255 255 255 / .6%) 48%, rgb(220 207 188 / 2.5%)),
+    var(--gel-tinta);
+  box-shadow:
+    inset 0 1px 1px rgb(var(--gel-branco) / 10%),
+    inset 0 -1px 2px rgb(var(--gel-branco) / 4%),
+    0 12px 26px -18px rgb(0 0 0 / 62%);
+  -webkit-backdrop-filter: blur(var(--gel-blur)) saturate(1.16);
+  backdrop-filter: blur(var(--gel-blur)) saturate(1.16);
+}
+
+/* Retira os aros anteriores; uma única lente produz o acabamento. */
+#app .gel-superficie:where(.acesso-cartao, .botao, .botao-icone, .config-opcao, .config-opcao-icone, .ambiente, .ambiente-editar, .item-editar, .editor-adicionar-ambiente-topo, .botao-tracejado, .menu-link, .icone, .botao-central > span)::before,
+#proposta .gel-superficie:where(.p-vidro, .p-ambiente, .p-condicoes-painel)::before,
+#app .acesso-cartao.gel-superficie::after,
+#app .botao.gel-superficie::after,
+.modal .botao.gel-superficie::before {
+  content: none;
+}
+
+/* A camada negativa está acima do fundo local e abaixo de todo o conteúdo. */
+.gel-superficie > .gel-lente {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  transform: translate3d(var(--gel-dx), var(--gel-dy), 0) scale(var(--gel-sx), var(--gel-sy));
+  transform-origin: var(--gel-luz-x) var(--gel-luz-y);
+}
+.gel-lente::before,
+.gel-lente::after,
+.gel-refracao {
+  content: '';
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.gel-lente::before {
+  z-index: 2;
+  border: 1px solid rgb(var(--gel-branco) / 11%);
+  background:
+    radial-gradient(ellipse 72% 48% at var(--gel-luz-x) var(--gel-luz-y), rgb(var(--gel-branco) / 10%), transparent 76%),
+    radial-gradient(ellipse 58% 38% at var(--gel-oposta-x) var(--gel-oposta-y), rgb(245 231 209 / 5%), transparent 78%);
+  box-shadow: inset 0 1px 1px rgb(var(--gel-branco) / 14%);
+  filter: blur(.45px);
+  opacity: var(--gel-energia);
+}
+.gel-lente::after {
+  z-index: 3;
+  background:
+    radial-gradient(ellipse 115% 25% at var(--gel-luz-x) -12%, rgb(var(--gel-branco) / 5%), transparent 75%),
+    radial-gradient(ellipse 70% 22% at var(--gel-oposta-x) 112%, rgb(var(--gel-branco) / 3%), transparent 78%);
+  box-shadow:
+    inset 0 6px 16px -14px rgb(var(--gel-branco) / 32%),
+    inset 0 -8px 18px -16px rgb(var(--gel-branco) / 24%);
+}
+.gel-refracao { display: none; }
+.gel-madeira > .gel-lente > .gel-refracao {
+  display: block;
+  padding: calc(var(--gel-menisco) * 1.25);
+  background-image: linear-gradient(rgb(15 12 10 / 36%), rgb(15 12 10 / 36%)), url('/images/figma-madeira-original.jpg');
+  background-size: auto, var(--gel-textura-w, 100vw) var(--gel-textura-h, 100vh);
+  background-position: center, var(--gel-textura-x, center) var(--gel-textura-y, center);
+  background-repeat: no-repeat;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  filter: blur(3px);
+  opacity: .12;
+}
+
+.gel-superficie.gel-controle:where(.botao-primario, .p-botao-principal, .lateral-novo),
+.menu-inferior .botao-central > .gel-superficie,
+.gel-superficie.gel-controle:where(.chip.ativo, .segmentado > .ativo, .abas > .ativa, .abas-editor > .ativo, .editor-indice > .ativo) {
+  --gel-tinta: rgb(156 112 62 / 29%);
+  --gel-borda: rgb(255 237 205 / 24%);
+}
+#app .gel-superficie:where(.botao-primario, .chip.ativo, .segmentado > .ativo, .abas-editor > .ativo),
+#proposta .p-botao-principal.gel-superficie { color: #fff3df; }
+.gel-superficie:where(.botao-whatsapp, .botao-icone-whatsapp, .ficha-whatsapp) { --gel-tinta: rgb(76 139 98 / 18%); --gel-borda: rgb(160 223 183 / 22%); }
+.gel-superficie:where(.botao-perigo, .botao-perigo-texto) { --gel-tinta: rgb(174 73 59 / 12%); --gel-borda: rgb(238 145 128 / 22%); }
+.gel-controle > .gel-lente::before { border-color: rgb(var(--gel-branco) / 9%); }
+.gel-superficie:where(.selo-icone, .config-opcao-icone, .aviso-feed-icone, .avatar, .cliente-avatar, .dashboard-atalho-icone) { --gel-menisco: 3px; }
+#app .gel-superficie:hover,
+#proposta .gel-superficie:hover { border-color: var(--gel-borda); }
+.gel-superficie:focus-visible { outline: 2px solid #e2c397; outline-offset: 3px; }
+
+/* Os campos são elementos nativos: o cursor e o texto permanecem nítidos. */
+#app .gel-campo,
+.modal .gel-campo,
+#proposta .gel-campo,
+.p-modal .gel-campo {
+  border-color: rgb(242 229 211 / 17%);
+  background: linear-gradient(160deg, rgb(255 249 239 / 4%), rgb(255 255 255 / .6%) 65%), rgb(16 14 12 / 20%);
+  box-shadow: inset 0 2px 7px rgb(0 0 0 / 13%), inset 0 -1px 1px rgb(255 245 228 / 10%), 0 1px 0 rgb(255 249 239 / 3%);
+  color: #f5efe6;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+#app .gel-campo:focus,
+.modal .gel-campo:focus,
+.p-modal .gel-campo:focus {
+  border-color: rgb(226 195 151 / 56%);
+  box-shadow: inset 0 2px 7px rgb(0 0 0 / 10%), inset 0 -1px 2px rgb(255 245 228 / 17%), 0 0 0 3px rgb(226 195 151 / 10%);
+}
+#app :is(.barra-busca, .entrada-com-unidade, .preco-com-unidade) .gel-campo,
+.modal .entrada-com-unidade .gel-campo {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+#app .gel-superficie:where(.abas, .abas-editor, .editor-indice, .segmentado) { --gel-tinta: rgb(18 16 13 / 25%); --gel-menisco: 4px; }
+#app :is(.abas-editor, .segmentado) > .gel-superficie:not(.ativo),
+#app .abas > .gel-superficie:not(.ativa) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:is(.abas-editor, .segmentado) > .gel-superficie:not(.ativo) > .gel-lente,
+.abas > .gel-superficie:not(.ativa) > .gel-lente { opacity: 0; }
+
+#app .estrutura {
+  background:
+    radial-gradient(ellipse 1000px 700px at 8% 0%, rgb(144 102 65 / 8%), transparent 70%),
+    radial-gradient(ellipse 700px 900px at 100% 60%, rgb(187 157 117 / 3%), transparent 75%),
+    #100d0b;
+}
+.modal.gel-superficie::backdrop,
+.p-modal.gel-superficie::backdrop { background: rgb(5 4 3 / 55%); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+
+/* Um único controle opcional de movimento; o toque funciona sem permissão. */
+.gel-movimento {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid rgb(255 245 225 / 16%);
+  border-radius: 99px;
+  color: #d6c7b1;
+  font: 500 10px/1.2 'Inter', sans-serif;
+  cursor: pointer;
+}
+.gel-movimento svg { flex: none; width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.gel-movimento::after { position: absolute; inset: -6px 0; content: ''; }
+.gel-movimento-ativo { color: #f1dfbf; }
+.gel-movimento-topo { position: relative; inset: auto; order: 1; flex: none; width: 32px; padding: 0; margin-left: 2px; }
+.gel-movimento-topo .gel-movimento-texto { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gel-superficie > .gel-lente { transform: none; }
+  .gel-movimento { display: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .gel-superficie { --gel-tinta: rgb(31 26 21 / 94%); }
+}
+@media print {
+  .gel-lente, .gel-movimento { display: none; }
+}

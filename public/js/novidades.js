@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-10-23-vidro-gel-em-todo-site',
+    data: '23 de outubro de 2026',
+    titulo: 'Vidro líquido mais fluido em todo o Esquadro',
+    itens: [
+      'O acabamento translúcido agora acompanha botões, cartões, navegação, campos, menus e diálogos.',
+      'Reflexos suaves e uma resposta elástica ao toque dão volume sem afetar a leitura ou o alinhamento.',
+      'O mesmo material aparece no acesso e na proposta do cliente, preservando o fundo de madeira.',
+    ],
+  },
+  {
     id: '2026-10-cartao-nu-empresas',
     data: '22 de outubro de 2026',
     titulo: 'Novas opções de pagamento no cartão',
