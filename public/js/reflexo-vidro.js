@@ -1,7 +1,10 @@
-const SELETORES = '.acesso-cartao, .p-vidro, .p-barra';
+const SELETORES = '.acesso-cartao, .p-vidro, .p-ambiente, .p-condicoes-painel, .p-barra';
 const CLASSE_ATIVA = 'reflexo-vidro';
+const ANGULO_INICIAL = -35;
+const BRILHO_REPOUSO = 0.72;
 
 const limitar = (valor, minimo, maximo) => Math.min(maximo, Math.max(minimo, valor));
+const diferencaAngular = (angulo, referencia) => ((angulo - referencia + 540) % 360 + 360) % 360 - 180;
 
 function criarBotaoMovimento() {
   const botao = document.createElement('button');
@@ -26,51 +29,70 @@ function criarBotaoMovimento() {
   const eixos = document.createElementNS(svg.namespaceURI, 'path');
   eixos.setAttribute('d', 'M12 2v3m0 14v3M2 12h3m14 0h3');
   svg.append(mira, centro, eixos);
-  botao.append(svg);
+  const texto = document.createElement('span');
+  texto.className = 'reflexo-permissao-texto';
+  texto.textContent = 'Ativar reflexo';
+  botao.append(svg, texto);
   return botao;
 }
 
 /** Reflexo de borda via inclinação, com ponteiro como alternativa universal. */
 export function ativarReflexoVidro(raiz = document) {
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return () => {};
-
   const cartoes = [];
   if (raiz.matches?.(SELETORES)) cartoes.push(raiz);
   cartoes.push(...raiz.querySelectorAll(SELETORES));
   if (!cartoes.length) return () => {};
 
-  const estados = new Map(cartoes.map((cartao) => {
-    cartao.classList.add(CLASSE_ATIVA);
-    return [cartao, { x: 50, y: 50, brilho: 0, alvoX: 50, alvoY: 50, alvoBrilho: 0 }];
-  }));
   const bordas = new Map(cartoes.map((cartao) => {
+    cartao.classList.add(CLASSE_ATIVA);
     const borda = document.createElement('span');
     borda.className = 'reflexo-borda';
     borda.setAttribute('aria-hidden', 'true');
     cartao.append(borda);
     return [cartao, borda];
   }));
+  function removerBordas() {
+    for (const cartao of cartoes) {
+      cartao.classList.remove(CLASSE_ATIVA);
+      cartao.style.removeProperty('--reflexo-angulo');
+      cartao.style.removeProperty('--reflexo-brilho');
+      bordas.get(cartao).remove();
+    }
+  }
+  // Preserva o acabamento estático quando a pessoa prefere reduzir movimento.
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return removerBordas;
+
+  const estados = new Map(cartoes.map((cartao) => [cartao, {
+    angulo: ANGULO_INICIAL, brilho: BRILHO_REPOUSO,
+    alvoAngulo: ANGULO_INICIAL, alvoBrilho: BRILHO_REPOUSO,
+  }]));
   let quadro = 0;
+  let ultimoQuadro = 0;
   let temporizadorPonteiro = 0;
+  let temporizadorSensor = 0;
   let movimentoAtivo = false;
+  let leituraRecebida = false;
+  let solicitando = false;
   let referenciaInclinacao = null;
-  let ultimoPonteiro = 0;
+  let ultimoPonteiro = -Infinity;
+  let luzSensor = { angulo: ANGULO_INICIAL, brilho: BRILHO_REPOUSO };
   let botao = null;
   let encerrado = false;
 
-  function desenhar() {
+  function desenhar(agora) {
     quadro = 0;
+    const intervalo = limitar(agora - ultimoQuadro, 0, 100);
+    ultimoQuadro = agora;
+    // A mesma resposta em telas de 30, 60 ou 120 Hz.
+    const progresso = 1 - Math.exp(-intervalo / 85);
     let continua = false;
     for (const [cartao, estado] of estados) {
-      estado.x += (estado.alvoX - estado.x) * 0.18;
-      estado.y += (estado.alvoY - estado.y) * 0.18;
-      estado.brilho += (estado.alvoBrilho - estado.brilho) * 0.2;
-      cartao.style.setProperty('--reflexo-x', `${estado.x.toFixed(2)}%`);
-      cartao.style.setProperty('--reflexo-y', `${estado.y.toFixed(2)}%`);
+      estado.angulo += (estado.alvoAngulo - estado.angulo) * progresso;
+      estado.brilho += (estado.alvoBrilho - estado.brilho) * progresso;
+      cartao.style.setProperty('--reflexo-angulo', `${estado.angulo.toFixed(2)}deg`);
       cartao.style.setProperty('--reflexo-brilho', estado.brilho.toFixed(3));
       if (
-        Math.abs(estado.alvoX - estado.x) > 0.08 ||
-        Math.abs(estado.alvoY - estado.y) > 0.08 ||
+        Math.abs(estado.alvoAngulo - estado.angulo) > 0.08 ||
         Math.abs(estado.alvoBrilho - estado.brilho) > 0.01
       ) continua = true;
     }
@@ -78,14 +100,20 @@ export function ativarReflexoVidro(raiz = document) {
   }
 
   function animar() {
-    if (!quadro) quadro = requestAnimationFrame(desenhar);
+    if (!quadro) {
+      ultimoQuadro = performance.now();
+      quadro = requestAnimationFrame(desenhar);
+    }
   }
 
-  function refletirEmTodos(x, y, brilho) {
+  function direcionar(estado, angulo, brilho) {
+    estado.alvoAngulo = estado.angulo + diferencaAngular(angulo, estado.angulo);
+    estado.alvoBrilho = brilho;
+  }
+
+  function refletirEmTodos(angulo, brilho) {
     for (const estado of estados.values()) {
-      estado.alvoX = x;
-      estado.alvoY = y;
-      estado.alvoBrilho = brilho;
+      direcionar(estado, angulo, brilho);
     }
     animar();
   }
@@ -95,55 +123,66 @@ export function ativarReflexoVidro(raiz = document) {
     if (!limite.width || !limite.height) return;
     ultimoPonteiro = performance.now();
     clearTimeout(temporizadorPonteiro);
+    const x = (evento.clientX - limite.left) / limite.width - 0.5;
+    const y = (evento.clientY - limite.top) / limite.height - 0.5;
+    const angulo = Math.hypot(x, y) < 0.04 ? ANGULO_INICIAL : Math.atan2(y, x) * 180 / Math.PI + 90;
     for (const [alvo, estado] of estados) {
-      estado.alvoBrilho = alvo === cartao ? 0.86 : 0;
-      if (alvo === cartao) {
-        estado.alvoX = limitar(((evento.clientX - limite.left) / limite.width) * 100, 4, 96);
-        estado.alvoY = limitar(((evento.clientY - limite.top) / limite.height) * 100, 4, 96);
-      }
+      if (alvo === cartao) direcionar(estado, angulo, 1);
     }
     animar();
     temporizadorPonteiro = setTimeout(() => {
-      ultimoPonteiro = 0;
-      if (movimentoAtivo && referenciaInclinacao) refletirEmTodos(50, 50, 0.22);
-      else refletirEmTodos(50, 50, 0);
-    }, 1400);
+      ultimoPonteiro = -Infinity;
+      refletirEmTodos(luzSensor.angulo, luzSensor.brilho);
+    }, 700);
   }
 
   function aoSairDoCartao(evento, cartao) {
     if (evento.pointerType !== 'mouse') return;
     const estado = estados.get(cartao);
-    if (estado) estado.alvoBrilho = 0;
-    ultimoPonteiro = 0;
+    if (estado) direcionar(estado, luzSensor.angulo, luzSensor.brilho);
+    ultimoPonteiro = -Infinity;
     animar();
   }
 
   function aoInclinar(evento) {
     if (!movimentoAtivo || !Number.isFinite(evento.beta) || !Number.isFinite(evento.gamma)) return;
-    if (performance.now() - ultimoPonteiro < 1400) return;
+    if (!leituraRecebida) {
+      leituraRecebida = true;
+      clearTimeout(temporizadorSensor);
+      atualizarBotao('ativo');
+    }
     if (!referenciaInclinacao) referenciaInclinacao = { beta: evento.beta, gamma: evento.gamma };
 
-    let horizontal = limitar((evento.gamma - referenciaInclinacao.gamma) / 36, -1, 1);
-    let vertical = limitar((evento.beta - referenciaInclinacao.beta) / 36, -1, 1);
+    let horizontal = limitar(diferencaAngular(evento.gamma, referenciaInclinacao.gamma) / 18, -1, 1);
+    let vertical = limitar(diferencaAngular(evento.beta, referenciaInclinacao.beta) / 18, -1, 1);
     const angulo = ((window.screen.orientation?.angle ?? window.orientation ?? 0) + 360) % 360;
     if (angulo === 90) [horizontal, vertical] = [vertical, -horizontal];
     else if (angulo === 180) [horizontal, vertical] = [-horizontal, -vertical];
     else if (angulo === 270) [horizontal, vertical] = [-vertical, horizontal];
 
-    const intensidade = 0.28 + Math.min(0.58, Math.hypot(horizontal, vertical) * 0.42);
-    refletirEmTodos(50 + horizontal * 37, 50 + vertical * 37, intensidade);
+    luzSensor = {
+      angulo: ANGULO_INICIAL + horizontal * 90 + vertical * 65,
+      brilho: BRILHO_REPOUSO + Math.min(0.28, Math.hypot(horizontal, vertical) * 0.24),
+    };
+    if (performance.now() - ultimoPonteiro >= 700) refletirEmTodos(luzSensor.angulo, luzSensor.brilho);
   }
 
-  function atualizarBotao(ativo, negado = false) {
+  function atualizarBotao(modo) {
     if (!botao) return;
+    const ativo = modo === 'ativo';
+    const negado = modo === 'negado' || modo === 'indisponivel';
     botao.classList.toggle('ativo', ativo);
     botao.classList.toggle('negado', negado);
     botao.setAttribute('aria-pressed', String(ativo));
-    const texto = ativo
-      ? 'Desativar reflexo pelo movimento do aparelho'
-      : negado
-        ? 'Permissão não concedida. Mova o dedo sobre o vidro para deslocar o reflexo.'
-        : 'Ativar reflexo pelo movimento do aparelho';
+    const rotulos = {
+      inativo: ['Ativar reflexo', 'Ativar reflexo pelo movimento do aparelho'],
+      aguardando: ['Ativando…', 'Aguardando o movimento do aparelho'],
+      ativo: ['Reflexo ativo', 'Desativar reflexo pelo movimento do aparelho'],
+      negado: ['Reflexo ao toque', 'Movimento não autorizado. O reflexo acompanha o toque. Toque aqui para tentar ativar o movimento novamente.'],
+      indisponivel: ['Reflexo ao toque', 'Este navegador não enviou movimentos. O reflexo acompanha o toque. Toque aqui para tentar novamente.'],
+    };
+    const [rotulo, texto] = rotulos[modo];
+    botao.querySelector('.reflexo-permissao-texto').textContent = rotulo;
     botao.setAttribute('aria-label', texto);
     botao.title = texto;
   }
@@ -151,24 +190,32 @@ export function ativarReflexoVidro(raiz = document) {
   function iniciarMovimento() {
     if (movimentoAtivo || encerrado) return;
     movimentoAtivo = true;
+    leituraRecebida = false;
     referenciaInclinacao = null;
     window.addEventListener('deviceorientation', aoInclinar, { passive: true });
-    atualizarBotao(true);
+    atualizarBotao('aguardando');
+    temporizadorSensor = setTimeout(() => {
+      if (leituraRecebida || encerrado) return;
+      atualizarBotao('indisponivel');
+    }, 3000);
   }
 
   function pararMovimento() {
     if (!movimentoAtivo) return;
     movimentoAtivo = false;
+    clearTimeout(temporizadorSensor);
     window.removeEventListener('deviceorientation', aoInclinar);
     referenciaInclinacao = null;
-    atualizarBotao(false);
-    refletirEmTodos(50, 50, 0);
+    luzSensor = { angulo: ANGULO_INICIAL, brilho: BRILHO_REPOUSO };
+    atualizarBotao('inativo');
+    refletirEmTodos(luzSensor.angulo, luzSensor.brilho);
   }
 
   const eventosPonteiro = new Map(cartoes.map((cartao) => {
     const mover = (evento) => aoMoverPonteiro(evento, cartao);
     const sair = (evento) => aoSairDoCartao(evento, cartao);
     cartao.addEventListener('pointermove', mover, { passive: true });
+    cartao.addEventListener('pointerdown', mover, { passive: true });
     cartao.addEventListener('pointerleave', sair, { passive: true });
     return [cartao, { mover, sair }];
   }));
@@ -179,39 +226,48 @@ export function ativarReflexoVidro(raiz = document) {
     botao = criarBotaoMovimento();
     cartaoControle.append(botao);
     botao.addEventListener('click', async () => {
+      if (solicitando) return;
       if (movimentoAtivo) {
         pararMovimento();
-        return;
+        if (leituraRecebida) return;
       }
+      solicitando = true;
+      botao.setAttribute('aria-busy', 'true');
+      atualizarBotao('aguardando');
       try {
         const permissao = await Sensor.requestPermission();
         if (encerrado) return;
         if (permissao === 'granted') iniciarMovimento();
-        else atualizarBotao(false, true);
+        else atualizarBotao('negado');
       } catch {
         if (encerrado) return;
-        atualizarBotao(false, true);
+        atualizarBotao('negado');
+      } finally {
+        solicitando = false;
+        botao.removeAttribute('aria-busy');
       }
     });
   } else if (Sensor) {
     iniciarMovimento();
   }
 
+  const recalibrar = () => { referenciaInclinacao = null; };
+  window.addEventListener('orientationchange', recalibrar, { passive: true });
+
   return () => {
     encerrado = true;
     clearTimeout(temporizadorPonteiro);
+    clearTimeout(temporizadorSensor);
     if (quadro) cancelAnimationFrame(quadro);
     window.removeEventListener('deviceorientation', aoInclinar);
+    window.removeEventListener('orientationchange', recalibrar);
     for (const cartao of cartoes) {
       const eventos = eventosPonteiro.get(cartao);
       cartao.removeEventListener('pointermove', eventos.mover);
+      cartao.removeEventListener('pointerdown', eventos.mover);
       cartao.removeEventListener('pointerleave', eventos.sair);
-      cartao.classList.remove(CLASSE_ATIVA);
-      cartao.style.removeProperty('--reflexo-x');
-      cartao.style.removeProperty('--reflexo-y');
-      cartao.style.removeProperty('--reflexo-brilho');
-      bordas.get(cartao).remove();
     }
+    removerBordas();
     botao?.remove();
   };
 }
