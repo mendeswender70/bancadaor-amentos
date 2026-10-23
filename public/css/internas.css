@@ -199,6 +199,17 @@
 .editor-pagamento-opcoes > .formulario { margin-top: 16px; }
 .editor-pagamento .previa-pagamento { order: 4; margin: 0; padding: 0; border: 0; background: transparent; color: #e2c397; font-size: 12px; line-height: 17px; }
 .editor-pagamento:not(:has(.editor-pagamento-opcoes[open])) .previa-pagamento > div:nth-child(n+2) { display: none; }
+.editor-cartao-campos { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.editor-cartao-campos > .campo-inteiro { grid-column: 1 / -1; }
+.editor-cartao-campos select { width: 100%; min-width: 0; min-height: 50px; padding: 0 12px; border: 1px solid rgb(234 215 191 / 16%); border-radius: 14px; background: linear-gradient(160deg,#28221c,#181410 87%); color: var(--texto); font-size: 14px; }
+.editor-cartao-campos [hidden] { display: none !important; }
+.previa-cartao { order: 5; min-width: 0; color: var(--suave); font-size: 11px; }
+.editor-cartao-simulacao { padding: 12px; border: 1px solid rgb(255 243 221 / 14%); border-radius: 16px; background: rgb(0 0 0 / 12%); }
+.editor-cartao-simulacao > summary { color: #e2c397; cursor: pointer; }
+.editor-cartao-simulacao > p { margin: 8px 0; }
+.editor-cartao-linha { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid rgb(255 243 221 / 10%); }
+.editor-cartao-linha span { min-width: 0; overflow-wrap: anywhere; }
+.editor-cartao-linha strong { flex: none; color: #e2c397; font-variant-numeric: tabular-nums; }
 .editor-notas-internas > summary, .editor-observacoes-item > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; color: var(--suave); font-size: 12px; line-height: 18px; list-style: none; cursor: pointer; }
 .editor-notas-internas > summary::-webkit-details-marker, .editor-observacoes-item > summary::-webkit-details-marker { display: none; }
 .editor-notas-internas > summary .icone, .editor-observacoes-item > summary .icone { width: 30px; height: 28px; padding: 3px 4px; border: 1px solid rgb(255 244 226 / 38%); border-radius: 14px; background: var(--vidro-neutro); }

@@ -2,7 +2,7 @@
 // Mostra apenas o que vem de /api/publico — a mesma visão do PDF — e deixa o
 // cliente aprovar a proposta.
 
-import { formatarData, formatarDinheiro } from '/shared/calc.js';
+import { formatarData, formatarDinheiro, formatarPercentual } from '/shared/calc.js';
 import { h, icone, substituir } from '/js/ui.js';
 import { ativarReflexoVidro } from '/js/reflexo-vidro.js';
 
@@ -196,6 +196,37 @@ function investimento(p) {
   );
 }
 
+function cartao(p) {
+  const cartao = p.pagamento.cartao;
+  if (!cartao) return null;
+  const linha = (opcao) => {
+    const valores = opcao.valores_parcelas_cents || [];
+    const minimo = valores.length ? Math.min(...valores) : 0;
+    const maximo = valores.length ? Math.max(...valores) : 0;
+    const parcela = valores.length <= 1
+      ? 'à vista'
+      : minimo === maximo
+        ? `${valores.length}x de ${formatarDinheiro(minimo)}`
+        : `${valores.length}x · ${formatarDinheiro(minimo)} a ${formatarDinheiro(maximo)}`;
+    return h('article', { class: 'p-cartao-opcao' },
+      h('div', { class: 'p-cartao-opcao-topo' },
+        h('strong', {}, opcao.tipo),
+        h('span', {}, `${formatarPercentual(opcao.taxa_centesimos_percentual)}% · +${formatarDinheiro(opcao.taxa_cents)}`),
+      ),
+      h('span', { class: 'p-cartao-parcela' }, parcela),
+      h('div', { class: 'p-cartao-total' }, h('small', {}, 'Total'), h('strong', { class: 'p-valor' }, formatarDinheiro(opcao.total_cents))),
+    );
+  };
+  return h('section', { class: 'p-cartao p-vidro', 'aria-labelledby': 'titulo-cartao' },
+    h('div', { class: 'p-cartao-cabecalho' },
+      h('div', {}, h('span', { class: 'p-sobre' }, 'Outra forma de pagamento'), h('h2', { id: 'titulo-cartao' }, 'Cartão')),
+      h('span', { class: 'p-cartao-canal' }, cartao.nome),
+    ),
+    h('p', { class: 'p-cartao-nota' }, `${cartao.recebimento}. Os valores incluem a taxa informada pelo Nu Empresas; o pagamento é combinado com a marcenaria.`),
+    h('div', { class: 'p-cartao-grade' }, cartao.debito ? linha(cartao.debito) : null, cartao.credito.map(linha)),
+  );
+}
+
 function condicoes(p) {
   const par = (rotulo, valor) => (valor ? h('div', { class: 'p-par' }, h('dt', {}, rotulo), h('dd', {}, valor)) : null);
   const entrada = p.pagamento.linhas.find((linha) => /^entrada\s*:/i.test(linha));
@@ -217,6 +248,7 @@ function condicoes(p) {
         par('Validade', `Até ${formatarData(p.data_validade)}`),
       ),
     ),
+    cartao(p),
     observacoes.length ? h('div', { class: 'p-observacoes' }, h('span', { class: 'p-sobre' }, 'Observações'), observacoes.map((o) => h('p', {}, o))) : null,
   );
 }
