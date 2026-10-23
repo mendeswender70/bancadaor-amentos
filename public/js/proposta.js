@@ -4,10 +4,18 @@
 
 import { formatarData, formatarDinheiro } from '/shared/calc.js';
 import { h, icone, substituir } from '/js/ui.js';
+import { ativarReflexoVidro } from '/js/reflexo-vidro.js';
 
 const raiz = document.getElementById('proposta');
+let pararReflexoProposta = () => {};
 const token = decodeURIComponent(location.pathname.split('/p/')[1] || location.hash.slice(1) || '').replace(/\/$/, '');
 const base = `/api/publico/propostas/${encodeURIComponent(token)}`;
+
+function limparReflexoProposta() {
+  const parar = pararReflexoProposta;
+  pararReflexoProposta = () => {};
+  parar();
+}
 
 async function pedir(metodo, caminho = '', corpo) {
   const r = await fetch(base + caminho, {
@@ -318,6 +326,7 @@ function agradecimento(p) {
 // ------------------------------------------------------------------ Página
 
 function mostrar(p, { acabouDeAprovar = false } = {}) {
+  limparReflexoProposta();
   document.title = `Proposta nº ${p.numero} · ${p.empresa.nome || 'Móveis planejados'}`;
   raiz.className = 'p-pagina';
   raiz.removeAttribute('aria-busy');
@@ -338,10 +347,12 @@ function mostrar(p, { acabouDeAprovar = false } = {}) {
     ),
     barraAcoes(p),
   );
+  pararReflexoProposta = ativarReflexoVidro(raiz);
   if (acabouDeAprovar) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function falha(mensagem) {
+  limparReflexoProposta();
   raiz.className = 'p-pagina p-falha';
   raiz.removeAttribute('aria-busy');
   substituir(

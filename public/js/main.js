@@ -8,11 +8,19 @@ import { paginaEditor } from './pages/editor.js';
 import { paginaClientes, paginaCliente, paginaEditarCliente } from './pages/clientes.js';
 import { paginaConfiguracoes } from './pages/config.js';
 import { paginaAvisos } from './pages/avisos.js';
+import { ativarReflexoVidro } from './reflexo-vidro.js';
 
 const raiz = document.getElementById('app');
 let usuario = null;
+let pararReflexoAcesso = () => {};
 let intervaloVersao = null;
 let avisoVersaoAtivo = null;
+
+function limparReflexoAcesso() {
+  const parar = pararReflexoAcesso;
+  pararReflexoAcesso = () => {};
+  parar();
+}
 
 // ------------------------------------------------------------------ Rotas
 
@@ -357,6 +365,7 @@ export async function sair() {
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
   if (estado.usuario) {
+    limparReflexoAcesso();
     usuario = estado.usuario;
     await cache.carregarEmpresa();
     montarLayout();
@@ -365,7 +374,9 @@ async function mostrarAcesso() {
     await abrirNovidades({ somenteNaoLidas: true });
     return rotear();
   }
+  limparReflexoAcesso();
   substituir(raiz, estado.precisa_configurar ? telaConfigurar(estado.configuracao_inicial_habilitada) : telaEntrar());
+  pararReflexoAcesso = ativarReflexoVidro(raiz);
 }
 
 function medidorAcesso(input, controle = input, limite = 30) {

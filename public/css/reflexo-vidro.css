@@ -1,0 +1,73 @@
+/* Reflexo metálico suave, movido pela inclinação ou pelo ponteiro. */
+.reflexo-vidro {
+  --reflexo-x: 50%;
+  --reflexo-y: 50%;
+  --reflexo-brilho: 0;
+  isolation: isolate;
+}
+
+.reflexo-borda {
+  display: block;
+  position: absolute;
+  z-index: 2;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 190px 120px at var(--reflexo-x) var(--reflexo-y),
+    rgb(255 247 229 / 92%) 0%,
+    rgb(226 195 151 / 54%) 18%,
+    rgb(194 146 92 / 20%) 34%,
+    transparent 70%
+  );
+  opacity: var(--reflexo-brilho);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.reflexo-permissao {
+  position: absolute;
+  z-index: 4;
+  top: 13px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgb(255 244 226 / 32%);
+  border-radius: 50%;
+  background: rgb(16 13 11 / 42%);
+  color: #e2c397;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 16%), 0 3px 10px rgb(0 0 0 / 22%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  opacity: 0.76;
+  transition: opacity 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.reflexo-permissao svg {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.reflexo-permissao:hover,
+.reflexo-permissao:focus-visible,
+.reflexo-permissao.ativo {
+  border-color: rgb(255 239 209 / 70%);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 24%), 0 0 16px rgb(226 195 151 / 24%);
+  opacity: 1;
+}
+
+.reflexo-permissao.negado { color: #e5b77b; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reflexo-permissao { transition: none; }
+}
