@@ -1877,6 +1877,41 @@ body {
 .pagina-editor .etapa { position: relative; background: var(--vidro-neutro); border: 1px solid rgb(255 244 226 / 38%); box-shadow: var(--vidro-sombra); }
 .pagina-editor .etapa.ativa { background: var(--vidro-primario); border-color: rgb(255 242 216 / 55%); }
 
+/* Superfícies de conteúdo: brilho e profundidade discretos dos frames aprovados. */
+:root {
+  --cartao-brilho: linear-gradient(145deg, rgb(255 255 255 / 2.6%), transparent 58%, rgb(226 195 151 / 1.8%));
+  --cartao-fosco: linear-gradient(145deg, rgb(28 23 19 / 96%), rgb(25 21 18 / 96%));
+  --cartao-borda: rgb(226 195 151 / 18%);
+  --cartao-sombra: inset 0 1px rgb(255 255 255 / 4%), 0 8px 20px -14px rgb(0 0 0 / 68%);
+}
+
+.pagina-dashboard .cartao-atencao,
+.pagina-dashboard .dashboard-atalhos,
+.pagina-dashboard .indicadores .indicador,
+.pagina-dashboard .colunas-2-1 > .cartao:first-child,
+.pagina-dashboard .dashboard-proximos,
+.pagina-dashboard .linha-orcamento,
+.pagina-clientes .linha-cliente-ui,
+.pagina-orcamentos .linha-orcamento-tabela {
+  border-color: var(--cartao-borda);
+  background: var(--cartao-brilho), var(--cartao-fosco);
+  box-shadow: var(--cartao-sombra);
+  -webkit-backdrop-filter: blur(5px) saturate(1.05);
+  backdrop-filter: blur(5px) saturate(1.05);
+}
+
+/* Um ou nenhum aviso não precisa ocupar a altura reservada para dois. */
+@media (max-width: 767px) {
+  .pagina-dashboard .cartao-atencao-1,
+  .pagina-dashboard .cartao-atencao-0 { min-height: 0; }
+}
+
+@media (min-width: 1200px) {
+  .pagina-dashboard .dashboard-destaques { align-items: start; }
+  .pagina-dashboard .cartao-atencao-1 { min-height: 128px; }
+  .pagina-dashboard .cartao-atencao-0 { min-height: 132px; }
+}
+
 /* Primeiro acesso: a mesma lente, com a grade de cinco campos dos frames 163. */
 .acesso.acesso-configuracao { min-height: max(1130px, 100svh); height: auto; }
 .acesso-configuracao .acesso-cartao { height: 700px; }
