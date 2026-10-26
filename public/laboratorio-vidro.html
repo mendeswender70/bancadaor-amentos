@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR" data-material="glass">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#100d0b" />
+    <title>Esquadro · Estudo de vidro</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/images/figma-madeira-original.jpg" as="image" />
+    <link rel="stylesheet" href="/css/laboratorio-vidro.css" />
+    <script type="module" src="/js/laboratorio-vidro.js"></script>
+  </head>
+  <body>
+    <canvas id="material" aria-hidden="true"></canvas>
+    <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="square" viewBox="0 0 32 32"><path d="M7 3v26h23v-6H13V3Z"/><path d="M7 8h6M7 13h4M7 18h6M18 23v6M23 25v4"/></symbol>
+      <symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></symbol>
+      <symbol id="document" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6ZM14 3v5h4M9 12h6M9 16h6"/></symbol>
+      <symbol id="plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+      <symbol id="people" viewBox="0 0 24 24"><path d="M15 21v-2a6 6 0 0 0-12 0v2M17 4a4 4 0 0 1 0 8M21 21v-2a6 6 0 0 0-4-5"/><circle cx="9" cy="8" r="4"/></symbol>
+      <symbol id="settings" viewBox="0 0 24 24"><path d="m10 3-1 3-3-1-2 3 2 2v4l-2 2 2 3 3-1 1 3h4l1-3 3 1 2-3-2-2v-4l2-2-2-3-3 1-1-3Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+      <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    </svg>
+    <div class="page">
+      <header class="header">
+        <a class="brand" href="/" aria-label="Esquadro, ir para o site"><span><svg><use href="#square"/></svg></span>esquadro</a>
+        <button class="compare" id="compare" role="switch" aria-checked="true" aria-label="Efeito de vidro"><span id="compare-label">Vidro</span><span class="switch" aria-hidden="true"></span></button>
+      </header>
+      <main>
+        <section class="intro" aria-labelledby="title">
+          <p class="eyebrow">UM ESTUDO DE LUZ E MATÉRIA</p>
+          <h1 id="title">Precisão que você vê.<br>Leveza que você sente.</h1>
+          <p class="intro-copy">A essência do Esquadro, sob uma nova luz.</p>
+        </section>
+        <section class="stage" aria-label="Demonstração interativa do vidro">
+          <div class="sample-card lens" data-glass data-radius="32">
+            <div class="card-heading"><span class="eyebrow" id="card-category">SEU PRÓXIMO PROJETO</span><span class="badge">Prévia</span></div>
+            <h2 id="card-title">Cada detalhe,<br>no seu lugar.</h2>
+            <p id="card-copy">Móveis pensados para o seu espaço.<br>Uma proposta feita para você.</p>
+            <div class="project"><span id="project-name">Cozinha planejada</span><span id="project-meta">2 ambientes · 4 móveis</span></div>
+            <div class="investment"><span>INVESTIMENTO</span><strong id="project-total">R$ 22.191,29</strong></div>
+            <button class="primary lens" id="explore" data-glass data-radius="22" data-tint="gold" aria-expanded="false" aria-controls="detail">Explorar proposta <svg><use href="#arrow"/></svg></button>
+          </div>
+          <aside class="detail lens" id="detail" data-glass data-radius="26" aria-labelledby="detail-title" hidden>
+            <button class="close" id="close-detail" aria-label="Fechar detalhes"><svg><use href="#close"/></svg></button>
+            <span class="eyebrow">FEITO COM PRECISÃO</span>
+            <h3 id="detail-title">O cuidado está nos detalhes.</h3>
+            <p>Acabamentos, proporções e materiais escolhidos para durar.</p>
+            <span class="detail-note">Demonstração visual · nenhum orçamento será alterado.</span>
+          </aside>
+          <div class="instructions"><p>Toque nos controles e mova o dedo sobre o vidro.</p><button id="motion" hidden>Ativar reflexo com o movimento do celular <span aria-hidden="true">↗</span></button><span id="status" role="status" aria-live="polite"></span></div>
+        </section>
+      </main>
+      <nav class="dock lens" data-glass data-radius="30" aria-label="Navegação da demonstração">
+        <span class="dock-selection lens" data-glass data-radius="20" data-tint="gold" aria-hidden="true"></span>
+        <button data-tab="home" aria-current="page"><svg><use href="#home"/></svg><span>Início</span></button>
+        <button data-tab="budgets"><svg><use href="#document"/></svg><span>Propostas</span></button>
+        <button data-tab="new"><svg><use href="#plus"/></svg><span>Novo</span></button>
+        <button data-tab="clients"><svg><use href="#people"/></svg><span>Clientes</span></button>
+        <button data-tab="settings"><svg><use href="#settings"/></svg><span>Ajustes</span></button>
+      </nav>
+    </div>
+    <noscript><p class="no-script">Ative o JavaScript para experimentar o movimento e a refração do vidro.</p></noscript>
+  </body>
+</html>
