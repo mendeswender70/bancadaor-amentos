@@ -78,7 +78,7 @@ function blocoAtencao(d) {
   });
   return h(
     'section',
-    { class: 'cartao cartao-atencao' },
+    { class: `cartao cartao-atencao cartao-atencao-${linhas.length}` },
     h(
       'div',
       { class: 'cartao-titulo' },
