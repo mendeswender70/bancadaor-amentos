@@ -281,7 +281,6 @@
   .pagina-editor.editor-novo #secao-cliente .editor-validade-input { min-height: 44px; padding: 0; border: 0; }
   .pagina-editor.editor-novo #secao-cliente .editor-validade-input > span { display: none; }
   .pagina-editor.editor-novo #secao-cliente .secao-corpo > .dica { display: block; margin-top: 12px; font-size: 11px; line-height: 16px; }
-  .editor-novo .secao-ambientes > .secao-topo { display: none; }
   .pagina-editor > .editor-indice { margin-top: 19px; }
   .pagina-editor:not([data-secao-ativa="cliente"]) #secao-cliente { display: none; }
   .pagina-editor[data-secao-ativa="ambientes"] #secao-cliente { display: block; }
