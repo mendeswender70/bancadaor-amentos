@@ -16,6 +16,7 @@ import { randomBytes } from 'node:crypto';
 import { semAcento } from './db.js';
 import { ErroHttp, dataIso, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
 import { visaoCliente } from './visaoCliente.js';
+import { periodoComercial, dadosComerciais, filtroAtencao } from './painel.js';
 
 const MAX_ITENS = 200;
 const MAX_AMBIENTES = 50;
@@ -560,6 +561,20 @@ export async function listarOrcamentos(db, filtros = {}) {
     }
   }
   const grupos = { abertos: STATUS_ABERTOS, perdidos: STATUS_PERDIDOS };
+  if (filtros.tipo === 'propostas') onde.push("o.status <> 'rascunho'");
+  if (filtros.atencao) {
+    const filtro = filtroAtencao(filtros.atencao, filtros.hoje);
+    onde.push(`(${filtro.sql})`);
+    params.push(...filtro.params);
+  }
+  if (filtros.aprovados_periodo) {
+    const p = periodoComercial(filtros.hoje, filtros.aprovados_periodo);
+    const fuso = process.env.TZ_EMPRESA || 'America/Sao_Paulo';
+    onde.push(`o.status = 'aprovado' AND (
+      (o.aprovado_em >= (?::date::timestamp AT TIME ZONE ?) AND o.aprovado_em < (?::date::timestamp AT TIME ZONE ?))
+      OR (o.aprovado_em IS NULL AND o.data >= ? AND o.data < ?))`);
+    params.push(p.inicio, fuso, p.fim, fuso, p.inicio, p.fim);
+  }
   if (grupos[filtros.status]) {
     onde.push(`o.status IN (${grupos[filtros.status].map(() => '?').join(', ')})`);
     params.push(...grupos[filtros.status]);
@@ -599,6 +614,7 @@ export async function listarOrcamentos(db, filtros = {}) {
     `SELECT o.id, o.numero, o.data, o.data_validade, o.status, o.total_cents, o.cliente_id, o.versao,
             o.visualizacoes, o.ultima_visualizacao_em, o.aprovado_pelo_link,
             (SELECT COUNT(*) FROM orcamento_ambientes a WHERE a.orcamento_id = o.id) AS ambientes,
+            (SELECT nome FROM orcamento_ambientes a WHERE a.orcamento_id = o.id ORDER BY a.ordem,a.id LIMIT 1) AS ambiente_nome,
             c.nome AS cliente_nome, c.telefone AS cliente_telefone, c.whatsapp AS cliente_whatsapp
      FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
      ${where} ORDER BY o.numero DESC LIMIT ? OFFSET ?`,
@@ -734,7 +750,8 @@ export async function listarLembretesAutomaticos(db, dataHoje) {
   }));
 }
 
-export async function resumoDashboard(db, dataHoje) {
+export async function resumoDashboard(db, dataHoje, escolhaPeriodo = 'mes') {
+  const periodo = periodoComercial(dataHoje, escolhaPeriodo);
   const inicioMes = inicioDoMes(dataHoje);
   const mes = await numerosDoPeriodo(db, inicioMes, somarMeses(inicioMes, 1));
   const anterior = await numerosDoPeriodo(db, somarMeses(inicioMes, -1), inicioMes);
@@ -773,12 +790,21 @@ export async function resumoDashboard(db, dataHoje) {
      ORDER BY h.data_hora DESC, h.id DESC LIMIT 6`,
   );
   const vencimentos = await db.all(
-    `SELECT o.id, o.numero, o.data_validade, o.total_cents, c.nome AS cliente_nome
+    `SELECT o.id, o.numero, o.data_validade, o.total_cents, c.nome AS cliente_nome,
+       (SELECT nome FROM orcamento_ambientes a WHERE a.orcamento_id=o.id ORDER BY a.ordem,a.id LIMIT 1) AS ambiente_nome
      FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
      WHERE o.status IN ('enviado', 'negociacao') AND o.data_validade >= ?
      ORDER BY o.data_validade, o.numero LIMIT 8`, dataHoje,
   );
+  const situacoes = Object.keys(STATUS).map((status) => ({
+    status, quantidade: porStatus.find((s) => s.status === status)?.quantidade || 0,
+    valor_cents: porStatus.find((s) => s.status === status)?.valor_cents || 0,
+  }));
+  const atualSelecionado = escolhaPeriodo === 'mes' ? mes : await numerosDoPeriodo(db, periodo.inicio, periodo.fim);
+  const anteriorSelecionado = escolhaPeriodo === 'mes' ? anterior : await numerosDoPeriodo(db, periodo.anterior_inicio, periodo.inicio);
+  const comercial = await dadosComerciais(db, dataHoje, periodo, { atual: atualSelecionado, anterior: anteriorSelecionado, aprovadosMensais: totaisMensais, situacoes });
   return {
+    comercial,
     data_hoje: dataHoje,
     clientes_total: clientes.total,
     atividades,
@@ -793,11 +819,7 @@ export async function resumoDashboard(db, dataHoje) {
     conversao,
     em_aberto: abertos,
     em_aberto_cents: abertosCents,
-    situacoes: Object.keys(STATUS).map((status) => ({
-      status,
-      quantidade: porStatus.find((s) => s.status === status)?.quantidade || 0,
-      valor_cents: porStatus.find((s) => s.status === status)?.valor_cents || 0,
-    })),
+    situacoes,
     atencao: await precisaAtencao(db, dataHoje),
     recentes: (await listarOrcamentos(db, { limite: 6 })).orcamentos,
   };

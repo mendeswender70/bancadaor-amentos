@@ -31,6 +31,11 @@ export function substituir(el, ...filhos) {
 
 // Ícones SVG estáticos (conteúdo fixo, não vem do usuário).
 const ICONES = {
+  enviar: '<path d="m21 3-7 18-4-7-7-4Z"/><path d="m10 14 11-11"/>',
+  tendencia: '<path d="m3 17 6-7 4 3 8-10M16 3h5v5"/>',
+  grafico: '<path d="M3 3v18h18M7 17v-5h3v5M12 17V8h3v9M17 17V4h3v13"/>',
+  atividade: '<path d="M2 12h4l3-8 5 16 3-8h5"/>',
+  moedas: '<ellipse cx="9" cy="6" rx="6" ry="3"/><path d="M3 6v8c0 4 12 4 12 0V6M3 10c0 4 12 4 12 0M15 10c4-1 6 1 6 3v5c0 3-10 4-12 1M15 15c3 1 6 0 6-2"/>',
   aparelho: '<rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8M12 16v5"/>',
   sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   lua: '<path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/>',

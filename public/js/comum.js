@@ -236,21 +236,22 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
             },
             icone('whatsapp'),
           ),
-          menuSuspenso(
-            [
-              ['whatsapp', 'Enviar ao cliente', () => enviarDaLista(o, aoMudar)],
-              ['link', 'Copiar link da proposta', () => acaoCopiarLink(o)],
-              ['pdf', 'Baixar PDF', () => acaoPdf(o)],
-              ['copiar', 'Duplicar', () => acaoDuplicar(o)],
-              '-',
-              ['lixeira', 'Excluir orçamento', () => excluirOrcamento(o, aoMudar), { perigo: true }],
-            ],
-            { rotulo: `Ações do orçamento nº ${formatarNumero(o.numero)}` },
-          ),
+          menuOrcamento(o, aoMudar),
         ),
       );
     }),
   );
+}
+
+export function menuOrcamento(o, aoMudar) {
+  return menuSuspenso([
+    ['whatsapp', 'Enviar ao cliente', () => enviarDaLista(o, aoMudar)],
+    ['link', 'Copiar link da proposta', () => acaoCopiarLink(o)],
+    ['pdf', 'Baixar PDF', () => acaoPdf(o)],
+    ['copiar', 'Duplicar', () => acaoDuplicar(o)],
+    '-',
+    ['lixeira', 'Excluir orçamento', () => excluirOrcamento(o, aoMudar), { perigo: true }],
+  ], { rotulo: `Ações do orçamento nº ${formatarNumero(o.numero)}` });
 }
 
 // ------------------------------------------------------------------ Clientes

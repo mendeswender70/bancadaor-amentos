@@ -786,6 +786,72 @@ test('dashboard retorna clientes, movimentações e somente vencimentos de propo
   assert.deepEqual(d.atividades.map((a) => a.data_hora), d.atividades.map((a) => a.data_hora).toSorted().toReversed());
 });
 
+test('painel comercial compara períodos reais, classifica cada orçamento uma vez e abre os alertas correspondentes', async (t) => {
+  const db = await app.locals.obterDb();
+  const criados = [];
+  t.after(async () => { for (const id of criados) await db.run('DELETE FROM orcamentos WHERE id = ?', id); });
+  const antes = (await chamar('GET', '/dashboard')).dados.comercial;
+  const anterior = (await chamar('GET', '/dashboard?periodo=anterior')).dados.comercial;
+  const preparar = async (data, status, nome = 'Cozinha') => {
+    const { orc } = await novaProposta({ abrir: false });
+    criados.push(orc.id);
+    const r = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, data, validade_dias: 365,
+      ambientes: [{ nome, itens: orc.ambientes[0].itens }, { nome: 'Quarto', itens: [] }] });
+    assert.equal(r.status, 200);
+    assert.equal((await mudarStatus(orc.id, status)).status, 200);
+    return r.dados;
+  };
+  const atual = await preparar(hojeFalso, 'enviado');
+  const outroMes = await preparar('2026-08-20', 'rascunho', 'Sala');
+  const cancelado = await preparar(hojeFalso, 'cancelado');
+  const aceiteAntigo = await preparar('2026-08-21', 'aprovado', 'Banheiro');
+  await db.run('UPDATE orcamentos SET aprovado_em = ? WHERE id = ?', `${hojeFalso}T15:00:00Z`, aceiteAntigo.id);
+  await db.run('UPDATE orcamentos SET data_validade = ?, visualizacoes = 2, ultima_visualizacao_em = now(), enviado_em = ? WHERE id = ?', somarDias(hojeFalso, 7), `${somarDias(hojeFalso,-6)}T12:00:00Z`, atual.id);
+  const r = await chamar('GET', '/dashboard');
+  assert.equal(r.status, 200);
+  const c = r.dados.comercial;
+  assert.equal(c.periodo.inicio, '2026-09-01');
+  assert.equal(c.periodo.ate, '2026-09-30');
+  assert.equal(c.atual.valor_cents, antes.atual.valor_cents + atual.total_cents);
+  assert.equal(c.atual.validos, antes.atual.validos + 1);
+  assert.equal(c.ticket_cents, Math.round(c.atual.valor_cents / c.atual.validos));
+  assert.equal(c.atual.aprovados_cents, antes.atual.aprovados_cents + aceiteAntigo.total_cents);
+  assert.equal(c.serie.at(-1).aprovados_cents, c.atual.aprovados_cents);
+  const aprovadosNoMes = (await chamar('GET', '/orcamentos?status=aprovado&aprovados_periodo=mes&limite=200')).dados;
+  assert.equal(aprovadosNoMes.total, c.atual.aprovados);
+  assert.equal(aprovadosNoMes.orcamentos.reduce((n,o) => n + o.total_cents, 0), c.atual.aprovados_cents);
+  assert.ok(aprovadosNoMes.orcamentos.some(o => o.id === aceiteAntigo.id));
+  assert.equal(c.conversao.enviados, antes.conversao.enviados + 2);
+  assert.equal(c.conversao.aprovados, antes.conversao.aprovados + 1);
+  assert.equal(c.pendentes, antes.pendentes + 1); // Rascunhos não são propostas pendentes.
+  assert.equal(c.atencao.visualizadas, antes.atencao.visualizadas + 1);
+  assert.equal(c.atencao.vencimentos, antes.atencao.vencimentos + 1); // Inclui o sétimo dia.
+  assert.equal(c.atencao.sem_resposta, antes.atencao.sem_resposta + 1);
+  assert.equal(c.atencao.aprovados, antes.atencao.aprovados + 1);
+  const qtd = (dados,nome) => dados.ambientes.find(a => a.nome === nome)?.quantidade || 0;
+  assert.equal(qtd(c,'Cozinha'), qtd(antes,'Cozinha') + 1); // Dois ambientes não duplicam o orçamento.
+  assert.equal(qtd(c,'Quarto'), qtd(antes,'Quarto'));
+  assert.equal(qtd(c,'Sala'), qtd(antes,'Sala') + 1);
+  const p = (await chamar('GET', '/dashboard?periodo=anterior')).dados.comercial;
+  assert.equal(p.atual.valor_cents, anterior.atual.valor_cents + outroMes.total_cents + aceiteAntigo.total_cents);
+  assert.equal(p.serie.at(-1).mes, '2026-08');
+  for (const filtro of ['visualizadas','vencimentos','aprovados','sem_resposta']) {
+    const lista = await chamar('GET', `/orcamentos?atencao=${filtro}&limite=200`);
+    assert.equal(lista.status, 200);
+    assert.equal(lista.dados.total, c.atencao[filtro]);
+    assert.ok(lista.dados.orcamentos.some(o => o.id === (filtro === 'aprovados' ? aceiteAntigo.id : atual.id)));
+  }
+  const propostas = (await chamar('GET', '/orcamentos?tipo=propostas&limite=200')).dados.orcamentos;
+  assert.ok(propostas.every(o => o.status !== 'rascunho'));
+  assert.ok(propostas.some(o => o.id === atual.id && o.ambiente_nome === 'Cozinha'));
+  assert.equal((await chamar('GET', '/dashboard?periodo=semestre')).dados.comercial.periodo.inicio, '2026-04-01');
+  assert.equal((await chamar('GET', '/dashboard?periodo=inventado')).status, 400);
+  assert.equal((await chamar('GET', '/orcamentos?atencao=inventado')).status, 400);
+  assert.ok(c.atividades.length <= 5);
+  assert.ok(c.atividades.some(a => a.orcamento_id === atual.id && /Cliente abriu/.test(a.evento)));
+  assert.ok(!c.atividades.some(a => a.orcamento_id === cancelado.id && /Cliente abriu/.test(a.evento)));
+});
+
 test('excluir o último móvel persiste sem excluir ambiente, orçamento ou cópia duplicada', async () => {
   const { orc } = await novaProposta({ abrir: false });
   const copia = (await chamar('POST', `/orcamentos/${orc.id}/duplicar`)).dados;

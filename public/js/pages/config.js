@@ -20,13 +20,13 @@ function chavePushParaBytes(chave) {
   return Uint8Array.from(dados, (caractere) => caractere.charCodeAt(0));
 }
 
-export async function paginaConfiguracoes(aba) {
+export async function paginaConfiguracoes(aba, query = new URLSearchParams()) {
   const mostrarVisao = !aba;
   aba ||= 'empresa';
   aba = APELIDOS[aba] || aba;
   if (!ABAS.some(([a]) => a === aba) && !['padroes', 'senha'].includes(aba)) aba = 'empresa';
   const montar = { empresa: abaEmpresa, moveis: abaMoveis, pagamento: abaPagamento, conta: abaConta, padroes: () => abaEmpresa({ padroes: true }), senha: () => abaConta({ soSenha: true }) }[aba];
-  const formulario = await montar();
+  const formulario = await (aba === 'moveis' ? abaMoveis(query.get('q') || '') : montar());
   const resumoEmpresa = h('section', { class: 'config-empresa-resumo' },
     h('span', { class: 'config-logo-resumo', 'aria-hidden': 'true' },
       cache.empresa?.tem_logo
@@ -245,7 +245,7 @@ async function abaEmpresa({ padroes = false } = {}) {
 
 // ----------------------------------------------------------- Móveis e preços
 
-async function abaMoveis() {
+async function abaMoveis(buscaInicial = '') {
   const tipos = await api.get('/tipos-moveis');
   const recarregar = () => irPara(`#/config/moveis?${Date.now()}`);
   const entradas = new Map();
@@ -295,6 +295,16 @@ async function abaMoveis() {
     );
   };
 
+  const lista = h('div', { class: 'lista-moveis' }, tipos.map(linha));
+  const semResultado = h('p', { class: 'suave', role: 'status' }, 'Nenhum móvel encontrado. Tente outro nome.');
+  const normalizarBusca = (v) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+  const filtrar = (valor) => {
+    const termo = normalizarBusca(valor.trim());
+    for (const el of lista.children) el.hidden = !normalizarBusca(el.textContent).includes(termo);
+    semResultado.hidden = [...lista.children].some(el => !el.hidden);
+  };
+  filtrar(buscaInicial);
+
   return h(
     'form',
     {
@@ -331,7 +341,9 @@ async function abaMoveis() {
       h('span', { class: 'config-info-icone' }, icone('cadeado')),
       'Só você vê estes preços. Alterações valem para novos orçamentos; os anteriores mantêm seus valores.',
     ),
-    tipos.length ? h('div', { class: 'lista-moveis' }, tipos.map(linha)) : vazio('Nenhum tipo cadastrado.'),
+    h('input', { type: 'search', value: buscaInicial, placeholder: 'Buscar móvel no catálogo', 'aria-label': 'Buscar móvel no catálogo', oninput: (e) => filtrar(e.target.value) }),
+    tipos.length ? lista : vazio('Nenhum tipo cadastrado.'),
+    tipos.length ? semResultado : null,
     tipos.length ? h('div', { class: 'acao-interna-fixa config-salvar-precos' }, contador, botaoSalvar) : null,
   );
 }

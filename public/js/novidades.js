@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-painel-comercial',
+    data: '6 de novembro de 2026',
+    titulo: 'Seu novo painel comercial',
+    itens: [
+      'Acompanhe valor orçado, valor aprovado, taxa de aprovação, pendências e ticket médio com períodos selecionáveis.',
+      'Veja os orçamentos que precisam de atenção, a distribuição por ambiente, as últimas atividades e os próximos vencimentos.',
+      'Acesse propostas, catálogo e relatórios pelo menu. O PDF e o link público continuam com o visual aprovado.',
+    ],
+  },
+  {
     id: '2026-11-tema-aparelho-filtros',
     data: '6 de novembro de 2026',
     titulo: 'O tema acompanha seu aparelho',
