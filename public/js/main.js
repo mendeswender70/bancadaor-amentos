@@ -1,6 +1,7 @@
 import { api, cache, quandoPerderSessao } from './api.js';
 import { h, anexar, icone, substituir, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
 import { novidades } from './novidades.js';
+import { botaoTema } from './tema.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
@@ -197,6 +198,7 @@ function montarLayout() {
           h('a', { href: '#/', class: 'topo-marca' }, marcaEsquadro('marca-app marca-mobile')),
           botaoBusca,
           buscaGlobal,
+          botaoTema('tema-topo'),
           botaoNovidades('topo'),
           h('a', { href: '#/config/conta', class: 'gestao-conta', title: 'Minha conta', 'aria-label': 'Minha conta' }, h('span', { class: 'avatar' }, iniciais(usuario?.nome)), h('span', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, 'Proprietário')), icone('baixo')),
         ),
@@ -400,6 +402,7 @@ function cartaoAcesso(titulo, subtitulo, formulario, { etiqueta = 'ACESSO PRIVAD
   return h(
     'div',
     { class: `acesso${classe ? ` ${classe}` : ''}` },
+    botaoTema('tema-acesso', true),
     h(
       'section',
       { class: 'acesso-marca' },

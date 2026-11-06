@@ -74,7 +74,7 @@ function barras(situacoes) {
     h('div', { class: 'gestao-barras' }, situacoes.map((s, i) => {
       const barra = h('span', { class: 'gestao-barra' });
       barra.style.height = `${s.quantidade / maior * 100}%`;
-      barra.style.backgroundColor = CORES[i];
+      barra.style.backgroundColor = `var(--grafico-${s.status}, ${CORES[i]})`;
       return h('a', { href: `#/orcamentos?status=${s.status}`, class: 'gestao-barra-coluna', 'aria-label': `${STATUS[s.status]}: ${s.quantidade} orçamentos, ${moeda(s.valor_cents)}` },
         h('span', { class: 'gestao-barra-pista' }, h('strong', {}, String(s.quantidade)), barra), h('small', {}, nomes[i]));
     })),
@@ -85,9 +85,9 @@ function barras(situacoes) {
 function distribuicao(situacoes) {
   const somar = (estados) => situacoes.filter((s) => estados.includes(s.status)).reduce((n, s) => n + s.quantidade, 0);
   const dados = [
-    { nome: 'Aprovadas', n: somar(['aprovado']), cor: '#8cb9a2', filtro: 'aprovado' },
-    { nome: 'Em aberto', n: somar(['rascunho', 'enviado', 'negociacao']), cor: '#d5b17e', filtro: 'abertos' },
-    { nome: 'Encerradas', n: somar(['cancelado', 'recusado', 'expirado']), cor: '#75695e', filtro: 'perdidos' },
+    { nome: 'Aprovadas', n: somar(['aprovado']), cor: 'var(--grafico-aprovado, #8cb9a2)', filtro: 'aprovado' },
+    { nome: 'Em aberto', n: somar(['rascunho', 'enviado', 'negociacao']), cor: 'var(--grafico-enviado, #d5b17e)', filtro: 'abertos' },
+    { nome: 'Encerradas', n: somar(['cancelado', 'recusado', 'expirado']), cor: 'var(--grafico-encerrado, #75695e)', filtro: 'perdidos' },
   ];
   const total = dados.reduce((n, d) => n + d.n, 0);
   const circunferencia = 2 * Math.PI * 61;
