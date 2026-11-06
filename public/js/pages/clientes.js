@@ -177,7 +177,7 @@ export async function paginaCliente(id) {
       subtitulo: 'Cadastro e histórico de propostas.', acoes: [editar, novo],
     }),
     h('div', { class: 'cliente-colunas' },
-      h('section', { class: 'gestao-cliente-telefone' },
+      h('section', { class: 'cliente-contato' },
         h('div', { class: 'ficha-contato' },
           avatar(cliente.nome, 'ficha-avatar'),
           h('div', { class: 'ficha-identidade' }, h('strong', {}, cliente.nome), h('small', {}, 'DADOS DO CLIENTE')),

@@ -11,6 +11,7 @@ export async function paginaDashboard() {
     const nova = desenhar();
     pagina.replaceWith(nova);
     pagina = nova;
+    pagina.querySelector('.gestao-periodo select')?.focus({ preventScroll: true });
   });
   pagina = desenhar();
   let assinatura = JSON.stringify(d);

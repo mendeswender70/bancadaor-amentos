@@ -107,7 +107,7 @@ export async function paginaOrcamentos(query) {
   });
 
   const chips = h('div', { class: 'chips chips-rolagem', role: 'group', 'aria-label': 'Filtrar por situação' });
-  const desenharChips = () =>
+  const desenharChips = () => {
     substituir(
       chips,
       FILTROS_STATUS.map(([valor, texto]) =>
@@ -127,6 +127,12 @@ export async function paginaOrcamentos(query) {
         ),
       ),
     );
+    requestAnimationFrame(() => {
+      const ativo = chips.querySelector('.ativo');
+      if (!chips.isConnected || !ativo || chips.scrollWidth <= chips.clientWidth) return;
+      chips.scrollLeft = ativo.offsetLeft - chips.offsetLeft - (chips.clientWidth - ativo.offsetWidth) / 2;
+    });
+  };
   desenharChips();
 
   const rotuloFiltro = h('span', {});

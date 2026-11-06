@@ -178,7 +178,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
               : o.status === 'expirado'
                 ? 'Validade da proposta encerrada'
                 : o.status === 'recusado'
-                  ? 'Proposta recusada pelo cliente'
+                  ? 'Proposta recusada'
                   : o.status === 'cancelado'
                     ? 'Proposta cancelada'
                     : 'Rascunho aguardando envio';
