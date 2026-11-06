@@ -20,6 +20,7 @@ export function aplicarTema(tema, salvar = true) {
   const escolhido = tema === 'claro' ? 'claro' : 'escuro';
   document.documentElement.dataset.tema = escolhido;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', escolhido === 'claro' ? '#f6f3ed' : '#100d0b');
+  document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.setAttribute('content', escolhido === 'claro' ? 'default' : 'black-translucent');
   if (salvar) {
     try { localStorage.setItem('esquadro.tema', escolhido); } catch { /* A troca segue funcionando nesta aba. */ }
   }
