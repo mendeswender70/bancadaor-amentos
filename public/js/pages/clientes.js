@@ -4,7 +4,7 @@ import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, conf
 import { avatar, cabecalhoPagina, cabecalhoInterno, formularioCliente, listaOrcamentos, modalNovoCliente, numeroWhatsApp } from '../comum.js';
 import { irPara } from '../main.js';
 
-export async function paginaClientes() {
+export async function paginaClientes(query = new URLSearchParams()) {
   const lista = h('div', {});
   const porPagina = 50;
   let deslocamento = 0;
@@ -16,6 +16,7 @@ export async function paginaClientes() {
     class: 'busca',
     placeholder: window.matchMedia('(min-width: 768px)').matches ? 'Procurar por nome, telefone ou WhatsApp' : 'Nome ou telefone',
     'aria-label': 'Procurar cliente',
+    value: query.get('q') || '',
   });
   const contador = h('p', { class: 'contador-clientes' });
 
@@ -35,6 +36,7 @@ export async function paginaClientes() {
         { href: `#/clientes/${c.id}`, class: 'linha-link cliente-link' },
         avatar(c.nome, 'avatar-linha cliente-avatar'),
         h('div', { class: 'linha-principal' }, h('strong', {}, c.nome), h('span', { class: 'suave' }, resumo)),
+        h('span', { class: 'gestao-cliente-telefone' }, c.whatsapp || c.telefone || 'Contato não informado'),
         icone('seta', 'icone linha-seta'),
       ),
       h(
@@ -175,7 +177,7 @@ export async function paginaCliente(id) {
       subtitulo: 'Cadastro e histórico de propostas.', acoes: [editar, novo],
     }),
     h('div', { class: 'cliente-colunas' },
-      h('section', { class: 'cliente-contato' },
+      h('section', { class: 'gestao-cliente-telefone' },
         h('div', { class: 'ficha-contato' },
           avatar(cliente.nome, 'ficha-avatar'),
           h('div', { class: 'ficha-identidade' }, h('strong', {}, cliente.nome), h('small', {}, 'DADOS DO CLIENTE')),

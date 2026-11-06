@@ -22,7 +22,7 @@ const ROTAS = [
   [/^\/orcamentos\/novo$/, () => paginaNovoOrcamento()],
   [/^\/orcamentos\/novo\/(\d+)$/, ([clienteId]) => paginaEditor({ clienteId: Number(clienteId) })],
   [/^\/orcamentos\/(\d+)$/, ([id]) => paginaEditor({ id: Number(id) })],
-  [/^\/clientes$/, () => paginaClientes()],
+  [/^\/clientes$/, (_, q) => paginaClientes(q)],
   [/^\/clientes\/(\d+)$/, ([id]) => paginaCliente(Number(id))],
   [/^\/clientes\/(\d+)\/editar$/, ([id]) => paginaEditarCliente(Number(id))],
   [/^\/config(?:\/(\w+))?$/, ([aba]) => paginaConfiguracoes(aba)],
@@ -140,6 +140,12 @@ export function monograma() {
 function montarLayout() {
   const link = ([href, texto, ic, padrao], rotuloCurto) =>
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
+  const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'));
+  const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente ou orçamento…', 'aria-label': 'Buscar no Esquadro' });
+  const buscaGlobal = h('form', { class: 'gestao-busca', role: 'search', onsubmit: (evento) => {
+    evento.preventDefault();
+    irPara(`#/${escopo.value}?q=${encodeURIComponent(busca.value.trim())}`);
+  } }, icone('busca'), busca, escopo, h('button', { type: 'submit', 'aria-label': 'Buscar' }, icone('seta')));
 
   substituir(
     raiz,
@@ -156,6 +162,7 @@ function montarLayout() {
         ),
         h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
         h('nav', { class: 'lateral-nav' }, MENU.map((m) => link(m))),
+        h('a', { class: 'gestao-lateral-destaque', href: '#/orcamentos/novo' }, h('span', {}, 'DO PRIMEIRO TRAÇO'), h('strong', {}, 'Seu próximo projeto começa aqui.'), h('small', {}, 'Crie uma proposta sob medida.'), h('span', {}, 'Fazer orçamento →')),
         botaoNovidades('lateral'),
         h(
           'div',
@@ -175,8 +182,9 @@ function montarLayout() {
           'header',
           { class: 'topo' },
           h('a', { href: '#/', class: 'topo-marca' }, marcaEsquadro('marca-app marca-mobile')),
+          buscaGlobal,
           botaoNovidades('topo'),
-          h('a', { href: '#/config/conta', class: 'avatar topo-avatar', title: 'Minha conta', 'aria-label': 'Minha conta' }, iniciais(usuario?.nome)),
+          h('a', { href: '#/config/conta', class: 'gestao-conta', title: 'Minha conta', 'aria-label': 'Minha conta' }, h('span', { class: 'avatar' }, iniciais(usuario?.nome)), h('span', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, 'Proprietário')), icone('baixo')),
         ),
         h('main', { id: 'conteudo', class: 'conteudo' }),
       ),
