@@ -496,9 +496,9 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   });
 
   // --------------------------------------------------------------- Dashboard
-  api.get('/dashboard', async (_req, res) => {
+  api.get('/dashboard', async (req, res) => {
     await expirarVencidos(db, dataHoje());
-    res.json(await resumoDashboard(db, dataHoje()));
+    res.json(await resumoDashboard(db, dataHoje(), req.query.periodo || 'mes'));
   });
 
   // ---------------------------------------------------------------- Clientes
@@ -820,6 +820,10 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       await listarOrcamentos(db, {
         q: req.query.q,
         status: req.query.status,
+        tipo: req.query.tipo,
+        atencao: req.query.atencao,
+        aprovados_periodo: req.query.aprovados_periodo,
+        hoje: dataHoje(),
         de: req.query.de,
         ate: req.query.ate,
         min: dinheiroOpcional(req.query.min),

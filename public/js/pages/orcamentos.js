@@ -13,15 +13,17 @@ const FILTROS_STATUS = [
 ];
 const POR_PAGINA = 30;
 
-export async function paginaOrcamentos(query) {
+export async function paginaOrcamentos(query, { propostas = false } = {}) {
   const filtros = {
     q: query.get('q') || '',
     status: query.get('status') || '',
-    de: '',
-    ate: '',
+    de: query.get('de') || '',
+    ate: query.get('ate') || '',
     min: '',
     max: '',
   };
+  let atencao = query.get('atencao') || '';
+  let aprovadosPeriodo = query.get('aprovados_periodo') || '';
   let deslocamento = 0;
   let buscaAtual = 0;
   const resultado = h('div', {});
@@ -29,6 +31,9 @@ export async function paginaOrcamentos(query) {
 
   const montarBusca = () => {
     const p = new URLSearchParams();
+    if (propostas) p.set('tipo', 'propostas');
+    if (atencao) p.set('atencao', atencao);
+    if (aprovadosPeriodo) p.set('aprovados_periodo', aprovadosPeriodo);
     if (filtros.q) p.set('q', filtros.q);
     if (filtros.status) p.set('status', filtros.status);
     if (filtros.de) p.set('de', filtros.de);
@@ -110,7 +115,7 @@ export async function paginaOrcamentos(query) {
   const desenharChips = () => {
     substituir(
       chips,
-      FILTROS_STATUS.map(([valor, texto]) =>
+      FILTROS_STATUS.filter(([v]) => !propostas || v !== 'rascunho').map(([valor, texto]) =>
         h(
           'button',
           {
@@ -174,7 +179,7 @@ export async function paginaOrcamentos(query) {
   return h(
     'div',
     { class: 'pagina pagina-orcamentos' },
-    cabecalhoPagina('Orçamentos', {
+    cabecalhoPagina(propostas ? 'Propostas' : 'Orçamentos', {
       subtitulo: h('span', {},
         h('span', { class: 'texto-orcamentos-mobile' }, 'Acompanhe cada proposta sem perder o fio.'),
         h('span', { class: 'texto-orcamentos-desktop' }, 'Todas as propostas, organizadas do rascunho à aprovação.'),
@@ -183,6 +188,12 @@ export async function paginaOrcamentos(query) {
     }),
     h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca),
     barraFiltros,
+    atencao ? h('div', { class: 'pc-filtro-atencao' },
+      h('span', {}, { visualizadas: 'Visualizadas sem resposta', vencimentos: 'Vencem nos próximos 7 dias', aprovados: 'Aprovados nos últimos 7 dias', sem_resposta: 'Enviadas sem resposta há mais de 5 dias' }[atencao] || 'Precisa de atenção'),
+      h('button', { type: 'button', class: 'pc-link', onclick: (e) => { atencao = ''; e.currentTarget.parentElement.remove(); carregar(); } }, 'Remover filtro ×')) : null,
+    aprovadosPeriodo ? h('div', { class: 'pc-filtro-atencao' },
+      h('span', {}, `Data da aprovação: ${{mes:'este mês',anterior:'mês anterior',trimestre:'últimos 3 meses',semestre:'últimos 6 meses'}[aprovadosPeriodo] || 'período selecionado'}`),
+      h('button', { type: 'button', onclick: e => { aprovadosPeriodo = ''; e.currentTarget.parentElement.remove(); carregar(); } }, 'Remover filtro ×')) : null,
     contador,
     cabecalhoLista,
     resultado,

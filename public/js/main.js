@@ -2,6 +2,7 @@ import { api, cache, quandoPerderSessao } from './api.js';
 import { h, anexar, icone, substituir, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
 import { novidades } from './novidades.js';
 import { botaoTema } from './tema.js';
+import { paginaRelatorios } from './pages/relatorios.js';
 import { paginaDashboard } from './pages/dashboard.js';
 import { paginaOrcamentos } from './pages/orcamentos.js';
 import { paginaNovoOrcamento } from './pages/novo.js';
@@ -20,13 +21,15 @@ let avisoVersaoAtivo = null;
 const ROTAS = [
   [/^\/?$/, () => paginaDashboard()],
   [/^\/orcamentos$/, (_, q) => paginaOrcamentos(q)],
+  [/^\/propostas$/, (_, q) => paginaOrcamentos(q, { propostas: true })],
+  [/^\/relatorios$/, () => paginaRelatorios()],
   [/^\/orcamentos\/novo$/, () => paginaNovoOrcamento()],
   [/^\/orcamentos\/novo\/(\d+)$/, ([clienteId]) => paginaEditor({ clienteId: Number(clienteId) })],
   [/^\/orcamentos\/(\d+)$/, ([id]) => paginaEditor({ id: Number(id) })],
   [/^\/clientes$/, (_, q) => paginaClientes(q)],
   [/^\/clientes\/(\d+)$/, ([id]) => paginaCliente(Number(id))],
   [/^\/clientes\/(\d+)\/editar$/, ([id]) => paginaEditarCliente(Number(id))],
-  [/^\/config(?:\/(\w+))?$/, ([aba]) => paginaConfiguracoes(aba)],
+  [/^\/config(?:\/(\w+))?$/, ([aba], q) => paginaConfiguracoes(aba, q)],
   [/^\/avisos$/, () => paginaAvisos()],
 ];
 
@@ -93,6 +96,15 @@ async function rotear() {
 }
 
 window.addEventListener('hashchange', rotear);
+window.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+  const busca = document.querySelector('.gestao-busca input');
+  if (!busca) return;
+  e.preventDefault();
+  document.querySelector('.gestao-busca').classList.add('gestao-busca-aberta');
+  document.querySelector('.gestao-abrir-busca')?.setAttribute('aria-expanded', 'true');
+  busca.focus();
+});
 window.addEventListener('beforeunload', (e) => {
   if (verificarSaida?.sincrono?.() === false) {
     e.preventDefault();
@@ -119,6 +131,15 @@ const MENU = [
   ['#/config', 'Ajustes', 'config', /^\/config/],
 ];
 
+const MENU_LATERAL = [
+  ['#/', 'Painel', 'inicio', /^\/?$/],
+  MENU[1], MENU[2],
+  ['#/config/moveis', 'Móveis e preços', 'caixa', /^\/config\/(moveis|tipos|precos)/],
+  ['#/propostas', 'Propostas', 'enviar', /^\/propostas/],
+  ['#/relatorios', 'Relatórios', 'grafico', /^\/relatorios/],
+  ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos))/],
+];
+
 export const usuarioAtual = () => usuario;
 
 /**
@@ -141,8 +162,8 @@ export function monograma() {
 function montarLayout() {
   const link = ([href, texto, ic, padrao], rotuloCurto) =>
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
-  const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'));
-  const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente ou orçamento…', 'aria-label': 'Buscar no Esquadro' });
+  const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'), h('option', { value: 'propostas' }, 'Propostas'), h('option', { value: 'config/moveis' }, 'Móveis'));
+  const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente, orçamento, proposta ou móvel…', 'aria-label': 'Buscar no Esquadro' });
   const alternarBusca = (aberta, devolverFoco = false) => {
     buscaGlobal.classList.toggle('gestao-busca-aberta', aberta);
     botaoBusca.setAttribute('aria-expanded', String(aberta));
@@ -159,7 +180,7 @@ function montarLayout() {
     evento.preventDefault();
     irPara(`#/${escopo.value}?q=${encodeURIComponent(busca.value.trim())}`);
     if (botaoBusca.getClientRects().length) alternarBusca(false, true);
-  } }, icone('busca'), busca, escopo, h('button', { type: 'submit', 'aria-label': 'Buscar' }, icone('seta')));
+  } }, icone('busca'), busca, escopo, h('kbd', { class: 'gestao-atalho' }, 'Ctrl K'), h('button', { type: 'submit', 'aria-label': 'Buscar' }, icone('seta')));
 
   substituir(
     raiz,
@@ -175,8 +196,11 @@ function montarLayout() {
           marcaEsquadro('marca-app marca-lateral'),
         ),
         h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
-        h('nav', { class: 'lateral-nav' }, MENU.map((m) => link(m))),
-        h('a', { class: 'gestao-lateral-destaque', href: '#/orcamentos/novo' }, h('span', {}, 'DO PRIMEIRO TRAÇO'), h('strong', {}, 'Seu próximo projeto começa aqui.'), h('small', {}, 'Crie uma proposta sob medida.'), h('span', {}, 'Fazer orçamento →')),
+        h('nav', { class: 'lateral-nav' }, MENU_LATERAL.map((m) => link(m))),
+        h('a', { class: 'pc-lateral-promocao', href: '#/orcamentos/novo' },
+          h('img', { src: '/images/painel-cozinha.jpg', alt: '', loading: 'lazy' }),
+          h('strong', {}, 'Gestão comercial', h('br', {}), 'para sua marcenaria'),
+          h('small', {}, 'Orçamentos, propostas e vendas de móveis planejados em um só lugar.')),
         botaoNovidades('lateral'),
         h(
           'div',
