@@ -2,6 +2,17 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-modo-claro',
+    data: '6 de novembro de 2026',
+    titulo: 'O Esquadro também em modo claro',
+    itens: [
+      'Escolha entre Claro e Escuro em Aparência, nos ajustes da conta. A preferência fica salva neste navegador.',
+      'O modo claro usa marfim, cartões brancos e detalhes em bronze, com gráficos e formulários adaptados.',
+      'Troque o tema também no acesso, mantendo o fundo de madeira e os dados digitados.',
+      'A aparência do PDF e do link público da proposta foi preservada.',
+    ],
+  },
+  {
     id: '2026-11-refino-gestao',
     data: '6 de novembro de 2026',
     titulo: 'Mais clareza na gestão do dia a dia',

@@ -3,6 +3,7 @@ import { api, cache } from '../api.js';
 import { h, icone, campo, segmentado, abrirModal, confirmar, aviso, avisoErro, substituir, vazio } from '../ui.js';
 import { cabecalhoPagina, cabecalhoInterno } from '../comum.js';
 import { atualizarMarca, irPara, sair } from '../main.js';
+import { seletorTema } from '../tema.js';
 
 const ABAS = [
   ['empresa', 'Empresa', 'empresa'],
@@ -84,6 +85,7 @@ export async function paginaConfiguracoes(aba) {
     cabecalho,
     h('div', { class: 'config-overview' },
       resumoEmpresa,
+      seletorTema(),
       h('h2', {}, 'Preferências'),
       h('nav', { class: 'config-opcoes', 'aria-label': 'Preferências' },
         itensVisao.map(([rota, texto, detalhe, ic]) =>
@@ -632,6 +634,7 @@ async function abaConta({ soSenha = false } = {}) {
   return h(
     'div',
     { class: `config-conta${soSenha ? ' config-so-senha' : ''}` },
+    !soSenha ? seletorTema() : null,
     h(
       'section',
       { class: 'cartao notificacoes-conta' },
