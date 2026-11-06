@@ -573,8 +573,8 @@ body {
 .orcamento-data { grid-column: 1; grid-row: 2; padding-left: 47px; color: #b9ad9e; font-size: 9px; }
 .orcamento-status { grid-column: 2; grid-row: 3; justify-self: end; align-self: start; margin-top: 7px; }
 .orcamento-status .selo { padding: 4px 10px; border: 1px solid rgb(195 154 105 / 20%); border-radius: 99px; background: rgb(195 154 105 / 9%); color: #b9ad9e; font-size: 9px; }
-.selo-aprovado { border-color: rgb(146 203 165 / 18%) !important; background: rgb(146 203 165 / 9%) !important; color: #92cba5 !important; }
-.selo-enviado,.selo-negociacao { border-color: rgb(229 183 123 / 20%) !important; background: rgb(229 183 123 / 9%) !important; color: #e5b77b !important; }
+.selo-aprovado { border-color: var(--selo-sucesso-borda, rgb(146 203 165 / 18%)) !important; background: var(--selo-sucesso-fundo, rgb(146 203 165 / 9%)) !important; color: var(--sucesso) !important; }
+.selo-enviado,.selo-negociacao { border-color: var(--selo-alerta-borda, rgb(229 183 123 / 20%)) !important; background: var(--selo-alerta-fundo, rgb(229 183 123 / 9%)) !important; color: var(--alerta) !important; }
 .linha-orcamento-tabela .linha-acoes { grid-column: 2; grid-row: 1; align-self: start; justify-content: end; padding: 0; }
 .linha-orcamento-tabela .linha-acoes .menu-suspenso > button { width: 40px; height: 40px; border-radius: 14px; }
 .linha-orcamento-tabela .linha-acoes .menu-suspenso > button .icone { display: grid; place-items: center; width: 18px; height: 18px; }

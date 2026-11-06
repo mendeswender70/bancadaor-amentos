@@ -6,10 +6,12 @@
 .estrutura .tema-preferencias { display: flex; flex-direction: column; gap: 18px; order: -1; min-width: 0; margin: 0; padding: 22px; border: 1px solid var(--borda); border-radius: 16px; background: var(--gestao-painel); }
 .estrutura .tema-preferencias h2 { margin: 0; font: 600 17px/1.4 'Inter',sans-serif; }
 .estrutura .tema-preferencias p { margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: var(--suave); }
-.tema-opcoes { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.tema-opcoes { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
 .tema-opcao { min-width: 0; padding: 8px; border: 1px solid var(--borda); border-radius: 13px; background: var(--superficie); color: var(--texto); font: 500 13px 'Inter',sans-serif; cursor: pointer; text-align: left; }
 .tema-opcao.ativo { outline: 2px solid var(--primaria); outline-offset: 1px; }
-.tema-opcao-rotulo { display: flex; align-items: center; gap: 8px; margin: 12px 4px 4px; }
+.tema-opcao-rotulo { display: flex; align-items: center; gap: 8px; min-height: 36px; margin: 12px 4px 4px; line-height: 18px; }
+.tema-opcao-rotulo > .icone, .tema-opcao-check { flex: none; }
+.tema-opcao-rotulo > span:nth-child(2) { min-width: 0; }
 .tema-opcao .icone { width: 18px; height: 18px; }
 .tema-opcao-check { display: grid; place-items: center; margin-left: auto; visibility: hidden; color: var(--primaria); }
 .tema-opcao.ativo .tema-opcao-check { visibility: visible; }
@@ -20,6 +22,13 @@
 .tema-amostra-escuro .tema-amostra { background: #13110f; }
 .tema-amostra-escuro .tema-amostra > span { border-color: #574632; background: #241e17; }
 .tema-amostra-escuro .tema-amostra > span:first-child { background: #352a1e; }
+.tema-amostra-sistema .tema-amostra { background: linear-gradient(120deg,#f6f3ed 50%,#13110f 50%); }
+.tema-amostra-sistema .tema-amostra > span { background: linear-gradient(120deg,#fffefa 50%,#241e17 50%); border-color: #b79b7152; }
+@media (max-width:600px) {
+  .tema-opcoes { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .tema-amostra-sistema { grid-column: 1 / -1; display: grid; grid-template-columns: 92px minmax(0,1fr); align-items: center; gap: 12px; }
+  .tema-amostra-sistema .tema-opcao-rotulo { margin: 4px 4px 4px 0; }
+}
 @media (min-width:1200px) {
   .estrutura .config-conta:has(> .tema-preferencias) { grid-template-rows: auto auto auto; }
   .estrutura .config-conta > .tema-preferencias { grid-column: 1 / -1; grid-row: 1; display: grid; grid-template-columns: 1fr minmax(280px, .8fr); align-items: center; }
@@ -53,6 +62,10 @@ html[data-tema='claro'] {
   --perigo-fundo: #fbeeea;
   --alerta: #865d28;
   --alerta-fundo: #fbf1db;
+  --selo-alerta-borda: #d8c497;
+  --selo-alerta-fundo: #fbf1db;
+  --selo-sucesso-borda: #bbd1c0;
+  --selo-sucesso-fundo: #e8f2ea;
   --info: #3b647b;
   --info-fundo: #eaf2f6;
   --whatsapp: #267049;
@@ -215,3 +228,14 @@ html[data-tema='claro'] .estrutura .menu-inferior .menu-link .icone { color: inh
 html[data-tema='claro'] .estrutura .menu-inferior .botao-central > span:last-child { color: var(--primaria); }
 html[data-tema='claro'] .acesso-cartao .acesso-seguranca .icone { color: #865e31; }
 .estrutura .config-overview > .tema-preferencias { order: 0; margin-bottom: 24px; }
+
+/* Filtros também precisam de preenchimento próprio no claro, inclusive inativos. */
+html[data-tema='claro'] .estrutura .pagina .chip { border-color: #d5c7b4; background: #fffcf6; color: #514436; box-shadow: none; }
+html[data-tema='claro'] .estrutura .pagina .chip.ativo { border-color: #b3946b; background: #eee0c9; color: #684623; }
+html[data-tema='claro'] .estrutura .pagina-orcamentos .orcamento-status .selo { border-color: #d8cab5; background: #f4ebdc; color: #725331; }
+html[data-tema='claro'] .estrutura .pagina-orcamentos .orcamento-status .selo-aprovado { border-color: #bbd1c0; background: #e8f2ea; color: #2e7151; }
+html[data-tema='claro'] .estrutura .pagina-orcamentos .orcamento-status :is(.selo-recusado,.selo-cancelado) { border-color: #d8bcb3; background: #f8eeea; color: #964b3e; }
+html[data-tema='claro'] .estrutura .pagina-orcamentos .orcamento-status .selo-expirado { border-color: #d8c497; background: #f7efdc; color: #825b2d; }
+@media (hover:hover) {
+  html[data-tema='claro'] .estrutura .pagina .chip:hover { border-color: #ad8d62; background: #f1e7d8; color: #5c4022; }
+}

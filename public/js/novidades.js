@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-tema-aparelho-filtros',
+    data: '6 de novembro de 2026',
+    titulo: 'O tema acompanha seu aparelho',
+    itens: [
+      'Em Aparência, escolha Seguir o aparelho para alternar automaticamente com o celular ou computador, sem recarregar.',
+      'Claro e Escuro continuam disponíveis como escolhas fixas. A preferência fica salva neste navegador.',
+      'Os filtros de orçamentos e os indicadores de status ficaram mais legíveis no modo claro.',
+    ],
+  },
+  {
     id: '2026-11-modo-claro',
     data: '6 de novembro de 2026',
     titulo: 'O Esquadro também em modo claro',
