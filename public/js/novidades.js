@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-relatorios-comerciais',
+    data: '6 de novembro de 2026',
+    titulo: 'Relatórios para entender seus resultados',
+    itens: [
+      'Escolha o período e acompanhe valores orçados, aprovações, conversão e ticket médio com comparação real.',
+      'Veja a evolução mensal, os clientes em destaque e as oportunidades ainda em aberto.',
+      'Confira cada aprovação, filtre por mês ou cliente e exporte o resumo ou o detalhamento em CSV.',
+    ],
+  },
+  {
     id: '2026-11-painel-comercial',
     data: '6 de novembro de 2026',
     titulo: 'Seu novo painel comercial',

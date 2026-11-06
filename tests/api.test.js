@@ -852,6 +852,100 @@ test('painel comercial compara períodos reais, classifica cada orçamento uma v
   assert.ok(!c.atividades.some(a => a.orcamento_id === cancelado.id && /Cliente abriu/.test(a.evento)));
 });
 
+test('relatórios conciliam emissão e aceite, respeitam o fuso e mantêm totais, clientes e filtros coerentes', async (t) => {
+  const db = await app.locals.obterDb();
+  const c1 = (await chamar('POST','/clientes',{nome:'Cliente % relatório'})).dados;
+  const c2 = (await chamar('POST','/clientes',{nome:'Cliente legado do relatório'})).dados;
+  t.after(async () => {
+    for (const c of [c1,c2]) { await db.run('DELETE FROM orcamentos WHERE cliente_id = ?',c.id); await db.run('DELETE FROM clientes WHERE id = ?',c.id); }
+  });
+  const inserir = async (data,status,total,aprovadoEm,cliente=c1,peloLink=0) => {
+    const {n} = await db.get('SELECT COALESCE(MAX(numero),0)+1 AS n FROM orcamentos');
+    const r = await db.run(`INSERT INTO orcamentos (numero,cliente_id,data,validade_dias,data_validade,status,total_cents,aprovado_em,aprovado_pelo_link)
+      VALUES (?,?,?,365,'2027-01-01',?,?,?,?) RETURNING id`,n,cliente.id,data,status,total,aprovadoEm,peloLink);
+    return r.lastInsertRowid;
+  };
+  const fora = await inserir('2025-04-10','aprovado',10000,'2025-05-01T02:59:59Z'); // 30/04 no Brasil
+  const antigo = await inserir('2025-04-11','aprovado',20000,'2025-05-01T03:00:00Z',c1,1);
+  await inserir('2025-05-05','aprovado',30000,'2025-06-01T02:59:59Z'); // 31/05 no Brasil
+  const junho = await inserir('2025-05-06','aprovado',40000,'2025-06-01T03:00:00Z');
+  await inserir('2025-05-10','rascunho',50000,null);
+  await inserir('2025-05-12','enviado',60000,null);
+  await inserir('2025-05-15','cancelado',70000,null);
+  await inserir('2025-05-20','aprovado',80000,null,c2);
+  const r = await chamar('GET','/relatorios?de=2025-05-01&ate=2025-05-31');
+  assert.equal(r.status,200,JSON.stringify(r.dados));
+  const d = r.dados;
+  assert.equal(d.periodo.anterior_de,'2025-03-31');
+  assert.equal(d.periodo.anterior_ate,'2025-04-30');
+  assert.equal(d.atual.orcado_cents,260000); // Emissão de maio, sem cancelados.
+  assert.equal(d.atual.orcamentos,5);
+  assert.equal(d.atual.aprovado_cents,130000); // 20.000 + 30.000 + 80.000 centavos.
+  assert.equal(d.atual.aprovados,3);
+  assert.equal(d.atual.ticket_cents,43333);
+  assert.equal(d.atual.apresentadas,4);
+  assert.equal(d.atual.coorte_aprovados,3);
+  assert.equal(d.atual.taxa,75);
+  assert.equal(d.atual.clientes_aprovados,2);
+  assert.equal(d.atual.pendentes,1);
+  assert.equal(d.atual.pendente_cents,60000);
+  assert.equal(d.anterior.aprovado_cents,10000);
+  assert.equal(d.serie.length,1);
+  assert.equal(d.serie[0].aprovado_cents,d.atual.aprovado_cents);
+  assert.equal(d.serie[0].orcado_cents,d.atual.orcado_cents);
+  assert.equal(d.clientes[0].id,c2.id);
+  assert.equal(d.clientes.reduce((n,c)=>n+c.valor_cents,0),d.atual.aprovado_cents);
+  assert.equal(d.aprovacoes.quantidade,3);
+  assert.equal(d.aprovacoes.valor_cents,d.atual.aprovado_cents);
+  assert.ok(d.aprovacoes.linhas.some(o=>o.id===antigo&&o.aprovado_dia==='2025-05-01'&&o.aprovado_pelo_link===1));
+  assert.ok(d.aprovacoes.linhas.every(o=>![fora,junho].includes(o.id)));
+  const pagina = (await chamar('GET','/relatorios/aprovacoes?de=2025-05-01&ate=2025-05-31&limite=2&deslocamento=2')).dados;
+  assert.equal(pagina.quantidade,3);assert.equal(pagina.linhas.length,1);
+  assert.equal(pagina.valor_cents,130000); // Subtotal não muda ao trocar a página.
+  const busca = (await chamar('GET','/relatorios/aprovacoes?de=2025-05-01&ate=2025-05-31&q=%25')).dados;
+  assert.equal(busca.quantidade,2);assert.equal(busca.valor_cents,50000);
+  const numero = (await db.get('SELECT numero FROM orcamentos WHERE id = ?',antigo)).numero;
+  const porNumero = (await chamar('GET',`/relatorios/aprovacoes?de=2025-05-01&ate=2025-05-31&q=%23${String(numero).padStart(5,'0')}`)).dados;
+  assert.equal(porNumero.quantidade,1);assert.equal(porNumero.linhas[0].id,antigo);
+});
+
+test('CSV do relatório exporta todas as aprovações filtradas e neutraliza fórmulas em nomes', async (t) => {
+  const db = await app.locals.obterDb();
+  const nome = '=HYPERLINK("https://example.com";"teste")';
+  const c = (await chamar('POST','/clientes',{nome})).dados;
+  t.after(async () => { await db.run('DELETE FROM orcamentos WHERE cliente_id = ?',c.id); await db.run('DELETE FROM clientes WHERE id = ?',c.id); });
+  const {n} = await db.get('SELECT COALESCE(MAX(numero),0)+1 AS n FROM orcamentos');
+  for(let i=0;i<23;i++) await db.run(`INSERT INTO orcamentos (numero,cliente_id,data,validade_dias,data_validade,status,total_cents,aprovado_em)
+    VALUES (?,?,'2024-12-01',365,'2027-01-01','aprovado',1000,'2024-12-10T12:00:00Z')`,n+i,c.id);
+  const lista = (await chamar('GET','/relatorios/aprovacoes?de=2024-12-01&ate=2024-12-31')).dados;
+  assert.equal(lista.linhas.length,20);assert.equal(lista.quantidade,23);
+  const r = await chamar('GET','/relatorios/exportar?tipo=aprovacoes&de=2024-12-01&ate=2024-12-31');
+  assert.equal(r.status,200);
+  assert.ok(r.headers.get('content-type').includes('text/csv'));
+  const csv = r.dados.toString('utf8');
+  assert.ok(csv.startsWith('\uFEFF'));
+  assert.equal(csv.split('\r\n').length,25); // Cabeçalho + 23 propostas + total.
+  assert.ok(csv.includes(`"'=HYPERLINK(""https://example.com"";""teste"")"`));
+  assert.ok(csv.includes('"230,00"'));
+  const mensal = (await chamar('GET','/relatorios/exportar?tipo=mensal&de=2024-12-01&ate=2024-12-31')).dados.toString('utf8');
+  assert.equal(mensal.split('\r\n').length,3);
+  assert.ok(mensal.includes('"2024-12";"23";"230,00";"23";"230,00";"10,00"'));
+});
+
+test('relatórios validam datas, limites e autenticação', async () => {
+  for(const qs of ['de=2026-02-30','de=2026-09-24&ate=2026-09-01','ate=2026-09-25','de=2023-01-01&ate=2026-09-24']) {
+    assert.equal((await chamar('GET',`/relatorios?${qs}`)).status,400,qs);
+  }
+  assert.equal((await chamar('GET','/relatorios/aprovacoes?limite=101')).status,400);
+  assert.equal((await chamar('GET','/relatorios/aprovacoes?deslocamento=-1')).status,400);
+  assert.equal((await chamar('GET','/relatorios/exportar?tipo=sql')).status,400);
+  const sessao=cookie;
+  try {
+    assert.equal((await chamar('GET','/relatorios',undefined,{semCookie:true})).status,401);
+    assert.equal((await chamar('GET','/relatorios/exportar?tipo=mensal',undefined,{semCookie:true})).status,401);
+  } finally {cookie=sessao;}
+});
+
 test('excluir o último móvel persiste sem excluir ambiente, orçamento ou cópia duplicada', async () => {
   const { orc } = await novaProposta({ abrir: false });
   const copia = (await chamar('POST', `/orcamentos/${orc.id}/duplicar`)).dados;

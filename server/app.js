@@ -35,6 +35,7 @@ import {
   registrarVisualizacao,
   resumoDashboard,
 } from './orcamentos.js';
+import { relatorioComercial, listarAprovacoesRelatorio, exportarRelatorio, periodoRelatorio } from './relatorios.js';
 import { gerarPdf } from './pdf.js';
 import { ErroHttp, hoje, id, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
 import { propostaPublica, visaoCliente } from './visaoCliente.js';
@@ -499,6 +500,20 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.get('/dashboard', async (req, res) => {
     await expirarVencidos(db, dataHoje());
     res.json(await resumoDashboard(db, dataHoje(), req.query.periodo || 'mes'));
+  });
+
+  // Relatórios internos: dados comerciais e exportações usam os mesmos filtros.
+  api.get('/relatorios', async (req,res) => {
+    await expirarVencidos(db,dataHoje());
+    res.json(await relatorioComercial(db,dataHoje(),req.query));
+  });
+  api.get('/relatorios/aprovacoes', async (req,res) => {
+    res.json(await listarAprovacoesRelatorio(db,dataHoje(),req.query));
+  });
+  api.get('/relatorios/exportar', async (req,res) => {
+    const periodo = periodoRelatorio(dataHoje(),req.query);
+    const csv = await exportarRelatorio(db,dataHoje(),req.query);
+    res.type('text/csv').attachment(`esquadro-${req.query.tipo}-${periodo.de}-${periodo.ate}.csv`).send(csv);
   });
 
   // ---------------------------------------------------------------- Clientes
