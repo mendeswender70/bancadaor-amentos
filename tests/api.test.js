@@ -471,6 +471,8 @@ test('dashboard mostra indicadores do mês', async () => {
   assert.equal(r.dados.mes.aprovados, 0);
   assert.equal(r.dados.recentes.length, 2);
   await mudarStatus(duplicadoId, 'aprovado');
+  // O relógio da API é fixo; a aprovação deve pertencer ao mesmo mês do teste.
+  await (await app.locals.obterDb()).run('UPDATE orcamentos SET aprovado_em = ? WHERE id = ?', `${hojeFalso}T12:00:00Z`, duplicadoId);
   const r2 = await chamar('GET', '/dashboard');
   assert.equal(r2.dados.mes.aprovados, 1);
   assert.equal(r2.dados.em_aberto, 1);
@@ -711,6 +713,56 @@ test('dashboard compara com o mês anterior e calcula a taxa de aprovação', as
   assert.ok(d.mes.validos >= 1);
   assert.ok(d.conversao.enviados >= d.conversao.aprovados && d.conversao.aprovados >= 1);
   assert.ok(d.recentes.length <= 6);
+});
+
+test('início conta aprovações pelo mês do aceite, inclusive propostas antigas e virada do mês no Brasil', async () => {
+  const db = await app.locals.obterDb();
+  const antes = (await chamar('GET', '/dashboard')).dados;
+  const preparar = async (data, aprovadoEm, peloLink = false) => {
+    const { orc, token: link } = await novaProposta({ abrir: false });
+    const edicao = await chamar('PUT', `/orcamentos/${orc.id}`, { ...orc, data, validade_dias: 365 });
+    assert.equal(edicao.status, 200);
+    const aprovado = peloLink
+      ? await aprovarProposta(link, { nome: 'Cliente do teste', aceite: true })
+      : await mudarStatus(orc.id, 'aprovado');
+    assert.equal(aprovado.status, 200);
+    await db.run('UPDATE orcamentos SET aprovado_em = ? WHERE id = ?', aprovadoEm, orc.id);
+    return (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
+  };
+  const manual = await preparar('2026-08-20', '2026-09-20T15:00:00Z');
+  const peloLink = await preparar('2026-08-21', '2026-10-01T02:59:59Z', true); // 30/09, 23h59 no Brasil
+  await preparar('2026-09-01', '2026-08-31T15:00:00Z');
+  await preparar('2026-08-22', '2026-10-01T03:00:00Z'); // 01/10, 00h no Brasil
+  const depois = (await chamar('GET', '/dashboard')).dados;
+  assert.equal(depois.mes.aprovados, antes.mes.aprovados + 2);
+  assert.equal(depois.mes.aprovados_cents, antes.mes.aprovados_cents + manual.total_cents + peloLink.total_cents);
+  assert.equal(manual.aprovado_pelo_link, 0);
+  assert.equal(peloLink.aprovado_pelo_link, 1);
+  assert.equal(depois.situacoes.find((s) => s.status === 'aprovado').quantidade, antes.situacoes.find((s) => s.status === 'aprovado').quantidade + 4);
+  await mudarStatus(manual.id, 'negociacao');
+  const reaberto = (await chamar('GET', '/dashboard')).dados;
+  assert.equal(reaberto.mes.aprovados, depois.mes.aprovados - 1);
+  assert.equal(reaberto.mes.aprovados_cents, depois.mes.aprovados_cents - manual.total_cents);
+  assert.equal(reaberto.em_aberto_cents, depois.em_aberto_cents + manual.total_cents);
+  // Registros legados sem data de aceite continuam contabilizados pela data da proposta.
+  const legado = await preparar('2026-09-02', null);
+  assert.equal((await chamar('GET', '/dashboard')).dados.mes.aprovados_cents, reaberto.mes.aprovados_cents + legado.total_cents);
+});
+
+test('excluir o último móvel persiste sem excluir ambiente, orçamento ou cópia duplicada', async () => {
+  const { orc } = await novaProposta({ abrir: false });
+  const copia = (await chamar('POST', `/orcamentos/${orc.id}/duplicar`)).dados;
+  const quantidadeCopia = copia.ambientes.reduce((soma, a) => soma + a.itens.length, 0);
+  const vazio = { ...orc, ambientes: orc.ambientes.map((a) => ({ ...a, itens: [] })), servicos: [] };
+  const salvo = await chamar('PUT', `/orcamentos/${orc.id}`, vazio);
+  assert.equal(salvo.status, 200);
+  const reaberto = (await chamar('GET', `/orcamentos/${orc.id}`)).dados;
+  assert.equal(reaberto.total_cents, 0);
+  assert.equal(reaberto.ambientes.length, orc.ambientes.length);
+  assert.ok(reaberto.ambientes.every((a) => a.itens.length === 0));
+  const copiaReaberta = (await chamar('GET', `/orcamentos/${copia.id}`)).dados;
+  assert.equal(copiaReaberta.ambientes.reduce((soma, a) => soma + a.itens.length, 0), quantidadeCopia);
+  assert.equal(copiaReaberta.total_cents, copia.total_cents);
 });
 
 // As ações usam a versão que foi lida, como o editor e a página pública.

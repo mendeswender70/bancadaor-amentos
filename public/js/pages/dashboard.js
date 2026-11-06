@@ -1,4 +1,4 @@
-import { formatarDinheiro, formatarNumero } from '/shared/calc.js';
+import { formatarDinheiro, formatarNumero, STATUS } from '/shared/calc.js';
 import { api, cache } from '../api.js';
 import { h, icone, vazioIlustrado, haQuanto, diasAte, iniciais } from '../ui.js';
 import { listaOrcamentos, modalNovoCliente } from '../comum.js';
@@ -100,6 +100,43 @@ function blocoAtencao(d) {
 
 export async function paginaDashboard() {
   const [d, empresa] = await Promise.all([api.get('/dashboard'), cache.carregarEmpresa()]);
+  let pagina = desenharDashboard(d, empresa);
+  let assinatura = JSON.stringify(d);
+  let carregando = false;
+  let montado = false;
+  const atualizar = async () => {
+    if (carregando || !pagina.isConnected || document.hidden || document.querySelector('dialog[open]')) return;
+    carregando = true;
+    try {
+      const dados = await api.get('/dashboard');
+      const proxima = JSON.stringify(dados);
+      if (pagina.isConnected && !document.querySelector('dialog[open]') && proxima !== assinatura) {
+        const nova = desenharDashboard(dados, empresa);
+        pagina.replaceWith(nova);
+        pagina = nova;
+        assinatura = proxima;
+      }
+    } catch {
+      // Mantém os dados atuais e tenta novamente ao voltar à tela ou no próximo ciclo.
+    } finally { carregando = false; }
+  };
+  const intervalo = setInterval(atualizar, 30_000);
+  window.addEventListener('focus', atualizar);
+  document.addEventListener('visibilitychange', atualizar);
+  const observador = new MutationObserver(() => {
+    if (pagina.isConnected) montado = true;
+    else if (montado) {
+      clearInterval(intervalo);
+      window.removeEventListener('focus', atualizar);
+      document.removeEventListener('visibilitychange', atualizar);
+      observador.disconnect();
+    }
+  });
+  observador.observe(document.getElementById('conteudo') || document.body, { childList: true });
+  return pagina;
+}
+
+function desenharDashboard(d, empresa) {
   const agora = new Date();
   const mes = MESES[agora.getMonth()];
   const mesAnterior = MESES[(agora.getMonth() + 11) % 12];
@@ -151,7 +188,7 @@ export async function paginaDashboard() {
       indicador(
         'aprovado',
         'sucesso',
-        'Aprovado',
+        `Aprovado em ${mes}`,
         formatarIndicador(d.mes.aprovados_cents),
         '#/orcamentos?status=aprovado',
         d.mes.aprovados === 1 ? '1 proposta' : `${d.mes.aprovados} propostas`,
@@ -164,7 +201,18 @@ export async function paginaDashboard() {
         '#/orcamentos?status=aprovado',
         d.conversao.enviados ? `${d.conversao.aprovados} de ${d.conversao.enviados} nos últimos 90 dias` : 'Envie propostas para medir',
       ),
-      indicador('dinheiro', 'alerta', 'Valor médio', formatarIndicador(medio), '#/orcamentos', `por orçamento em ${mes}`),
+      indicador('dinheiro', 'alerta', 'Em aberto', formatarIndicador(d.em_aberto_cents), '#/orcamentos?status=abertos', `${d.em_aberto} ${d.em_aberto === 1 ? 'orçamento' : 'orçamentos'} · inclui rascunhos`),
+    ),
+    h('section', { class: 'cartao dashboard-situacoes' },
+      h('div', { class: 'cartao-titulo' }, h('h2', {}, 'Visão geral dos orçamentos'), h('a', { href: '#/orcamentos' }, 'Ver todos →')),
+      h('p', { class: 'suave dashboard-situacoes-resumo' }, `${d.situacoes.reduce((soma, s) => soma + s.quantidade, 0)} orçamentos cadastrados · todos os períodos`),
+      h('div', { class: 'dashboard-situacoes-lista' }, d.situacoes.map((s) =>
+        h('a', { href: `#/orcamentos?status=${s.status}`, class: `dashboard-situacao situacao-${s.status}` },
+          h('span', {}, h('strong', {}, STATUS[s.status]), h('small', {}, formatarDinheiro(s.valor_cents))),
+          h('span', { class: 'dashboard-situacao-quantidade', 'aria-label': `${s.quantidade} ${s.quantidade === 1 ? 'orçamento' : 'orçamentos'}` }, String(s.quantidade)),
+        ),
+      )),
+      h('p', { class: 'suave dashboard-situacoes-resumo' }, `Valor médio dos orçamentos de ${mes}: ${formatarIndicador(medio)}`),
     ),
     h(
       'div',
