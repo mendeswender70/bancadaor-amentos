@@ -617,16 +617,26 @@ function somarMeses(inicio, meses) {
 }
 
 async function numerosDoPeriodo(db, de, ate) {
-  return db.get(
+  const orcados = await db.get(
     `SELECT COUNT(*) AS quantidade,
             COUNT(*) FILTER (WHERE status <> 'cancelado') AS validos,
-            COALESCE(SUM(CASE WHEN status <> 'cancelado' THEN total_cents END), 0) AS valor_cents,
-            COUNT(*) FILTER (WHERE status = 'aprovado') AS aprovados,
-            COALESCE(SUM(CASE WHEN status = 'aprovado' THEN total_cents END), 0) AS aprovados_cents
+            COALESCE(SUM(CASE WHEN status <> 'cancelado' THEN total_cents END), 0) AS valor_cents
      FROM orcamentos WHERE data >= ? AND data < ?`,
     de,
     ate,
   );
+  // Uma proposta de outubro aprovada em novembro é uma aprovação de novembro.
+  // Registros antigos sem a data de aprovação preservam a data da proposta.
+  const fuso = process.env.TZ_EMPRESA || 'America/Sao_Paulo';
+  const aprovados = await db.get(
+    `SELECT COUNT(*) AS aprovados, COALESCE(SUM(total_cents), 0) AS aprovados_cents
+     FROM orcamentos WHERE status = 'aprovado' AND (
+       (aprovado_em >= (?::date::timestamp AT TIME ZONE ?) AND aprovado_em < (?::date::timestamp AT TIME ZONE ?))
+       OR (aprovado_em IS NULL AND data >= ? AND data < ?)
+     )`,
+    de, fuso, ate, fuso, de, ate,
+  );
+  return { ...orcados, ...aprovados };
 }
 
 /**
@@ -734,15 +744,60 @@ export async function resumoDashboard(db, dataHoje) {
      FROM orcamentos WHERE data >= ? AND status NOT IN ('rascunho', 'cancelado')`,
     somarDias(dataHoje, -90),
   );
-  const { n: abertos } = await db.get(
-    `SELECT COUNT(*) AS n FROM orcamentos WHERE status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`,
+  const { n: abertos, valor: abertosCents } = await db.get(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(total_cents), 0) AS valor FROM orcamentos WHERE status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`,
     ...STATUS_ABERTOS,
   );
+  const porStatus = await db.all(
+    `SELECT status, COUNT(*) AS quantidade, COALESCE(SUM(total_cents), 0) AS valor_cents
+     FROM orcamentos GROUP BY status`,
+  );
+  const inicioSerie = somarMeses(inicioMes, -11);
+  const fimSerie = somarMeses(inicioMes, 1);
+  const fuso = process.env.TZ_EMPRESA || 'America/Sao_Paulo';
+  const totaisMensais = await db.all(
+    `SELECT COALESCE(to_char(aprovado_em AT TIME ZONE ?, 'YYYY-MM'), substring(data, 1, 7)) AS mes,
+            COUNT(*) AS quantidade, COALESCE(SUM(total_cents), 0) AS valor_cents
+     FROM orcamentos WHERE status = 'aprovado' AND (
+       (aprovado_em >= (?::date::timestamp AT TIME ZONE ?) AND aprovado_em < (?::date::timestamp AT TIME ZONE ?))
+       OR (aprovado_em IS NULL AND data >= ? AND data < ?)
+     ) GROUP BY 1 ORDER BY 1`,
+    fuso, inicioSerie, fuso, fimSerie, fuso, inicioSerie, fimSerie,
+  );
+  const clientes = await db.get('SELECT COUNT(*) AS total FROM clientes');
+  const atividades = await db.all(
+    `SELECT h.id, h.orcamento_id, h.evento, h.data_hora, h.total_cents,
+            o.numero, c.nome AS cliente_nome, u.nome AS usuario_nome
+     FROM orcamento_historico h JOIN orcamentos o ON o.id = h.orcamento_id
+     JOIN clientes c ON c.id = o.cliente_id LEFT JOIN usuarios u ON u.id = h.usuario_id
+     ORDER BY h.data_hora DESC, h.id DESC LIMIT 6`,
+  );
+  const vencimentos = await db.all(
+    `SELECT o.id, o.numero, o.data_validade, o.total_cents, c.nome AS cliente_nome
+     FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+     WHERE o.status IN ('enviado', 'negociacao') AND o.data_validade >= ?
+     ORDER BY o.data_validade, o.numero LIMIT 8`, dataHoje,
+  );
   return {
+    data_hoje: dataHoje,
+    clientes_total: clientes.total,
+    atividades,
+    vencimentos,
+    evolucao: Array.from({ length: 12 }, (_, i) => {
+      const mes = somarMeses(inicioSerie, i).slice(0, 7);
+      const total = totaisMensais.find((s) => s.mes === mes);
+      return { mes, quantidade: total?.quantidade || 0, valor_cents: total?.valor_cents || 0 };
+    }),
     mes,
     mes_anterior: anterior,
     conversao,
     em_aberto: abertos,
+    em_aberto_cents: abertosCents,
+    situacoes: Object.keys(STATUS).map((status) => ({
+      status,
+      quantidade: porStatus.find((s) => s.status === status)?.quantidade || 0,
+      valor_cents: porStatus.find((s) => s.status === status)?.valor_cents || 0,
+    })),
     atencao: await precisaAtencao(db, dataHoje),
     recentes: (await listarOrcamentos(db, { limite: 6 })).orcamentos,
   };

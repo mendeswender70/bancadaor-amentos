@@ -2,6 +2,17 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-gestao-dashboard-acoes',
+    data: '6 de novembro de 2026',
+    titulo: 'Uma nova visão da sua marcenaria',
+    itens: [
+      'O início agora traz valores aprovados, propostas em aberto, clientes e taxa de aprovação, com gráficos e atividades reais.',
+      'Clientes, orçamentos e ajustes ganharam uma navegação adaptada ao computador e ao celular.',
+      'Exclua móveis diretamente no orçamento e altere a situação pelo botão ao lado do número da proposta.',
+      'Aprovações manuais e pelo cliente entram no mês em que foram aceitas, mesmo em orçamentos antigos.',
+    ],
+  },
+  {
     id: '2026-10-cartao-nu-empresas',
     data: '22 de outubro de 2026',
     titulo: 'Novas opções de pagamento no cartão',

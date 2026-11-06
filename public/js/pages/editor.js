@@ -156,7 +156,7 @@ export async function paginaEditor({ id, clienteId }) {
   const alterado = () => (salvo ?? inicial) !== JSON.stringify(montarPayload(orc));
 
   function problemaParaSalvar() {
-    if (!orc.ambientes.some((a) => a.itens.length) && !orc.servicos.length) return 'Adicione um móvel para salvar';
+    if (!orc.id && !orc.ambientes.some((a) => a.itens.length) && !orc.servicos.length) return 'Adicione um móvel para salvar';
     const semDescricao = orc.servicos.findIndex((s) => !s.descricao.trim());
     if (semDescricao >= 0) return `Dê um nome ao serviço ${semDescricao + 1}`;
     return '';
@@ -263,7 +263,8 @@ export async function paginaEditor({ id, clienteId }) {
   const tituloEl = h('h1', {});
   const estadoTopoMobile = h('span', { class: 'editor-auto-save-text' }, 'Salvo automaticamente');
   const estadoTopoDesktop = h('span', { class: 'editor-auto-save-text' }, 'Salvo automaticamente');
-  const seloStatusTopo = h('span', { class: 'editor-status-badge' });
+  const seloStatusTopo = h('button', { type: 'button', class: 'editor-status-badge', 'aria-haspopup': 'dialog', onclick: escolherStatus });
+  let alterandoStatus = false;
   const resumoClienteLateral = h('p', { class: 'editor-resumo-cliente' });
   const resumoPagamentoLateral = h('div', { class: 'editor-resumo-pagamento' });
   const etapasEl = h('div', { class: 'etapas-area' });
@@ -331,7 +332,8 @@ export async function paginaEditor({ id, clienteId }) {
   // --------------------------------------------------------------- Atualizações
   function atualizarCabecalho() {
     tituloEl.textContent = orc.numero ? `Orçamento ${formatarNumero(orc.numero)}` : 'Novo orçamento';
-    seloStatusTopo.textContent = STATUS[orc.status] || orc.status;
+    substituir(seloStatusTopo, STATUS[orc.status] || orc.status, icone('baixo', 'icone icone-mini'));
+    seloStatusTopo.setAttribute('aria-label', `Alterar status do orçamento: ${STATUS[orc.status] || orc.status}`);
     seloStatusTopo.className = `editor-status-badge selo-${orc.status}`;
     resumoClienteLateral.textContent = orc.cliente?.nome || '';
     const paginaAtual = blocoCliente.closest('.pagina-editor');
@@ -439,11 +441,37 @@ export async function paginaEditor({ id, clienteId }) {
     );
   }
 
+  async function escolherStatus() {
+    const descricoes = {
+      rascunho: 'Ainda em preparação.',
+      enviado: 'Proposta enviada ao cliente.',
+      negociacao: 'Valores e condições em conversa.',
+      aprovado: 'Registrar aprovação manual, sem aprovação pelo link.',
+      recusado: 'O cliente não aceitou a proposta.',
+      cancelado: 'Orçamento encerrado por você.',
+    };
+    const escolhido = await abrirModal('Alterar status', (fechar) => h('div', { class: 'editor-status-opcoes' },
+      Object.entries(descricoes).map(([status, descricao]) => h('button', {
+        type: 'button', class: `editor-status-opcao${status === orc.status ? ' atual' : ''}`,
+        'aria-pressed': String(status === orc.status), onclick: () => fechar(status),
+      }, h('span', {}, h('strong', {}, STATUS[status]), h('small', {}, descricao)),
+      status === orc.status ? icone('check') : icone('seta'))),
+      orc.status === 'expirado' ? h('p', { class: 'dica' }, 'A expiração acompanha a validade. Para renovar a proposta, atualize a data ou a validade.') : null,
+    ), { contexto: 'ORÇAMENTO', subtitulo: 'Escolha a situação atual da proposta.', classe: 'modal-status-orcamento' });
+    if (escolhido) await mudarStatus(escolhido);
+  }
+
   async function mudarStatus(status) {
-    if (status === orc.status) return;
-    if (!(await garantirSalvo())) return;
-    if (['recusado', 'cancelado'].includes(status) && !(await confirmar(`Marcar o orçamento como “${STATUS[status]}”?`, { sim: `Marcar como ${STATUS[status]}` }))) return;
+    if (status === orc.status || alterandoStatus) return;
+    alterandoStatus = true;
+    seloStatusTopo.disabled = true;
     try {
+      if (!(await garantirSalvo())) return;
+      if (status === 'aprovado' && !orc.ambientes.some((a) => a.itens.length) && !orc.servicos.length) {
+        aviso('Adicione um móvel ou serviço antes de aprovar o orçamento.', 'erro');
+        return;
+      }
+      if (['recusado', 'cancelado'].includes(status) && !(await confirmar(`Marcar o orçamento como “${STATUS[status]}”?`, { sim: `Marcar como ${STATUS[status]}` }))) return;
       const r = await api.patch(`/orcamentos/${orc.id}/status`, { status, versao: orc.versao });
       const pendente = alterado();
       Object.assign(orc, {
@@ -457,12 +485,15 @@ export async function paginaEditor({ id, clienteId }) {
       // O servidor já tem a nova situação; só o resto (se houver) fica pendente.
       if (salvo) salvo = JSON.stringify({ ...JSON.parse(salvo), status: r.status });
       if (!pendente) salvo = JSON.stringify(montarPayload(orc));
-      desenharEtapas();
+      atualizarCabecalho();
       carregarHistorico();
       aviso(`Situação: ${STATUS[r.status]}.`);
     } catch (erro) {
       if (erro.status === 409) marcarConflito();
       avisoErro(erro);
+    } finally {
+      alterandoStatus = false;
+      seloStatusTopo.disabled = false;
     }
   }
 
@@ -676,6 +707,7 @@ export async function paginaEditor({ id, clienteId }) {
         'div',
         { class: 'item-acoes' },
         h('button', { type: 'button', class: 'botao-icone item-editar', title: 'Editar móvel', 'aria-label': `Editar ${item.descricao || item.tipo_nome}`, onclick: () => editarItem(ai, ii) }, icone('editar')),
+        h('button', { type: 'button', class: 'botao-icone item-remover', title: 'Excluir móvel', 'aria-label': `Excluir ${item.descricao || item.tipo_nome}`, onclick: () => removerItem(ai, ii) }, icone('lixeira')),
       ),
     );
   }

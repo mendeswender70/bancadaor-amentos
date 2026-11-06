@@ -367,6 +367,7 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
         );
         return;
       }
+      if (!acrescentar) substituir(lista);
       lista.querySelector('.carregar-mais')?.remove();
       lista.append(...clientes.map((c) =>
           h(
@@ -407,7 +408,7 @@ export function seletorCliente(aoEscolher, { textoBusca = '' } = {}) {
     const cliente = await modalNovoCliente(inicial);
     if (cliente) aoEscolher(cliente);
   };
-  busca.addEventListener('input', debounce(procurar));
+  busca.addEventListener('input', debounce(() => procurar()));
   procurar();
   return h(
     'div',
