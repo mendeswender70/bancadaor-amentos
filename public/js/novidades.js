@@ -2,6 +2,17 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-refino-gestao',
+    data: '6 de novembro de 2026',
+    titulo: 'Mais clareza na gestão do dia a dia',
+    itens: [
+      'Indicadores, valores e textos de apoio ficaram mais legíveis, com um acabamento consistente entre as telas.',
+      'Consulte cada mês no gráfico pelo toque, teclado ou seletor de mês.',
+      'No celular, a busca geral abre pela lupa e as atividades ficam organizadas em linhas, sem tabela para arrastar.',
+      'Os contatos e o atalho de WhatsApp voltaram a aparecer na ficha do cliente no celular.',
+    ],
+  },
+  {
     id: '2026-11-gestao-dashboard-acoes',
     data: '6 de novembro de 2026',
     titulo: 'Uma nova visão da sua marcenaria',

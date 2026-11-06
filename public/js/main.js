@@ -142,9 +142,22 @@ function montarLayout() {
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
   const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'));
   const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente ou orçamento…', 'aria-label': 'Buscar no Esquadro' });
-  const buscaGlobal = h('form', { class: 'gestao-busca', role: 'search', onsubmit: (evento) => {
+  const alternarBusca = (aberta, devolverFoco = false) => {
+    buscaGlobal.classList.toggle('gestao-busca-aberta', aberta);
+    botaoBusca.setAttribute('aria-expanded', String(aberta));
+    if (aberta) busca.focus();
+    else if (devolverFoco) botaoBusca.focus();
+  };
+  const botaoBusca = h('button', { type: 'button', class: 'botao-icone gestao-abrir-busca', 'aria-label': 'Abrir busca', 'aria-controls': 'busca-gestao', 'aria-expanded': 'false', onclick: () => alternarBusca(botaoBusca.getAttribute('aria-expanded') !== 'true') }, icone('busca'));
+  const buscaGlobal = h('form', { id: 'busca-gestao', class: 'gestao-busca', role: 'search', onkeydown: (evento) => {
+    if (evento.key === 'Escape' && botaoBusca.getClientRects().length) {
+      evento.preventDefault();
+      alternarBusca(false, true);
+    }
+  }, onsubmit: (evento) => {
     evento.preventDefault();
     irPara(`#/${escopo.value}?q=${encodeURIComponent(busca.value.trim())}`);
+    if (botaoBusca.getClientRects().length) alternarBusca(false, true);
   } }, icone('busca'), busca, escopo, h('button', { type: 'submit', 'aria-label': 'Buscar' }, icone('seta')));
 
   substituir(
@@ -182,6 +195,7 @@ function montarLayout() {
           'header',
           { class: 'topo' },
           h('a', { href: '#/', class: 'topo-marca' }, marcaEsquadro('marca-app marca-mobile')),
+          botaoBusca,
           buscaGlobal,
           botaoNovidades('topo'),
           h('a', { href: '#/config/conta', class: 'gestao-conta', title: 'Minha conta', 'aria-label': 'Minha conta' }, h('span', { class: 'avatar' }, iniciais(usuario?.nome)), h('span', {}, h('strong', {}, usuario?.nome || ''), h('small', {}, 'Proprietário')), icone('baixo')),
