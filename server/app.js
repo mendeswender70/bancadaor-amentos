@@ -2,7 +2,7 @@ import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import webpush from 'web-push';
-import { AMBIENTES_SUGERIDOS, METODOS, TIPOS_AJUSTE, LIMITES, formatarNumero } from '../public/shared/calc.js';
+import { AMBIENTES_SUGERIDOS, INCLUSOS_SUGERIDOS, LIMITES_INCLUSO, METODOS, TIPOS_AJUSTE, LIMITES, formatarNumero } from '../public/shared/calc.js';
 import { novidades } from '../public/js/novidades.js';
 import {
   conferirSenha,
@@ -31,6 +31,7 @@ import {
   listarLembretesAutomaticos,
   listarHistorico,
   listarOrcamentos,
+  normalizarInclusos,
   podeAprovar,
   registrarVisualizacao,
   resumoDashboard,
@@ -38,7 +39,7 @@ import {
 import { relatorioComercial, listarAprovacoesRelatorio, exportarRelatorio, periodoRelatorio } from './relatorios.js';
 import { gerarPdf } from './pdf.js';
 import { ErroHttp, hoje, id, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
-import { propostaPublica, visaoCliente } from './visaoCliente.js';
+import { lerInclusos, propostaPublica, visaoCliente } from './visaoCliente.js';
 
 const pasta = (relativo) => fileURLToPath(new URL(relativo, import.meta.url));
 const padraoLike = (s) => `%${String(s).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -123,6 +124,20 @@ function lerSugestoesAmbiente(json) {
     // Valor ausente ou inválido: usa as sugestões padrão.
   }
   return AMBIENTES_SUGERIDOS;
+}
+
+/** Lista "já está incluso" da empresa ou, se nunca foi alterada, as sugestões padrão. */
+function lerListaInclusos(json) {
+  if (json === null || json === undefined) return INCLUSOS_SUGERIDOS;
+  let bruta = [];
+  try {
+    bruta = JSON.parse(json);
+  } catch {
+    return INCLUSOS_SUGERIDOS;
+  }
+  if (!Array.isArray(bruta)) return INCLUSOS_SUGERIDOS;
+  const validos = bruta.filter((item) => item && typeof item.titulo === 'string' && item.titulo.trim());
+  return lerInclusos(validos).map((item, i) => ({ ...item, padrao: validos[i].padrao === true }));
 }
 
 /**
@@ -749,8 +764,8 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
 
   // ----------------------------------------------------------------- Empresa
   const lerEmpresa = async () => {
-    const { logo, ambientes_sugeridos, ...e } = await db.get('SELECT * FROM empresa WHERE id = 1');
-    return { ...e, tem_logo: Boolean(logo), ambientes_sugeridos: lerSugestoesAmbiente(ambientes_sugeridos) };
+    const { logo, ambientes_sugeridos, inclusos, ...e } = await db.get('SELECT * FROM empresa WHERE id = 1');
+    return { ...e, tem_logo: Boolean(logo), ambientes_sugeridos: lerSugestoesAmbiente(ambientes_sugeridos), inclusos: lerListaInclusos(inclusos) };
   };
 
   api.get('/empresa', async (_req, res) => res.json(await lerEmpresa()));
@@ -793,6 +808,13 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       nomes.push(nome);
     }
     await db.run('UPDATE empresa SET ambientes_sugeridos = ? WHERE id = 1', JSON.stringify(nomes));
+    res.json(await lerEmpresa());
+  });
+
+  // Lista inteira dos itens "já está incluso" que a empresa oferece.
+  api.put('/empresa/inclusos', async (req, res) => {
+    const itens = normalizarInclusos(req.body.inclusos ?? [], { max: LIMITES_INCLUSO.na_lista, comPadrao: true });
+    await db.run('UPDATE empresa SET inclusos = ? WHERE id = 1', JSON.stringify(itens));
     res.json(await lerEmpresa());
   });
 
@@ -875,6 +897,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       prazo_entrega: e.prazo_padrao,
       observacoes: e.texto_padrao,
       observacoes_internas: '',
+      inclusos: lerListaInclusos(e.inclusos).filter((item) => item.padrao).map(({ titulo, descricao, icone }) => ({ titulo, descricao, icone })),
     });
   });
 

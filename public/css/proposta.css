@@ -140,6 +140,13 @@ button { cursor: pointer; }
 .p-cartao-total { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-top: 5px; }
 .p-cartao-total small { color: var(--suave); font-size: 8px; text-transform: uppercase; }
 .p-cartao-total strong { color: var(--madeira-clara); font-size: 10px; }
+.p-inclusos { margin-bottom: 24px; padding: 24px 30px 26px; }
+.p-inclusos h2 { margin-top: 6px; font: 500 26px/1.4 'Playfair Display', Georgia, serif; }
+.p-inclusos ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; margin: 20px 0 0; padding: 20px 0 0; border-top: 1px solid var(--linha); list-style: none; }
+.p-inclusos li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: start; }
+.p-inclusos .icone { width: 22px; height: 22px; color: var(--madeira-clara); }
+.p-inclusos strong { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.p-inclusos p { margin-top: 4px; color: var(--suave); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .p-observacoes { margin-top: 28px; }
 .p-observacoes p { margin-top: 10px; color: var(--tinta-2); font-size: 12px; white-space: pre-line; overflow-wrap: anywhere; }
 .p-rodape { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; margin-top: 58px; padding-top: 18px; border-top: 1px solid var(--linha); color: var(--suave); font-size: 10px; }
@@ -264,6 +271,11 @@ button { cursor: pointer; }
   .p-condicoes-painel h2 { font-size: 23px; }
   .p-condicoes { margin-top: 22px; gap: 22px 16px; }
   .p-par dd { font-size: 11px; }
+  .p-inclusos { margin-bottom: 18px; padding: 18px 18px 20px; border-radius: 20px; }
+  .p-inclusos h2 { font-size: 22px; line-height: 1.3; }
+  .p-inclusos ul { grid-template-columns: 1fr; gap: 16px; margin-top: 14px; padding-top: 16px; }
+  .p-inclusos strong { font-size: 13px; }
+  .p-inclusos p { font-size: 11px; }
   .p-observacoes { margin-top: 24px; }
   .p-observacoes p { font-size: 11px; }
   .p-rodape { margin-top: 40px; font-size: 9px; }

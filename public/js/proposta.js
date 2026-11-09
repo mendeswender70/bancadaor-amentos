@@ -175,6 +175,23 @@ function ambientes(p) {
   );
 }
 
+function inclusos(p) {
+  if (!p.inclusos?.length) return null;
+  return h(
+    'section',
+    { class: 'p-inclusos p-vidro', 'aria-labelledby': 'titulo-inclusos' },
+    h('span', { class: 'p-sobre' }, 'Sem custo extra'),
+    h('h2', { id: 'titulo-inclusos' }, 'Já está incluso'),
+    h(
+      'ul',
+      {},
+      p.inclusos.map((item) =>
+        h('li', {}, icone(item.icone), h('div', {}, h('strong', {}, item.titulo), item.descricao ? h('p', {}, item.descricao) : null)),
+      ),
+    ),
+  );
+}
+
 function investimento(p) {
   const linha = (rotulo, valor, classe = '') => h('div', { class: `p-linha ${classe}` }, h('span', {}, rotulo), h('strong', { class: 'p-valor' }, valor));
   const ajustes = p.acrescimo || p.desconto_cents;
@@ -361,6 +378,7 @@ function mostrar(p, { acabouDeAprovar = false } = {}) {
       h('div', { class: 'p-projeto' },
         acabouDeAprovar ? agradecimento(p) : faixaSituacao(p),
         ambientes(p),
+        inclusos(p),
       ),
       h('aside', { class: 'p-resumo-proposta', 'aria-label': 'Resumo da proposta' },
         investimento(p),

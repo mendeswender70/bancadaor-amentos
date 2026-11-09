@@ -355,6 +355,54 @@ export function gerarPdf(v, logo) {
     doc.y += 20;
   }
 
+  // "Já está incluso": o que a marcenaria entrega sem custo extra, em duas colunas.
+  const inclusos = Array.isArray(v.inclusos) ? v.inclusos : [];
+  if (inclusos.length) {
+    const vao = 26;
+    const colunaW = (largura - 46 - vao) / 2;
+    const textoW = colunaW - 24;
+    const medidas = inclusos.map((item) => {
+      const tituloH = alturaTexto(item.titulo, textoW, { f: 'sansMedia', t: 11 });
+      const descricaoH = item.descricao ? alturaTexto(item.descricao, textoW, { t: 9 }) : 0;
+      return { ...item, tituloH, altura: tituloH + (descricaoH ? 3 + descricaoH : 0) };
+    });
+    const linhas = [];
+    for (let i = 0; i < medidas.length; i += 2) linhas.push(medidas.slice(i, i + 2));
+    const alturas = linhas.map((par) => Math.max(...par.map((item) => item.altura)) + 16);
+    // A lista cheia não cabe no fim de uma página: o painel continua na seguinte.
+    const cabecalhoH = 62;
+    const folga = 8;
+    let inicio = 0;
+    while (inicio < linhas.length) {
+      if (doc.y + cabecalhoH + alturas[inicio] + folga > LIMITE_CONTEUDO) novaPaginaDetalhes();
+      let fim = inicio;
+      let corpoH = 0;
+      do {
+        corpoH += alturas[fim];
+        fim += 1;
+      } while (fim < linhas.length && doc.y + cabecalhoH + corpoH + alturas[fim] + folga <= LIMITE_CONTEUDO);
+      const painelY = doc.y;
+      const painelH = cabecalhoH + corpoH + folga;
+      painel(esq, painelY, largura, painelH, 20, 0.86);
+      escrever(inicio ? 'Já está incluso · continuação' : 'Já está incluso', esq + 24, painelY + 17, { f: 'serifMedia', t: 19, cor: COR.tinta });
+      let yLinha = painelY + cabecalhoH;
+      for (let i = inicio; i < fim; i += 1) {
+        linhas[i].forEach((item, coluna) => {
+          const x = esq + 23 + coluna * (colunaW + vao);
+          doc.save();
+          doc.moveTo(x + 1, yLinha + 7.5).lineTo(x + 5, yLinha + 11.5).lineTo(x + 12.5, yLinha + 3.5)
+            .lineWidth(1.6).lineCap('round').lineJoin('round').strokeColor(COR.dourado).stroke();
+          doc.restore();
+          escrever(item.titulo, x + 24, yLinha, { f: 'sansMedia', t: 11, cor: COR.tinta, width: textoW });
+          if (item.descricao) escrever(item.descricao, x + 24, yLinha + item.tituloH + 3, { t: 9, cor: COR.suave, width: textoW });
+        });
+        yLinha += alturas[i];
+      }
+      doc.y = painelY + painelH + 20;
+      inicio = fim;
+    }
+  }
+
   const ajustes = [];
   if (v.acrescimo || v.desconto_cents) ajustes.push(['Subtotal', formatarDinheiro(v.subtotal_cents)]);
   if (v.acrescimo) ajustes.push([v.acrescimo.descricao, formatarDinheiro(v.acrescimo.valor_cents)]);
@@ -363,9 +411,10 @@ export function gerarPdf(v, logo) {
     const hAjustes = ajustes.length * 17;
     garantir(hAjustes + 76);
     for (const [nome, valor] of ajustes) {
-      escrever(nome, dir - 230, doc.y, { t: 7.5, cor: COR.suave, width: 120, lineBreak: false });
-      escrever(valor, dir - 110, doc.y, { f: 'sansMedia', t: 7.5, cor: COR.texto, width: 110, align: 'right', lineBreak: false });
-      doc.y += 17;
+      const yAjuste = doc.y;
+      escrever(nome, dir - 230, yAjuste, { t: 7.5, cor: COR.suave, width: 120, lineBreak: false });
+      escrever(valor, dir - 110, yAjuste, { f: 'sansMedia', t: 7.5, cor: COR.texto, width: 110, align: 'right', lineBreak: false });
+      doc.y = yAjuste + 17;
     }
     doc.y += 6;
   }

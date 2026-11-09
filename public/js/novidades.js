@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-ja-esta-incluso',
+    data: '9 de novembro de 2026',
+    titulo: 'Mostre o que já está incluso',
+    itens: [
+      'No orçamento, a nova etapa "Já está incluso" deixa você marcar o que entrega sem custo extra: medição, montagem, garantia e o que mais fizer parte do seu serviço.',
+      'A lista é sua: edite os textos, crie itens novos e escolha quais já entram marcados nos próximos orçamentos.',
+      'Os itens marcados aparecem para o cliente na proposta pelo link e no PDF. Se um deles também estiver sendo cobrado como serviço, o esquadro avisa.',
+    ],
+  },
+  {
     id: '2026-11-indicadores-consistentes',
     data: '9 de novembro de 2026',
     titulo: 'Indicadores mais fiéis às vendas',
