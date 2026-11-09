@@ -11,6 +11,8 @@ const FILTROS_STATUS = [
   ['perdidos', 'Perdidos'],
   ['rascunho', 'Rascunhos'],
 ];
+// Filtros que só chegam por links (ex.: card do painel) aparecem como chip enquanto ativos.
+const FILTROS_EXTRAS = { apresentados: 'Apresentadas' };
 const POR_PAGINA = 30;
 
 export async function paginaOrcamentos(query, { propostas = false } = {}) {
@@ -115,7 +117,10 @@ export async function paginaOrcamentos(query, { propostas = false } = {}) {
   const desenharChips = () => {
     substituir(
       chips,
-      FILTROS_STATUS.filter(([v]) => !propostas || v !== 'rascunho').map(([valor, texto]) =>
+      [
+        ...FILTROS_STATUS.filter(([v]) => !propostas || v !== 'rascunho'),
+        ...(FILTROS_EXTRAS[filtros.status] ? [[filtros.status, FILTROS_EXTRAS[filtros.status]]] : []),
+      ].map(([valor, texto]) =>
         h(
           'button',
           {

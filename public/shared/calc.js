@@ -27,6 +27,9 @@ export const STATUS_ABERTOS = ['rascunho', 'enviado', 'negociacao'];
 // Orçamentos que não viraram venda.
 export const STATUS_PERDIDOS = ['recusado', 'cancelado', 'expirado'];
 
+// Propostas que chegaram ao cliente: entram no valor orçado do painel.
+export const STATUS_APRESENTADOS = ['enviado', 'negociacao', 'aprovado', 'recusado', 'expirado'];
+
 // Caminho normal de um orçamento (as outras situações ficam fora dele).
 export const ETAPAS = ['rascunho', 'enviado', 'negociacao', 'aprovado'];
 

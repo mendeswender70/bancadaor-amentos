@@ -824,6 +824,12 @@ test('painel comercial compara períodos reais, classifica cada orçamento uma v
   assert.equal(aprovadosNoMes.total, c.atual.aprovados);
   assert.equal(aprovadosNoMes.orcamentos.reduce((n,o) => n + o.total_cents, 0), c.atual.aprovados_cents);
   assert.ok(aprovadosNoMes.orcamentos.some(o => o.id === aceiteAntigo.id));
+  // O link do valor orçado lista exatamente o que o card soma.
+  const apresentadas = (await chamar('GET', `/orcamentos?tipo=propostas&status=apresentados&de=${c.periodo.inicio}&ate=${c.periodo.ate}&limite=200`)).dados;
+  assert.equal(apresentadas.total, c.atual.validos);
+  assert.equal(apresentadas.orcamentos.reduce((n,o) => n + o.total_cents, 0), c.atual.valor_cents);
+  assert.ok(apresentadas.orcamentos.some(o => o.id === atual.id));
+  assert.ok(!apresentadas.orcamentos.some(o => o.id === cancelado.id));
   assert.equal(c.conversao.enviados, antes.conversao.enviados + 2);
   assert.equal(c.conversao.aprovados, antes.conversao.aprovados + 1);
   assert.equal(c.pendentes, antes.pendentes + 1); // Rascunhos não são propostas pendentes.
