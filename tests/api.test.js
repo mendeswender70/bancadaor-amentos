@@ -814,7 +814,7 @@ test('painel comercial compara períodos reais, classifica cada orçamento uma v
   assert.equal(c.periodo.ate, '2026-09-30');
   assert.equal(c.atual.valor_cents, antes.atual.valor_cents + atual.total_cents);
   assert.equal(c.atual.validos, antes.atual.validos + 1);
-  assert.equal(c.ticket_cents, Math.round(c.atual.valor_cents / c.atual.validos));
+  assert.equal(c.ticket_cents, Math.round(c.atual.aprovados_cents / c.atual.aprovados)); // Ticket de vendas aprovadas.
   assert.equal(c.atual.aprovados_cents, antes.atual.aprovados_cents + aceiteAntigo.total_cents);
   assert.equal(c.serie.at(-1).aprovados_cents, c.atual.aprovados_cents);
   const aprovadosNoMes = (await chamar('GET', '/orcamentos?status=aprovado&aprovados_periodo=mes&limite=200')).dados;
@@ -833,7 +833,7 @@ test('painel comercial compara períodos reais, classifica cada orçamento uma v
   assert.equal(qtd(c,'Quarto'), qtd(antes,'Quarto'));
   assert.equal(qtd(c,'Sala'), qtd(antes,'Sala') + 1);
   const p = (await chamar('GET', '/dashboard?periodo=anterior')).dados.comercial;
-  assert.equal(p.atual.valor_cents, anterior.atual.valor_cents + outroMes.total_cents + aceiteAntigo.total_cents);
+  assert.equal(p.atual.valor_cents, anterior.atual.valor_cents + aceiteAntigo.total_cents); // O rascunho de agosto não entra no valor orçado.
   assert.equal(p.serie.at(-1).mes, '2026-08');
   for (const filtro of ['visualizadas','vencimentos','aprovados','sem_resposta']) {
     const lista = await chamar('GET', `/orcamentos?atencao=${filtro}&limite=200`);
@@ -878,8 +878,8 @@ test('relatórios conciliam emissão e aceite, respeitam o fuso e mantêm totais
   const d = r.dados;
   assert.equal(d.periodo.anterior_de,'2025-03-31');
   assert.equal(d.periodo.anterior_ate,'2025-04-30');
-  assert.equal(d.atual.orcado_cents,260000); // Emissão de maio, sem cancelados.
-  assert.equal(d.atual.orcamentos,5);
+  assert.equal(d.atual.orcado_cents,210000); // Emissão de maio, sem rascunhos e cancelados.
+  assert.equal(d.atual.orcamentos,4);
   assert.equal(d.atual.aprovado_cents,130000); // 20.000 + 30.000 + 80.000 centavos.
   assert.equal(d.atual.aprovados,3);
   assert.equal(d.atual.ticket_cents,43333);

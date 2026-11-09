@@ -632,11 +632,13 @@ function somarMeses(inicio, meses) {
   return d.toISOString().slice(0, 10);
 }
 
+// Valor orçado = propostas apresentadas ao cliente. Rascunhos ainda não
+// foram entregues e cancelados não contam como oportunidade.
 async function numerosDoPeriodo(db, de, ate) {
   const orcados = await db.get(
     `SELECT COUNT(*) AS quantidade,
-            COUNT(*) FILTER (WHERE status <> 'cancelado') AS validos,
-            COALESCE(SUM(CASE WHEN status <> 'cancelado' THEN total_cents END), 0) AS valor_cents
+            COUNT(*) FILTER (WHERE status NOT IN ('rascunho', 'cancelado')) AS validos,
+            COALESCE(SUM(CASE WHEN status NOT IN ('rascunho', 'cancelado') THEN total_cents END), 0) AS valor_cents
      FROM orcamentos WHERE data >= ? AND data < ?`,
     de,
     ate,

@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-indicadores-consistentes',
+    data: '9 de novembro de 2026',
+    titulo: 'Indicadores mais fiéis às vendas',
+    itens: [
+      'O valor orçado considera apenas propostas apresentadas ao cliente. Rascunhos e cancelados ficam de fora no painel e nos relatórios.',
+      'O ticket médio agora é o valor médio das propostas aprovadas, igual em todas as telas.',
+      'A janela de novidades mostra só as mais recentes; as anteriores continuam em Avisos.',
+    ],
+  },
+  {
     id: '2026-11-relatorios-comerciais',
     data: '6 de novembro de 2026',
     titulo: 'Relatórios para entender seus resultados',
