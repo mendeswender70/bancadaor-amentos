@@ -54,8 +54,7 @@ export async function dadosComerciais(db, hoje, periodo, { atual, anterior, apro
       FROM orcamentos WHERE data >= ? AND data < ? AND status NOT IN ('rascunho','cancelado')`,
       somarDias(hoje,-89), somarDias(hoje,-89), somarDias(hoje,-89), somarDias(hoje,-89), somarDias(hoje,-179), somarDias(hoje,1)),
   ];
-  const resultados = [];
-  for (const consultar of consultas) resultados.push(await consultar());
+  const resultados = await Promise.all(consultas.map((consultar) => consultar()));
   const [atencao, orcados, ambientes, atividades, conversaoAnterior] = resultados;
   const pendentes = situacoes.filter((s) => ['enviado','negociacao'].includes(s.status)).reduce((n,s) => n+s.quantidade,0);
   return {

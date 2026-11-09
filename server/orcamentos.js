@@ -499,16 +499,18 @@ export function duplicarOrcamento(db, id, usuarioId, dataHoje) {
 
 /** Orçamentos enviados ou em negociação cuja validade passou viram "Expirado". */
 export async function expirarVencidos(db, dataHoje) {
-  const vencidos = await db.all(
-    `SELECT id FROM orcamentos WHERE status IN ('enviado', 'negociacao') AND data_validade < ?`,
-    dataHoje,
-  );
-  // Corrige também registros em que a validade foi renovada antes desta
-  // correção, mas o status expirado acabou sendo mantido no banco.
-  const renovados = await db.all(
-    `SELECT id FROM orcamentos WHERE status = 'expirado' AND data_validade >= ?`,
-    dataHoje,
-  );
+  const [vencidos, renovados] = await Promise.all([
+    db.all(
+      `SELECT id FROM orcamentos WHERE status IN ('enviado', 'negociacao') AND data_validade < ?`,
+      dataHoje,
+    ),
+    // Corrige também registros em que a validade foi renovada antes desta
+    // correção, mas o status expirado acabou sendo mantido no banco.
+    db.all(
+      `SELECT id FROM orcamentos WHERE status = 'expirado' AND data_validade >= ?`,
+      dataHoje,
+    ),
+  ]);
   if (!vencidos.length && !renovados.length) return;
   await db.transacao(async (t) => {
     for (const { id } of vencidos) {
@@ -635,25 +637,25 @@ function somarMeses(inicio, meses) {
 // Valor orçado = propostas apresentadas ao cliente. Rascunhos ainda não
 // foram entregues e cancelados não contam como oportunidade.
 async function numerosDoPeriodo(db, de, ate) {
-  const orcados = await db.get(
+  const fuso = process.env.TZ_EMPRESA || 'America/Sao_Paulo';
+  const [orcados, aprovados] = await Promise.all([db.get(
     `SELECT COUNT(*) AS quantidade,
             COUNT(*) FILTER (WHERE status NOT IN ('rascunho', 'cancelado')) AS validos,
             COALESCE(SUM(CASE WHEN status NOT IN ('rascunho', 'cancelado') THEN total_cents END), 0) AS valor_cents
      FROM orcamentos WHERE data >= ? AND data < ?`,
     de,
     ate,
-  );
+  ),
   // Uma proposta de outubro aprovada em novembro é uma aprovação de novembro.
   // Registros antigos sem a data de aprovação preservam a data da proposta.
-  const fuso = process.env.TZ_EMPRESA || 'America/Sao_Paulo';
-  const aprovados = await db.get(
+  db.get(
     `SELECT COUNT(*) AS aprovados, COALESCE(SUM(total_cents), 0) AS aprovados_cents
      FROM orcamentos WHERE status = 'aprovado' AND (
        (aprovado_em >= (?::date::timestamp AT TIME ZONE ?) AND aprovado_em < (?::date::timestamp AT TIME ZONE ?))
        OR (aprovado_em IS NULL AND data >= ? AND data < ?)
      )`,
     de, fuso, ate, fuso, de, ate,
-  );
+  )]);
   return { ...orcados, ...aprovados };
 }
 
@@ -700,8 +702,9 @@ async function precisaAtencao(db, dataHoje) {
   ];
   const vistos = new Set();
   const lista = [];
-  for (const [motivo, sql, ...params] of consultas) {
-    for (const linha of await db.all(sql, ...params)) {
+  const resultados = await Promise.all(consultas.map(([, sql, ...params]) => db.all(sql, ...params)));
+  for (const [i, [motivo]] of consultas.entries()) {
+    for (const linha of resultados[i]) {
       if (vistos.has(linha.id)) continue;
       vistos.add(linha.id);
       lista.push({ ...linha, motivo });
@@ -755,56 +758,66 @@ export async function listarLembretesAutomaticos(db, dataHoje) {
 export async function resumoDashboard(db, dataHoje, escolhaPeriodo = 'mes') {
   const periodo = periodoComercial(dataHoje, escolhaPeriodo);
   const inicioMes = inicioDoMes(dataHoje);
-  const mes = await numerosDoPeriodo(db, inicioMes, somarMeses(inicioMes, 1));
-  const anterior = await numerosDoPeriodo(db, somarMeses(inicioMes, -1), inicioMes);
-  // Taxa de aprovação dos últimos 90 dias, só entre os que chegaram ao cliente.
-  const conversao = await db.get(
-    `SELECT COUNT(*) AS enviados, COUNT(*) FILTER (WHERE status = 'aprovado') AS aprovados
-     FROM orcamentos WHERE data >= ? AND status NOT IN ('rascunho', 'cancelado')`,
-    somarDias(dataHoje, -90),
-  );
-  const { n: abertos, valor: abertosCents } = await db.get(
-    `SELECT COUNT(*) AS n, COALESCE(SUM(total_cents), 0) AS valor FROM orcamentos WHERE status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`,
-    ...STATUS_ABERTOS,
-  );
-  const porStatus = await db.all(
-    `SELECT status, COUNT(*) AS quantidade, COALESCE(SUM(total_cents), 0) AS valor_cents
-     FROM orcamentos GROUP BY status`,
-  );
   const inicioSerie = somarMeses(inicioMes, -11);
   const fimSerie = somarMeses(inicioMes, 1);
   const fuso = process.env.TZ_EMPRESA || 'America/Sao_Paulo';
-  const totaisMensais = await db.all(
-    `SELECT COALESCE(to_char(aprovado_em AT TIME ZONE ?, 'YYYY-MM'), substring(data, 1, 7)) AS mes,
-            COUNT(*) AS quantidade, COALESCE(SUM(total_cents), 0) AS valor_cents
-     FROM orcamentos WHERE status = 'aprovado' AND (
-       (aprovado_em >= (?::date::timestamp AT TIME ZONE ?) AND aprovado_em < (?::date::timestamp AT TIME ZONE ?))
-       OR (aprovado_em IS NULL AND data >= ? AND data < ?)
-     ) GROUP BY 1 ORDER BY 1`,
-    fuso, inicioSerie, fuso, fimSerie, fuso, inicioSerie, fimSerie,
-  );
-  const clientes = await db.get('SELECT COUNT(*) AS total FROM clientes');
-  const atividades = await db.all(
-    `SELECT h.id, h.orcamento_id, h.evento, h.data_hora, h.total_cents,
-            o.numero, c.nome AS cliente_nome, u.nome AS usuario_nome
-     FROM orcamento_historico h JOIN orcamentos o ON o.id = h.orcamento_id
-     JOIN clientes c ON c.id = o.cliente_id LEFT JOIN usuarios u ON u.id = h.usuario_id
-     ORDER BY h.data_hora DESC, h.id DESC LIMIT 6`,
-  );
-  const vencimentos = await db.all(
-    `SELECT o.id, o.numero, o.data_validade, o.total_cents, c.nome AS cliente_nome,
-       (SELECT nome FROM orcamento_ambientes a WHERE a.orcamento_id=o.id ORDER BY a.ordem,a.id LIMIT 1) AS ambiente_nome
-     FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
-     WHERE o.status IN ('enviado', 'negociacao') AND o.data_validade >= ?
-     ORDER BY o.data_validade, o.numero LIMIT 8`, dataHoje,
-  );
+  const periodoEhMes = escolhaPeriodo === 'mes';
+  // Consultas independentes saem juntas: no Postgres de produção cada ida e
+  // volta ao banco custa latência de rede, então elas não devem esperar umas
+  // pelas outras.
+  const [mes, anterior, atualOutro, anteriorOutro, conversao, abertos, porStatus, totaisMensais, clientes, atividades, vencimentos, atencao, recentes] = await Promise.all([
+    numerosDoPeriodo(db, inicioMes, fimSerie),
+    numerosDoPeriodo(db, somarMeses(inicioMes, -1), inicioMes),
+    periodoEhMes ? null : numerosDoPeriodo(db, periodo.inicio, periodo.fim),
+    periodoEhMes ? null : numerosDoPeriodo(db, periodo.anterior_inicio, periodo.inicio),
+    // Taxa de aprovação dos últimos 90 dias, só entre os que chegaram ao cliente.
+    db.get(
+      `SELECT COUNT(*) AS enviados, COUNT(*) FILTER (WHERE status = 'aprovado') AS aprovados
+       FROM orcamentos WHERE data >= ? AND status NOT IN ('rascunho', 'cancelado')`,
+      somarDias(dataHoje, -90),
+    ),
+    db.get(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(total_cents), 0) AS valor FROM orcamentos WHERE status IN (${STATUS_ABERTOS.map(() => '?').join(', ')})`,
+      ...STATUS_ABERTOS,
+    ),
+    db.all(
+      `SELECT status, COUNT(*) AS quantidade, COALESCE(SUM(total_cents), 0) AS valor_cents
+       FROM orcamentos GROUP BY status`,
+    ),
+    db.all(
+      `SELECT COALESCE(to_char(aprovado_em AT TIME ZONE ?, 'YYYY-MM'), substring(data, 1, 7)) AS mes,
+              COUNT(*) AS quantidade, COALESCE(SUM(total_cents), 0) AS valor_cents
+       FROM orcamentos WHERE status = 'aprovado' AND (
+         (aprovado_em >= (?::date::timestamp AT TIME ZONE ?) AND aprovado_em < (?::date::timestamp AT TIME ZONE ?))
+         OR (aprovado_em IS NULL AND data >= ? AND data < ?)
+       ) GROUP BY 1 ORDER BY 1`,
+      fuso, inicioSerie, fuso, fimSerie, fuso, inicioSerie, fimSerie,
+    ),
+    db.get('SELECT COUNT(*) AS total FROM clientes'),
+    db.all(
+      `SELECT h.id, h.orcamento_id, h.evento, h.data_hora, h.total_cents,
+              o.numero, c.nome AS cliente_nome, u.nome AS usuario_nome
+       FROM orcamento_historico h JOIN orcamentos o ON o.id = h.orcamento_id
+       JOIN clientes c ON c.id = o.cliente_id LEFT JOIN usuarios u ON u.id = h.usuario_id
+       ORDER BY h.data_hora DESC, h.id DESC LIMIT 6`,
+    ),
+    db.all(
+      `SELECT o.id, o.numero, o.data_validade, o.total_cents, c.nome AS cliente_nome,
+         (SELECT nome FROM orcamento_ambientes a WHERE a.orcamento_id=o.id ORDER BY a.ordem,a.id LIMIT 1) AS ambiente_nome
+       FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id
+       WHERE o.status IN ('enviado', 'negociacao') AND o.data_validade >= ?
+       ORDER BY o.data_validade, o.numero LIMIT 8`, dataHoje,
+    ),
+    precisaAtencao(db, dataHoje),
+    listarOrcamentos(db, { limite: 6 }),
+  ]);
   const situacoes = Object.keys(STATUS).map((status) => ({
     status, quantidade: porStatus.find((s) => s.status === status)?.quantidade || 0,
     valor_cents: porStatus.find((s) => s.status === status)?.valor_cents || 0,
   }));
-  const atualSelecionado = escolhaPeriodo === 'mes' ? mes : await numerosDoPeriodo(db, periodo.inicio, periodo.fim);
-  const anteriorSelecionado = escolhaPeriodo === 'mes' ? anterior : await numerosDoPeriodo(db, periodo.anterior_inicio, periodo.inicio);
-  const comercial = await dadosComerciais(db, dataHoje, periodo, { atual: atualSelecionado, anterior: anteriorSelecionado, aprovadosMensais: totaisMensais, situacoes });
+  const comercial = await dadosComerciais(db, dataHoje, periodo, {
+    atual: atualOutro ?? mes, anterior: anteriorOutro ?? anterior, aprovadosMensais: totaisMensais, situacoes,
+  });
   return {
     comercial,
     data_hoje: dataHoje,
@@ -819,11 +832,11 @@ export async function resumoDashboard(db, dataHoje, escolhaPeriodo = 'mes') {
     mes,
     mes_anterior: anterior,
     conversao,
-    em_aberto: abertos,
-    em_aberto_cents: abertosCents,
+    em_aberto: abertos.n,
+    em_aberto_cents: abertos.valor,
     situacoes,
-    atencao: await precisaAtencao(db, dataHoje),
-    recentes: (await listarOrcamentos(db, { limite: 6 })).orcamentos,
+    atencao,
+    recentes: recentes.orcamentos,
   };
 }
 
