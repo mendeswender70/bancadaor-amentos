@@ -156,9 +156,9 @@ export function desenharDashboard(d,{periodo,metrica,aoMudarPeriodo,aoMudarMetri
       indicador('aprovado',`Valor aprovado ${periodoTexto}`,moeda(c.atual.aprovados_cents),variacao(c.atual.aprovados_cents,c.anterior.aprovados_cents,comparacao),`#/orcamentos?status=aprovado&aprovados_periodo=${periodo}`,'pc-sucesso'),
       indicador('grafico','Taxa de aprovação (90 dias)',taxaAtual===null?'—':`${numero(taxaAtual)}%`,variacao(taxaAtual,taxaAnterior,'em relação ao período anterior',true),'#/orcamentos?status=aprovado'),
       indicador('enviar','Propostas pendentes',String(c.pendentes),h('span',{class:`pc-comparacao ${c.atencao.vencimentos?'pc-aviso':'pc-neutra'}`},icone('relogio'),`${c.atencao.vencimentos} ${c.atencao.vencimentos===1?'vence':'vencem'} nos próximos 7 dias`),'#/propostas?status=abertos'),
-      indicador('moedas','Ticket médio',moeda(c.ticket_cents),variacao(c.ticket_cents,c.ticket_anterior_cents,comparacao),`#/orcamentos?${deAte}`)),
+      indicador('moedas','Ticket médio aprovado',moeda(c.ticket_cents),variacao(c.ticket_cents,c.ticket_anterior_cents,comparacao),`#/orcamentos?status=aprovado&aprovados_periodo=${periodo}`)),
     h('div',{class:'pc-linha-central'},atencao(c),evolucao(c,metrica,aoMudarMetrica),barras(d.situacoes),atividades(c.atividades)),
     h('div',{class:'pc-linha-inferior'},distribuicao(c.ambientes),recentes(d.recentes,aoAtualizar),agenda(d.vencimentos,d.data_hoje)),
     h('nav',{class:'pc-mobile-atalhos','aria-label':'Mais opções do painel'},h('a',{href:'#/propostas'},icone('enviar'),'Propostas'),h('a',{href:'#/config/moveis'},icone('caixa'),'Móveis e preços'),h('a',{href:'#/relatorios'},icone('grafico'),'Relatórios')),
-    h('p',{class:'pc-nota'},'Valores aprovados representam propostas aceitas, não recebimentos. Distribuição por primeiro ambiente de cada orçamento.'));
+    h('p',{class:'pc-nota'},'Valor orçado considera propostas apresentadas ao cliente, sem rascunhos e cancelados. Valores aprovados representam propostas aceitas, não recebimentos. Distribuição por primeiro ambiente de cada orçamento.'));
 }

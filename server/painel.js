@@ -30,7 +30,7 @@ export async function dadosComerciais(db, hoje, periodo, { atual, anterior, apro
   const inicioSerie = deslocarMes(periodo.fim, -6);
   const consultas = [
     () => db.get(`SELECT ${atencoes.map((a) => `COUNT(*) FILTER (WHERE ${a.sql}) AS ${a.tipo}`).join(', ')} FROM orcamentos o`, ...atencoes.flatMap((a) => a.params)),
-    () => db.all(`SELECT substring(data,1,7) AS mes, COUNT(*) AS quantidade, COALESCE(SUM(total_cents),0) AS valor_cents FROM orcamentos WHERE status <> 'cancelado' AND data >= ? AND data < ? GROUP BY 1 ORDER BY 1`, inicioSerie, periodo.fim),
+    () => db.all(`SELECT substring(data,1,7) AS mes, COUNT(*) AS quantidade, COALESCE(SUM(total_cents),0) AS valor_cents FROM orcamentos WHERE status NOT IN ('rascunho','cancelado') AND data >= ? AND data < ? GROUP BY 1 ORDER BY 1`, inicioSerie, periodo.fim),
     () => db.all(`SELECT CASE
         WHEN lower(a.nome) LIKE '%cozinha%' THEN 'Cozinha'
         WHEN lower(a.nome) LIKE '%quarto%' OR lower(a.nome) LIKE '%suíte%' OR lower(a.nome) LIKE '%suite%' THEN 'Quarto'
@@ -62,8 +62,9 @@ export async function dadosComerciais(db, hoje, periodo, { atual, anterior, apro
     periodo, atual, anterior, atencao, pendentes, ambientes, atividades,
     conversao: { enviados: conversaoAnterior.enviados, aprovados: conversaoAnterior.aprovados },
     conversao_anterior: { enviados: conversaoAnterior.enviados_anteriores, aprovados: conversaoAnterior.aprovados_anteriores },
-    ticket_cents: atual.validos ? Math.round(atual.valor_cents / atual.validos) : 0,
-    ticket_anterior_cents: anterior.validos ? Math.round(anterior.valor_cents / anterior.validos) : 0,
+    // Mesmo cálculo dos relatórios: valor médio de cada venda aprovada.
+    ticket_cents: atual.aprovados ? Math.round(atual.aprovados_cents / atual.aprovados) : 0,
+    ticket_anterior_cents: anterior.aprovados ? Math.round(anterior.aprovados_cents / anterior.aprovados) : 0,
     serie: Array.from({length:6},(_,i) => {
       const mes = deslocarMes(inicioSerie,i).slice(0,7);
       const orcado = orcados.find((o) => o.mes===mes);

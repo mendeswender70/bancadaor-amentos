@@ -23,8 +23,8 @@ export function periodoRelatorio(hoje, filtros = {}) {
 
 async function resumo(db, de, ate, hoje) {
   const r = await db.get(`${BASE} SELECT
-    COUNT(*) FILTER (WHERE data BETWEEN ? AND ? AND status <> 'cancelado') AS orcamentos,
-    COALESCE(SUM(total_cents) FILTER (WHERE data BETWEEN ? AND ? AND status <> 'cancelado'),0) AS orcado_cents,
+    COUNT(*) FILTER (WHERE data BETWEEN ? AND ? AND status NOT IN ('rascunho','cancelado')) AS orcamentos,
+    COALESCE(SUM(total_cents) FILTER (WHERE data BETWEEN ? AND ? AND status NOT IN ('rascunho','cancelado')),0) AS orcado_cents,
     COUNT(*) FILTER (WHERE data BETWEEN ? AND ? AND status NOT IN ('rascunho','cancelado')) AS apresentadas,
     COUNT(*) FILTER (WHERE data BETWEEN ? AND ? AND status='aprovado' AND aprovado_dia <= ?) AS coorte_aprovados,
     COUNT(*) FILTER (WHERE status='aprovado' AND aprovado_dia BETWEEN ? AND ?) AS aprovados,
@@ -72,7 +72,7 @@ export async function relatorioComercial(db, hoje, filtros = {}) {
   const atual = await resumo(db, periodo.de, periodo.ate, hoje);
   const anterior = await resumo(db, periodo.anterior_de, periodo.anterior_ate, hoje);
   const mesesOrcados = await db.all(`SELECT substring(data,1,7) AS mes,COUNT(*) AS orcamentos,COALESCE(SUM(total_cents),0) AS orcado_cents
-    FROM orcamentos WHERE data BETWEEN ? AND ? AND status <> 'cancelado' GROUP BY 1`,periodo.de,periodo.ate);
+    FROM orcamentos WHERE data BETWEEN ? AND ? AND status NOT IN ('rascunho','cancelado') GROUP BY 1`,periodo.de,periodo.ate);
   const mesesAprovados = await db.all(`${BASE} SELECT substring(aprovado_dia,1,7) AS mes,COUNT(*) AS aprovados,COALESCE(SUM(total_cents),0) AS aprovado_cents
     FROM base WHERE status='aprovado' AND aprovado_dia BETWEEN ? AND ? GROUP BY 1`,fuso(),periodo.de,periodo.ate);
   const clientes = await db.all(`${BASE} SELECT c.id,c.nome,COUNT(*) AS aprovados,SUM(b.total_cents) AS valor_cents

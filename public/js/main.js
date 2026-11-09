@@ -244,6 +244,7 @@ function montarLayout() {
 
 const CHAVE_NOVIDADES_LIDAS = 'esquadro.novidades.lidas';
 const CHAVE_AVISOS_LIDAS = 'esquadro.avisos.lidas';
+const MAX_NOVIDADES_NO_MODAL = 3;
 
 function idsNovidadesLidas() {
   try {
@@ -350,12 +351,16 @@ async function abrirNovidades({ somenteNaoLidas = false } = {}) {
   const lidas = idsNovidadesLidas();
   const entradas = novidades.filter((n) => !somenteNaoLidas || !lidas.has(n.id));
   if (!entradas.length) return;
+  // Quem chega agora (ou ficou muito tempo sem entrar) vê só as mais recentes;
+  // as demais continuam em Avisos → Novidades e já contam como lidas.
+  const visiveis = entradas.slice(0, MAX_NOVIDADES_NO_MODAL);
+  const ocultas = entradas.length - visiveis.length;
 
   await abrirModal('Novidades do esquadro', (fechar) =>
     h(
       'div',
       { class: 'lista-novidades' },
-      entradas.map((n) =>
+      visiveis.map((n) =>
         h(
           'article',
           { class: 'novidade' },
@@ -364,6 +369,10 @@ async function abrirNovidades({ somenteNaoLidas = false } = {}) {
           h('ul', {}, n.itens.map((item) => h('li', {}, item))),
         ),
       ),
+      ocultas
+        ? h('p', { class: 'novidades-mais' }, `Mais ${ocultas} ${ocultas === 1 ? 'novidade anterior está' : 'novidades anteriores estão'} em `,
+            h('a', { href: '#/avisos', onclick: () => fechar(true) }, 'Avisos → Novidades'), '.')
+        : null,
       h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', autofocus: true, onclick: () => fechar(true) }, 'Entendi')),
     ),
   );
