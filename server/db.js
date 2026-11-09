@@ -399,7 +399,7 @@ class Banco {
   }
 }
 
-function driverPostgres(url) {
+function driverPostgres(url, { conexoes = 5 } = {}) {
   // Parâmetros da URL (sslmode, supa…) são tratados aqui, não repassados ao servidor.
   const endereco = new URL(url);
   // Erro comum ao copiar do Supabase: deixar "[YOUR-PASSWORD]" ou os colchetes.
@@ -418,7 +418,7 @@ function driverPostgres(url) {
   const sql = postgres(endereco.toString(), {
     ssl: semSsl ? false : 'require',
     prepare: false, // obrigatório no pooler do Supabase (modo transação)
-    max: 5,
+    max: conexoes,
     idle_timeout: 20,
     connect_timeout: 15,
     onnotice: () => {},
@@ -508,7 +508,7 @@ export async function abrirBanco(config = configuracaoBanco()) {
   const url = config?.url;
   if (url && ehPostgres(url)) {
     try {
-      driver = driverPostgres(url);
+      driver = driverPostgres(url, { conexoes: config.conexoes });
     } catch (erro) {
       throw erro instanceof ErroHttp ? erro : new ErroHttp(503, explicarErroBanco(erro));
     }

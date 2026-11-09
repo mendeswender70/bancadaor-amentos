@@ -52,7 +52,10 @@ before(async () => {
     const porta = socketServidor.server.address().port;
     url = `postgres://postgres:postgres@127.0.0.1:${porta}/postgres?sslmode=disable`;
   }
-  app = criarApp({ banco: { url }, dataHoje: () => hojeFalso });
+  // O PGlite por socket não aceita consultas simultâneas em conexões diferentes;
+  // com uma conexão só, o postgres.js enfileira as consultas paralelas.
+  const conexoes = process.env.TEST_BANCO === 'socket' && !process.env.TEST_POSTGRES_URL ? 1 : undefined;
+  app = criarApp({ banco: { url, conexoes }, dataHoje: () => hojeFalso });
   await new Promise((resolve) => {
     servidor = app.listen(0, resolve);
   });

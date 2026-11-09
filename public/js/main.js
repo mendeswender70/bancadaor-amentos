@@ -96,6 +96,12 @@ async function rotear() {
 }
 
 window.addEventListener('hashchange', rotear);
+
+// O atalho aceita Ctrl e ⌘; o rótulo mostra a tecla do aparelho.
+const plataforma = navigator.userAgentData?.platform || navigator.platform || '';
+const ATALHO_BUSCA = /mac|iphone|ipad|ipod/i.test(plataforma)
+  ? { texto: '⌘ K', aria: 'Meta+K' }
+  : { texto: 'Ctrl K', aria: 'Control+K' };
 window.addEventListener('keydown', (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
   const busca = document.querySelector('.gestao-busca input');
@@ -163,7 +169,7 @@ function montarLayout() {
   const link = ([href, texto, ic, padrao], rotuloCurto) =>
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
   const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'), h('option', { value: 'propostas' }, 'Propostas'), h('option', { value: 'config/moveis' }, 'Móveis'));
-  const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente, orçamento, proposta ou móvel…', 'aria-label': 'Buscar no Esquadro' });
+  const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente, orçamento, proposta ou móvel…', 'aria-label': 'Buscar no Esquadro', 'aria-keyshortcuts': ATALHO_BUSCA.aria });
   const alternarBusca = (aberta, devolverFoco = false) => {
     buscaGlobal.classList.toggle('gestao-busca-aberta', aberta);
     botaoBusca.setAttribute('aria-expanded', String(aberta));
@@ -180,7 +186,7 @@ function montarLayout() {
     evento.preventDefault();
     irPara(`#/${escopo.value}?q=${encodeURIComponent(busca.value.trim())}`);
     if (botaoBusca.getClientRects().length) alternarBusca(false, true);
-  } }, icone('busca'), busca, escopo, h('kbd', { class: 'gestao-atalho' }, 'Ctrl K'), h('button', { type: 'submit', 'aria-label': 'Buscar' }, icone('seta')));
+  } }, icone('busca'), busca, escopo, h('kbd', { class: 'gestao-atalho', title: `Atalho: ${ATALHO_BUSCA.texto}` }, ATALHO_BUSCA.texto), h('button', { type: 'submit', 'aria-label': 'Buscar' }, icone('seta')));
 
   substituir(
     raiz,
