@@ -58,26 +58,31 @@ export async function listarAprovacoesRelatorio(db, hoje, filtros = {}) {
   const limite = inteiro(filtros.limite ?? 20, {min:1,max:100,campo:'Limite'});
   const deslocamento = inteiro(filtros.deslocamento ?? 0, {min:0,max:1000000,campo:'Página'});
   const filtro = filtroAprovacoes(periodo, filtros.q);
-  const total = await db.get(`${BASE} SELECT COUNT(*) AS quantidade, COALESCE(SUM(b.total_cents),0) AS valor_cents
-    FROM base b JOIN clientes c ON c.id=b.cliente_id WHERE ${filtro.sql}`, fuso(), ...filtro.params);
-  const linhas = await db.all(`${BASE} SELECT ${COLUNAS_APROVACOES}
-    FROM base b JOIN clientes c ON c.id=b.cliente_id WHERE ${filtro.sql}
-    ORDER BY b.aprovado_dia DESC,b.aprovado_em DESC NULLS LAST,b.numero DESC LIMIT ? OFFSET ?`, fuso(), ...filtro.params, limite, deslocamento);
+  const [total, linhas] = await Promise.all([
+    db.get(`${BASE} SELECT COUNT(*) AS quantidade, COALESCE(SUM(b.total_cents),0) AS valor_cents
+      FROM base b JOIN clientes c ON c.id=b.cliente_id WHERE ${filtro.sql}`, fuso(), ...filtro.params),
+    db.all(`${BASE} SELECT ${COLUNAS_APROVACOES}
+      FROM base b JOIN clientes c ON c.id=b.cliente_id WHERE ${filtro.sql}
+      ORDER BY b.aprovado_dia DESC,b.aprovado_em DESC NULLS LAST,b.numero DESC LIMIT ? OFFSET ?`, fuso(), ...filtro.params, limite, deslocamento),
+  ]);
   return { ...total, linhas, limite, deslocamento };
 }
 
 export async function relatorioComercial(db, hoje, filtros = {}) {
   const periodo = periodoRelatorio(hoje, filtros);
-  // Consultas sequenciais também funcionam com o driver Postgres usado nos testes.
-  const atual = await resumo(db, periodo.de, periodo.ate, hoje);
-  const anterior = await resumo(db, periodo.anterior_de, periodo.anterior_ate, hoje);
-  const mesesOrcados = await db.all(`SELECT substring(data,1,7) AS mes,COUNT(*) AS orcamentos,COALESCE(SUM(total_cents),0) AS orcado_cents
-    FROM orcamentos WHERE data BETWEEN ? AND ? AND status NOT IN ('rascunho','cancelado') GROUP BY 1`,periodo.de,periodo.ate);
-  const mesesAprovados = await db.all(`${BASE} SELECT substring(aprovado_dia,1,7) AS mes,COUNT(*) AS aprovados,COALESCE(SUM(total_cents),0) AS aprovado_cents
-    FROM base WHERE status='aprovado' AND aprovado_dia BETWEEN ? AND ? GROUP BY 1`,fuso(),periodo.de,periodo.ate);
-  const clientes = await db.all(`${BASE} SELECT c.id,c.nome,COUNT(*) AS aprovados,SUM(b.total_cents) AS valor_cents
+  // Consultas independentes saem juntas, como no painel.
+  const [atual, anterior, mesesOrcados, mesesAprovados, clientes, aprovacoes] = await Promise.all([
+    resumo(db, periodo.de, periodo.ate, hoje),
+    resumo(db, periodo.anterior_de, periodo.anterior_ate, hoje),
+    db.all(`SELECT substring(data,1,7) AS mes,COUNT(*) AS orcamentos,COALESCE(SUM(total_cents),0) AS orcado_cents
+    FROM orcamentos WHERE data BETWEEN ? AND ? AND status NOT IN ('rascunho','cancelado') GROUP BY 1`,periodo.de,periodo.ate),
+    db.all(`${BASE} SELECT substring(aprovado_dia,1,7) AS mes,COUNT(*) AS aprovados,COALESCE(SUM(total_cents),0) AS aprovado_cents
+    FROM base WHERE status='aprovado' AND aprovado_dia BETWEEN ? AND ? GROUP BY 1`,fuso(),periodo.de,periodo.ate),
+    db.all(`${BASE} SELECT c.id,c.nome,COUNT(*) AS aprovados,SUM(b.total_cents) AS valor_cents
     FROM base b JOIN clientes c ON c.id=b.cliente_id WHERE b.status='aprovado' AND b.aprovado_dia BETWEEN ? AND ?
-    GROUP BY c.id,c.nome ORDER BY valor_cents DESC,c.nome,c.id LIMIT 5`,fuso(),periodo.de,periodo.ate);
+    GROUP BY c.id,c.nome ORDER BY valor_cents DESC,c.nome,c.id LIMIT 5`,fuso(),periodo.de,periodo.ate),
+    listarAprovacoesRelatorio(db,hoje,{de:periodo.de,ate:periodo.ate}),
+  ]);
   const serie = Array.from({length:periodo.meses},(_,i)=>{
     const mes = deslocarMes(`${periodo.de.slice(0,7)}-01`,i).slice(0,7);
     const orcado = mesesOrcados.find(m=>m.mes===mes), aprovado = mesesAprovados.find(m=>m.mes===mes);
@@ -85,7 +90,6 @@ export async function relatorioComercial(db, hoje, filtros = {}) {
       aprovados:aprovado?.aprovados || 0, aprovado_cents:aprovado?.aprovado_cents || 0,
       ticket_cents:aprovado?.aprovados ? Math.round(aprovado.aprovado_cents/aprovado.aprovados) : 0 };
   });
-  const aprovacoes = await listarAprovacoesRelatorio(db,hoje,{de:periodo.de,ate:periodo.ate});
   return { hoje, periodo, atual, anterior, serie, clientes, aprovacoes };
 }
 

@@ -152,7 +152,7 @@ export function desenharDashboard(d,{periodo,metrica,aoMudarPeriodo,aoMudarMetri
   return h('div',{class:'pagina painel-comercial'},
     h('header',{class:'pc-cabecalho'},h('div',{},h('h1',{},'Painel comercial'),h('p',{},'Visão geral da sua marcenaria, orçamentos e oportunidades de vendas.')),filtro),
     h('div',{class:'pc-metricas'},
-      indicador('orcamentos',`Valor orçado ${periodoTexto}`,moeda(c.atual.valor_cents),variacao(c.atual.valor_cents,c.anterior.valor_cents,comparacao),`#/orcamentos?${deAte}`),
+      indicador('orcamentos',`Valor orçado ${periodoTexto}`,moeda(c.atual.valor_cents),variacao(c.atual.valor_cents,c.anterior.valor_cents,comparacao),`#/propostas?status=apresentados&${deAte}`),
       indicador('aprovado',`Valor aprovado ${periodoTexto}`,moeda(c.atual.aprovados_cents),variacao(c.atual.aprovados_cents,c.anterior.aprovados_cents,comparacao),`#/orcamentos?status=aprovado&aprovados_periodo=${periodo}`,'pc-sucesso'),
       indicador('grafico','Taxa de aprovação (90 dias)',taxaAtual===null?'—':`${numero(taxaAtual)}%`,variacao(taxaAtual,taxaAnterior,'em relação ao período anterior',true),'#/orcamentos?status=aprovado'),
       indicador('enviar','Propostas pendentes',String(c.pendentes),h('span',{class:`pc-comparacao ${c.atencao.vencimentos?'pc-aviso':'pc-neutra'}`},icone('relogio'),`${c.atencao.vencimentos} ${c.atencao.vencimentos===1?'vence':'vencem'} nos próximos 7 dias`),'#/propostas?status=abertos'),

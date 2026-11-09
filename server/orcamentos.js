@@ -4,6 +4,7 @@ import {
   STATUS,
   STATUS_ABERTOS,
   STATUS_PERDIDOS,
+  STATUS_APRESENTADOS,
   TIPOS_AJUSTE,
   TAXAS_CARTAO,
   calcularItem,
@@ -562,7 +563,7 @@ export async function listarOrcamentos(db, filtros = {}) {
       params.push(padraoLike(semAcento(q)));
     }
   }
-  const grupos = { abertos: STATUS_ABERTOS, perdidos: STATUS_PERDIDOS };
+  const grupos = { abertos: STATUS_ABERTOS, perdidos: STATUS_PERDIDOS, apresentados: STATUS_APRESENTADOS };
   if (filtros.tipo === 'propostas') onde.push("o.status <> 'rascunho'");
   if (filtros.atencao) {
     const filtro = filtroAtencao(filtros.atencao, filtros.hoje);
