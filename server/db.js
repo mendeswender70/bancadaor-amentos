@@ -324,6 +324,8 @@ export const MIGRACOES = [
     `ALTER TABLE empresa ADD COLUMN inclusos text`,
     `ALTER TABLE orcamentos ADD COLUMN inclusos text NOT NULL DEFAULT '[]'`,
   ],
+  // v11: meta de vendas (valor aprovado por mês) que o painel acompanha. Zero = sem meta.
+  [`ALTER TABLE empresa ADD COLUMN meta_mensal_cents integer NOT NULL DEFAULT 0`],
 ];
 
 // ---------------------------------------------------------------------------

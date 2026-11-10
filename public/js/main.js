@@ -204,10 +204,6 @@ function montarLayout() {
         ),
         h('a', { href: '#/orcamentos/novo', class: 'botao botao-primario lateral-novo' }, icone('mais'), 'Novo orçamento'),
         h('nav', { class: 'lateral-nav' }, MENU_LATERAL.map((m) => link(m))),
-        h('a', { class: 'pc-lateral-promocao', href: '#/orcamentos/novo' },
-          h('img', { src: '/images/painel-cozinha.jpg', alt: '', loading: 'lazy' }),
-          h('strong', {}, 'Gestão comercial', h('br', {}), 'para sua marcenaria'),
-          h('small', {}, 'Orçamentos, propostas e vendas de móveis planejados em um só lugar.')),
         botaoNovidades('lateral'),
         h(
           'div',

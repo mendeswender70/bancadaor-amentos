@@ -118,7 +118,7 @@ export function desenharRelatorio(d,acoes) {
   return h('div',{class:'pagina pagina-relatorios'},
     h('header',{class:'rpt-cabecalho'},h('div',{},h('span',{class:'rpt-eyebrow'},'VISÃO DE RESULTADOS'),h('h1',{},'Relatórios comerciais'),h('p',{},'Entenda seus resultados e encontre as próximas oportunidades.')),acoes.exportar),
     filtros(d,acoes),
-    h('div',{class:'rpt-metricas'},metrica('orcamentos','Valor orçado',moeda(a.orcado_cents),`${total(a.orcamentos,'orçamento emitido','orçamentos emitidos')} · inclui rascunhos`,comparacao(a.orcado_cents,b.orcado_cents,p)),
+    h('div',{class:'rpt-metricas'},metrica('orcamentos','Valor orçado',moeda(a.orcado_cents),`${total(a.orcamentos,'orçamento emitido','orçamentos emitidos')} · sem rascunhos`,comparacao(a.orcado_cents,b.orcado_cents,p)),
       metrica('aprovado','Valor aprovado',moeda(a.aprovado_cents),`${total(a.aprovados,'proposta aceita','propostas aceitas')} no período`,comparacao(a.aprovado_cents,b.aprovado_cents,p),'rpt-destaque'),
       metrica('grafico','Taxa de aprovação',a.taxa===null?'—':`${numero(a.taxa)}%`,`${a.coorte_aprovados} de ${total(a.apresentadas,'proposta apresentada','propostas apresentadas')}`,comparacao(a.taxa,b.taxa,p,true)),
       metrica('moedas','Ticket médio aprovado',moeda(a.ticket_cents),'Valor médio por proposta aprovada',comparacao(a.ticket_cents,b.ticket_cents,p))),

@@ -832,6 +832,13 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     res.json(await lerEmpresa());
   });
 
+  // Meta de vendas: valor aprovado por mês que o painel acompanha. Zero desliga a meta.
+  api.put('/empresa/meta', async (req, res) => {
+    const meta = inteiro(req.body.meta_mensal_cents, { max: 2_000_000_000, campo: 'Meta do mês' });
+    await db.run('UPDATE empresa SET meta_mensal_cents = ? WHERE id = 1', meta);
+    res.json(await lerEmpresa());
+  });
+
   // Lista inteira dos itens "já está incluso" que a empresa oferece.
   api.put('/empresa/inclusos', async (req, res) => {
     const itens = normalizarInclusos(req.body.inclusos ?? [], { max: LIMITES_INCLUSO.na_lista, comPadrao: true });
