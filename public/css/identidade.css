@@ -109,3 +109,21 @@ html:root .estrutura .lateral :focus-visible { outline-color: var(--capa-ouro); 
 @media (max-width: 480px) {
   .painel-comercial .pc-meta-vazia { grid-template-columns: 1fr; }
 }
+
+/* ---------- Demais telas: títulos e valores com a letra do livro ---------- */
+/* Título de página */
+html:root .estrutura .pagina :is(.cabecalho-pagina, .cabecalho-interno, .rpt-cabecalho, .editor-titulo-linha) h1 { font-family: var(--fonte-titulo); font-weight: 400; letter-spacing: -0.03em; font-variant-numeric: lining-nums; }
+html:root .estrutura .pagina :is(.cabecalho-pagina, .cabecalho-interno, .rpt-cabecalho) h1 { font-size: clamp(28px, 2.6vw, 34px); line-height: 1.15; }
+
+/* Título de cartão e de seção. Os títulos pequenos das etapas do editor continuam na letra de formulário. */
+html:root .estrutura .pagina :is(.rpt-titulo, .cartao-titulo, .cliente-historico-titulo, .tema-preferencias, .config-overview, .config-formulario, .novo-escolha, .novo-proximo, .avisos-resumo-novidades, .editor-pagamento-titulo) h2,
+html:root .estrutura .pagina-editor .secao-topo-solta h2 { font-family: var(--fonte-titulo); font-weight: 450; font-size: 19px; line-height: 1.25; letter-spacing: -0.015em; }
+html:root .estrutura .painel-comercial .pc-titulo h2 { font: 450 15.5px/1.25 var(--fonte-titulo); letter-spacing: -0.01em; }
+html:root .estrutura .painel-comercial .pc-titulo h2 .icone { width: 15px; height: 15px; color: var(--pc-acento); }
+
+/* Valores em destaque: algarismos alinhados, como nas páginas de investimento da proposta */
+html:root .estrutura :is(.orcamento-total, .linha-valor strong, .rpt-metrica > strong, .rpt-leitura strong, .resumo-total strong, .barra-total-valor, .pc-donut strong) { font-family: var(--fonte-titulo); font-weight: 450; letter-spacing: -0.03em; font-variant-numeric: lining-nums tabular-nums; }
+html:root .estrutura .rpt-metrica > strong { font-size: 29px; font-weight: 400; }
+html:root .estrutura .orcamento-total { font-size: 20px; }
+html:root .estrutura .orcamento-total::before { font-family: 'Inter', sans-serif; font-weight: 500; letter-spacing: .05em; }
+html:root .estrutura .painel-comercial .pc-distribuicao .pc-titulo h2 { font-size: 15.5px !important; }
