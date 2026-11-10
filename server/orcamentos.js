@@ -642,8 +642,9 @@ export async function listarOrcamentos(db, filtros = {}) {
   const limite = Math.min(Math.max(Number(filtros.limite) || 50, 1), 200);
   const deslocamento = Math.max(Number(filtros.deslocamento) || 0, 0);
 
-  const { n: total } = await db.get(
-    `SELECT COUNT(*) AS n FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id ${where}`,
+  // A soma vale para todos os resultados do filtro, não só para a página carregada.
+  const { n: total, soma_cents } = await db.get(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(o.total_cents), 0) AS soma_cents FROM orcamentos o JOIN clientes c ON c.id = o.cliente_id ${where}`,
     ...params,
   );
   const orcamentos = await db.all(
@@ -658,7 +659,7 @@ export async function listarOrcamentos(db, filtros = {}) {
     limite,
     deslocamento,
   );
-  return { total, orcamentos };
+  return { total, soma_cents: Number(soma_cents), orcamentos };
 }
 
 const inicioDoMes = (iso) => `${iso.slice(0, 7)}-01`;

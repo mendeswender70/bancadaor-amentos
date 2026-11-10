@@ -6,6 +6,29 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
+    id: '2026-11-editor-folha',
+    data: '10 de novembro de 2026',
+    titulo: 'Editor mais limpo, com as ações à mão',
+    resumo: 'Enviar, baixar o PDF e duplicar agora ficam dentro do editor, no computador e no celular.',
+    itens: [
+      { icone: 'whatsapp', titulo: 'Enviar sem sair do orçamento', texto: 'No computador, o resumo ganhou "Enviar ao cliente" e um menu com PDF, duplicar e excluir. No celular, o menu fica na barra de baixo.' },
+      { icone: 'cadeado', titulo: 'Cálculos à vista quando você quiser', texto: 'O botão "Mostrar cálculos" fica ao lado de Ambientes e mostra a medida vezes o preço de cada móvel. O cliente nunca vê.' },
+      { icone: 'ambiente', titulo: 'Subtotal de cada ambiente', texto: 'Cada ambiente mostra quanto soma, e os móveis aparecem em linhas, com o valor à direita.' },
+    ],
+  },
+  {
+    id: '2026-11-lista-livro-caixa',
+    data: '10 de novembro de 2026',
+    titulo: 'A lista de orçamentos virou um livro-caixa',
+    resumo: 'Mais orçamentos por tela e o valor somado de cada filtro.',
+    itens: [
+      { icone: 'dinheiro', titulo: 'Soma de cada filtro', texto: 'Ao lado da contagem aparece o valor somado do que o filtro encontrou. Em Aprovados, por exemplo, é quanto você já vendeu.' },
+      { icone: 'olho', titulo: 'Quem abriu a proposta', texto: 'Quando o cliente abre o link, a linha mostra em destaque há quanto tempo foi. Propostas enviadas e ainda não abertas também aparecem como tal.' },
+      { icone: 'ambiente', titulo: 'Ambientes à vista', texto: 'Embaixo do nome do cliente aparecem os ambientes do orçamento.' },
+    ],
+    acao: { rotulo: 'Ver meus orçamentos', href: '#/orcamentos' },
+  },
+  {
     id: '2026-11-painel-frase-e-meta',
     data: '10 de novembro de 2026',
     titulo: 'O painel agora conta como vai o mês',

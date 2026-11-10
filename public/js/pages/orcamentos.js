@@ -1,4 +1,4 @@
-import { lerDinheiro } from '/shared/calc.js';
+import { lerDinheiro, formatarDinheiro } from '/shared/calc.js';
 import { api } from '../api.js';
 import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, campo, abrirModal } from '../ui.js';
 import { cabecalhoPagina, listaOrcamentos } from '../comum.js';
@@ -28,8 +28,8 @@ export async function paginaOrcamentos(query, { propostas = false } = {}) {
   let aprovadosPeriodo = query.get('aprovados_periodo') || '';
   let deslocamento = 0;
   let buscaAtual = 0;
-  const resultado = h('div', {});
-  const contador = h('p', { class: 'suave contador' });
+  const resultado = h('div', { class: 'll-resultado' });
+  const contador = h('p', { class: 'suave contador ll-contador', 'aria-live': 'polite' });
 
   const montarBusca = () => {
     const p = new URLSearchParams();
@@ -59,7 +59,7 @@ export async function paginaOrcamentos(query, { propostas = false } = {}) {
     try {
       const r = await api.get(`/orcamentos?${montarBusca()}`);
       if (sequencia !== buscaAtual) return;
-      contador.textContent = r.total === 1 ? '1 proposta' : `${r.total} propostas`;
+      substituir(contador, h('span', {}, r.total === 1 ? '1 proposta' : `${r.total} propostas`, r.total ? [' · ', h('strong', {}, formatarDinheiro(r.soma_cents || 0)), r.total > 1 ? ' somados' : ''] : null));
       const lista = listaOrcamentos(r.orcamentos, { aoMudar: () => carregar(), variante: 'tabela' });
       if (!acrescentar) substituir(resultado);
       resultado.querySelector('.carregar-mais')?.remove();
@@ -174,8 +174,8 @@ export async function paginaOrcamentos(query, { propostas = false } = {}) {
   };
   const botaoDatas = h('button', { type: 'button', class: 'botao botao-filtro-datas', onclick: aplicarFiltros }, icone('calendario'), rotuloFiltro, icone('baixo', 'icone icone-mini'));
   const barraFiltros = h('div', { class: 'barra-filtros-orcamentos' }, chips, botaoDatas);
-  const cabecalhoLista = h('div', { class: 'cabecalho-lista-orcamentos', 'aria-hidden': 'true' },
-    h('span', {}, 'Cliente'), h('span', {}, 'Acompanhamento'), h('span', {}, 'Data'), h('span', {}, 'Situação'), h('span', { class: 'num' }, 'Total'), h('span', {}, 'Ações'),
+  const cabecalhoLista = h('div', { class: 'll-cabecalho', 'aria-hidden': 'true' },
+    h('span', {}, 'Nº'), h('span', {}, 'Cliente'), h('span', {}, 'Andamento'), h('span', {}, 'Situação'), h('span', { class: 'num' }, 'Total'),
   );
   atualizarRotuloFiltro();
 

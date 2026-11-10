@@ -123,8 +123,8 @@ html[data-tema='claro'] :is(.estrutura,.modal) .botao.botao-primario,
 html[data-tema='claro'] .acesso-cartao .formulario > .botao-primario { border-color: #8e6437; background: linear-gradient(145deg,#946b3d,#855a2f); color: #fffdf9; box-shadow: inset 0 1px #fff4, 0 4px 12px #74502a12; }
 html[data-tema='claro'] .botao-primario :is(.icone,span) { color: inherit; }
 html[data-tema='claro'] .estrutura .botao-central > span:first-child { background: linear-gradient(145deg,#b18a55,#92693b); color: #fffdf9; }
-html[data-tema='claro'] .estrutura :is(.cartao,.linha-orcamento,.linha-cliente-ui,.secao-editor,.ambiente,.ficha-contato,.cliente-contato,.cliente-historico,.config-empresa-resumo,.config-form-empresa > section,.config-cartao-padroes,.config-logo-card,.config-conta > .cartao,.config-opcao,.config-informacao,.lista-condicoes > *, .linha-movel,.editor-pagamento,.novidade,.aviso-card,.editor-resumo-card,.editor-acoes-card,.sem-ambientes) { border-color: var(--borda); background: var(--superficie); box-shadow: 0 3px 15px #65503106; }
-html[data-tema='claro'] .estrutura :is(.config-opcao,.config-info-icone,.config-opcao-icone,.config-logo-resumo,.avatar,.selo-icone,.secao-numero,.editor-historico-topo,.cliente-avatar,.ficha-avatar) { border-color: #d8c8b0; background: #f3ebdf; color: #865e31; box-shadow: none; }
+html[data-tema='claro'] :is(.estrutura,.modal) :is(.cartao,.linha-orcamento,.linha-cliente-ui,.secao-editor,.ambiente,.ficha-contato,.cliente-contato,.cliente-historico,.config-empresa-resumo,.config-form-empresa > section,.config-cartao-padroes,.config-logo-card,.config-conta > .cartao,.config-opcao,.config-informacao,.lista-condicoes > *, .linha-movel,.editor-pagamento,.novidade,.aviso-card,.editor-resumo-card,.editor-acoes-card,.sem-ambientes) { border-color: var(--borda); background: var(--superficie); box-shadow: 0 3px 15px #65503106; }
+html[data-tema='claro'] :is(.estrutura,.modal) :is(.config-opcao,.config-info-icone,.config-opcao-icone,.config-logo-resumo,.avatar,.selo-icone,.secao-numero,.editor-historico-topo,.cliente-avatar,.ficha-avatar) { border-color: #d8c8b0; background: #f3ebdf; color: #865e31; box-shadow: none; }
 html[data-tema='claro'] :is(.estrutura,.modal) :is(input,select,textarea) { border-color: #d6cbbc; background: #fffefa; color: #302a23; box-shadow: inset 0 1px 2px #55402504; caret-color: #865e31; }
 html[data-tema='claro'] :is(.estrutura,.modal) :is(input,textarea)::placeholder { color: #857967; opacity: 1; }
 html[data-tema='claro'] .estrutura .barra-busca .busca,
@@ -239,3 +239,11 @@ html[data-tema='claro'] .estrutura .pagina-orcamentos .orcamento-status .selo-ex
 @media (hover:hover) {
   html[data-tema='claro'] .estrutura .pagina .chip:hover { border-color: #ad8d62; background: #f1e7d8; color: #5c4022; }
 }
+/* As janelas (dialog) ficam fora de .estrutura: etiquetas e marcadores precisam das cores claras aqui também */
+html[data-tema='claro'] .modal .chip { border-color: #d5c7b4; background: #fffcf6; color: #514436; box-shadow: none; }
+html[data-tema='claro'] .modal .chip:is(.ativo, [aria-pressed='true']) { border-color: #b3946b; background: #eee0c9; color: #684623; }
+html[data-tema='claro'] .modal .linha-orcamento:hover { border-color: #c4aa84; background: #fbf5ec; }
+html[data-tema='claro'] .modal .link-proposta { border-color: var(--borda); background: #f8f3eb; color: var(--texto); box-shadow: none; }
+html[data-tema='claro'] .modal .link-proposta :is(p, span, small) { color: var(--suave); }
+html[data-tema='claro'] .modal .link-proposta :is(strong, h3) { color: var(--texto); }
+html[data-tema='claro'] .modal .link-proposta .botao { border-color: var(--borda); background: #fffdf8; color: var(--texto); box-shadow: none; }
