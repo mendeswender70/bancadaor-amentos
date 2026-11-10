@@ -6,6 +6,17 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
+    id: '2026-11-editor-folha',
+    data: '10 de novembro de 2026',
+    titulo: 'Editor mais limpo, com as ações à mão',
+    resumo: 'Enviar, baixar o PDF e duplicar agora ficam dentro do editor, no computador e no celular.',
+    itens: [
+      { icone: 'whatsapp', titulo: 'Enviar sem sair do orçamento', texto: 'No computador, o resumo ganhou "Enviar ao cliente" e um menu com PDF, duplicar e excluir. No celular, o menu fica na barra de baixo.' },
+      { icone: 'cadeado', titulo: 'Cálculos à vista quando você quiser', texto: 'O botão "Mostrar cálculos" fica ao lado de Ambientes e mostra a medida vezes o preço de cada móvel. O cliente nunca vê.' },
+      { icone: 'ambiente', titulo: 'Subtotal de cada ambiente', texto: 'Cada ambiente mostra quanto soma, e os móveis aparecem em linhas, com o valor à direita.' },
+    ],
+  },
+  {
     id: '2026-11-lista-livro-caixa',
     data: '10 de novembro de 2026',
     titulo: 'A lista de orçamentos virou um livro-caixa',

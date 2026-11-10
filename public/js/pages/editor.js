@@ -286,7 +286,9 @@ export async function paginaEditor({ id, clienteId }) {
   const previaCartao = h('div', { class: 'previa-cartao' });
   const historicoEl = h('div', {});
   const totalBarra = h('strong', { class: 'barra-total-valor' });
-  const menuBarra = h('div', {});
+  const menuBarra = h('div', { class: 'editor-menu-barra' });
+  // Ações no resumo (computador): enviar fica à mão; o resto vai no menu.
+  const acoesResumo = h('div', { class: 'editor-resumo-acoes' });
   const campoNomeAcrescimo = h('div', {});
   const contadorHistorico = h('span', { class: 'contador-aba' });
   const avisoConflito = h(
@@ -387,6 +389,9 @@ export async function paginaEditor({ id, clienteId }) {
       ),
     );
     substituir(menuBarra, menuSuspenso(acoes, { rotulo: 'Ações do orçamento' }));
+    substituir(acoesResumo,
+      h('button', { type: 'button', class: 'botao botao-whatsapp', onclick: enviarAoCliente, disabled: !orc.id }, icone('whatsapp'), 'Enviar ao cliente'),
+      menuSuspenso(acoes.filter((a) => a === '-' || a[0] !== 'whatsapp'), { rotulo: 'Mais ações do orçamento' }));
   }
 
   // Situação do orçamento: caminho normal em etapas + as saídas (recusado…).
@@ -1363,7 +1368,8 @@ export async function paginaEditor({ id, clienteId }) {
       'div',
       { class: 'secao-topo secao-topo-solta' },
       h('div', { class: 'secao-cabecalho' }, h('span', { class: 'secao-numero' }, '2'), h('span', { class: 'secao-titulos' }, h('h2', {}, 'Ambientes'), h('span', { class: 'secao-resumo' }))),
-      h('button', { type: 'button', class: 'botao botao-secundario editor-adicionar-ambiente-topo', onclick: () => criarAmbiente() }, icone('mais'), 'Ambiente'),
+      h('div', { class: 'editor-ambientes-ferramentas' }, botaoCalculos,
+        h('button', { type: 'button', class: 'botao botao-secundario editor-adicionar-ambiente-topo', onclick: () => criarAmbiente() }, icone('mais'), 'Ambiente')),
     ),
     listaAmbientes,
     h('button', { type: 'button', class: 'botao botao-secundario botao-grande botao-bloco editor-adicionar-ambiente', onclick: () => criarAmbiente() }, icone('mais'), 'Ambiente'),
@@ -1714,6 +1720,7 @@ export async function paginaEditor({ id, clienteId }) {
           resumo,
           resumoPagamentoLateral,
           h('button', { type: 'button', class: 'botao botao-primario editor-ver-proposta-desktop', disabled: !orc.id, onclick: verComoCliente }, 'Ver proposta'),
+          acoesResumo,
           estadoSalvo,
         ),
         h('section', { class: 'cartao editor-acoes-card' }, acoesLateral),
