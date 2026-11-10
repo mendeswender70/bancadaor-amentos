@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import webpush from 'web-push';
-import { somarDias } from '../public/shared/calc.js';
+import { formatarDinheiro, somarDias } from '../public/shared/calc.js';
 import { criarApp } from '../server/app.js';
 import { visaoCliente } from '../server/visaoCliente.js';
 import { carregarOrcamento } from '../server/orcamentos.js';
@@ -1071,6 +1071,40 @@ async function novaProposta({ abrir = true } = {}) {
 }
 
 const aceite = (proposta) => ({ nome: 'João da Silva', aceite: true, versao_proposta: proposta.versao_proposta });
+
+test('a aprovação pelo link registra a forma de pagamento escolhida no simulador', async () => {
+  const aprovarCom = async (preferencia) => {
+    const { orc } = await novaProposta({ abrir: false });
+    orc.pagamento_cartao_metodo = 'link_pagamento';
+    orc.pagamento_cartao_parcelas = 6;
+    assert.equal((await chamar('PUT', `/orcamentos/${orc.id}`, orc)).status, 200);
+    assert.equal((await mudarStatus(orc.id, 'enviado')).status, 200);
+    const { token } = (await chamar('POST', `/orcamentos/${orc.id}/link`)).dados;
+    const proposta = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+    const r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { ...aceite(proposta), preferencia_pagamento: preferencia });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const hist = (await chamar('GET', `/orcamentos/${orc.id}/historico`)).dados;
+    return { proposta, evento: hist.find((h) => h.evento.startsWith('Aprovado pelo cliente')).evento };
+  };
+
+  // O cliente manda só a opção; o texto e os valores saem da própria proposta.
+  let { proposta, evento } = await aprovarCom({ forma: 'cartao', parcelas: 3, texto: 'desconto de 50% combinado' });
+  const opcao = proposta.pagamento.cartao.credito[2];
+  assert.equal(
+    evento,
+    `Aprovado pelo cliente pelo link (João da Silva) · Prefere pagar: cartão em 3x de ${formatarDinheiro(Math.max(...opcao.valores_parcelas_cents))} (total ${formatarDinheiro(opcao.total_cents)})`,
+  );
+  assert.ok(!evento.includes('desconto'));
+
+  ({ proposta, evento } = await aprovarCom({ forma: 'combinado' }));
+  assert.equal(evento, `Aprovado pelo cliente pelo link (João da Silva) · Prefere pagar: ${proposta.pagamento.descricao}`);
+
+  // Opção que a proposta não oferece, ou qualquer outra coisa, é ignorada sem impedir a aprovação.
+  for (const invalida of [{ forma: 'cartao', parcelas: 12 }, { forma: 'pix' }, 'cartão em 2x', null]) {
+    ({ evento } = await aprovarCom(invalida));
+    assert.equal(evento, 'Aprovado pelo cliente pelo link (João da Silva)');
+  }
+});
 
 test('o orçamento guarda e publica as taxas do canal de cartão escolhido', async () => {
   for (const [metodo, parcelas, nome, debito, primeiraTaxa] of [

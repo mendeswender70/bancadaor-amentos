@@ -915,7 +915,11 @@ export function podeAprovar(orc, dataHoje) {
   return ['rascunho', 'enviado', 'negociacao'].includes(orc.status) && orc.data_validade >= dataHoje;
 }
 
-export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
+/**
+ * `preferencia` é a forma de pagamento que o cliente escolheu no simulador da proposta,
+ * já descrita pelo servidor (nunca texto livre do cliente). Fica só no histórico.
+ */
+export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta, { preferencia = '' } = {}) {
   return db.transacao(async (t) => {
     await bloquearOrcamento(t, id);
     const orc = await t.get('SELECT status, data_validade, versao_proposta FROM orcamentos WHERE id = ?', id);
@@ -933,7 +937,7 @@ export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
     }
     await t.run(`UPDATE orcamentos SET status = 'aprovado', versao = versao + 1, atualizado_em = now() WHERE id = ?`, id);
     await marcarDatasStatus(t, id, orc.status, 'aprovado', { peloLink: true, nome });
-    await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})`, null);
+    await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})${preferencia ? ` · Prefere pagar: ${preferencia}` : ''}`, null);
     return true;
   });
 }

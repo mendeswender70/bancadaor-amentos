@@ -2,6 +2,16 @@
 // O id deve ser único e mudar quando a entrada for publicada.
 export const novidades = [
   {
+    id: '2026-11-proposta-em-livro',
+    data: '10 de novembro de 2026',
+    titulo: 'A proposta do cliente virou um livro',
+    itens: [
+      'O link da proposta agora abre um livro: capa com o nome do cliente e páginas que ele vira arrastando ou pelas setas, no celular e no computador.',
+      'O cliente simula o pagamento no cartão, parcela por parcela, e aprova segurando um botão. A forma de pagamento escolhida aparece no histórico do orçamento e no aviso de aprovação.',
+      'Cada ambiente tem a sua página com o valor de cada móvel, seguido do que já está incluso, do investimento e das observações. O PDF continua disponível para baixar.',
+    ],
+  },
+  {
     id: '2026-11-ja-esta-incluso',
     data: '9 de novembro de 2026',
     titulo: 'Mostre o que já está incluso',

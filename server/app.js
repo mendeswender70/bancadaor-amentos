@@ -2,7 +2,7 @@ import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import webpush from 'web-push';
-import { AMBIENTES_SUGERIDOS, INCLUSOS_SUGERIDOS, LIMITES_INCLUSO, METODOS, TIPOS_AJUSTE, LIMITES, formatarNumero } from '../public/shared/calc.js';
+import { AMBIENTES_SUGERIDOS, INCLUSOS_SUGERIDOS, LIMITES_INCLUSO, METODOS, TIPOS_AJUSTE, LIMITES, formatarDinheiro, formatarNumero } from '../public/shared/calc.js';
 import { novidades } from '../public/js/novidades.js';
 import {
   conferirSenha,
@@ -124,6 +124,23 @@ function lerSugestoesAmbiente(json) {
     // Valor ausente ou inválido: usa as sugestões padrão.
   }
   return AMBIENTES_SUGERIDOS;
+}
+
+/**
+ * Forma de pagamento escolhida pelo cliente no simulador da proposta. O cliente manda só a
+ * opção ({ forma: 'cartao', parcelas } ou { forma: 'combinado' }); o texto é montado aqui,
+ * com os valores da própria proposta. Opção inválida é ignorada: não impede a aprovação.
+ */
+function descreverPreferencia(escolha, pagamento) {
+  if (!escolha || typeof escolha !== 'object') return '';
+  if (escolha.forma === 'combinado') return pagamento.descricao || 'condição combinada';
+  if (escolha.forma !== 'cartao') return '';
+  const opcao = (pagamento.cartao?.credito || []).find((o) => o.parcelas === escolha.parcelas);
+  if (!opcao) return '';
+  const parcela = Math.max(...opcao.valores_parcelas_cents);
+  return opcao.parcelas === 1
+    ? `cartão de crédito à vista (${formatarDinheiro(opcao.total_cents)})`
+    : `cartão em ${opcao.parcelas}x de ${formatarDinheiro(parcela)} (total ${formatarDinheiro(opcao.total_cents)})`;
 }
 
 /** Lista "já está incluso" da empresa ou, se nunca foi alterada, as sugestões padrão. */
@@ -321,12 +338,13 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (nome.length < 3) throw invalido('Digite seu nome completo para aprovar.');
     if (req.body.aceite !== true) throw invalido('Confirme que leu e concorda com a proposta.');
     await expirarVencidos(db, dataHoje());
-    const aprovadaAgora = await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta);
+    const preferencia = descreverPreferencia(req.body.preferencia_pagamento, (await montarProposta(orcId)).publica.pagamento);
+    const aprovadaAgora = await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta, { preferencia });
     const proposta = await montarProposta(orcId);
     if (aprovadaAgora) {
       await tentarNotificar(db, {
         titulo: 'Proposta aprovada',
-        texto: `O cliente aprovou o orçamento nº ${proposta.publica.numero}.`,
+        texto: `O cliente aprovou o orçamento nº ${proposta.publica.numero}.${preferencia ? ` Prefere pagar: ${preferencia}.` : ''}`,
         caminho: `/#/orcamentos/${orcId}`,
         tag: `esquadro-proposta-${orcId}-aprovada`,
       });
