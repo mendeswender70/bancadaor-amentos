@@ -143,6 +143,7 @@ const MENU_LATERAL = [
   ['#/', 'Painel', 'inicio', /^\/?$/],
   MENU[1], MENU[2],
   ['#/config/moveis', 'Móveis e preços', 'caixa', /^\/config\/(moveis|tipos|precos)/],
+  ['/producao/', 'Produção', 'serra', /^\/producao/],
   ['#/relatorios', 'Relatórios', 'grafico', /^\/relatorios/],
   ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos))/],
 ];
@@ -431,6 +432,11 @@ export async function sair() {
 
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
+  // Funcionário da produção tem a área própria dele.
+  if (estado.usuario?.tipo === 'producao') {
+    location.replace('/producao/');
+    return;
+  }
   if (estado.usuario) {
     usuario = estado.usuario;
     await cache.carregarEmpresa();

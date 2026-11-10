@@ -6,6 +6,24 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
+    id: '2026-11-producao',
+    data: '10 de novembro de 2026',
+    titulo: 'A produção ganhou uma área própria',
+    resumo: 'Mande o orçamento aprovado para quem vai cortar. O funcionário monta o plano de corte no celular e segue a serra passo a passo.',
+    itens: [
+      { icone: 'clientes', titulo: 'Equipe da produção', texto: 'Em Ajustes → Equipe, crie o usuário e a senha de cada funcionário. Ele entra em esquadro.site/producao e vê só os trabalhos dele, sem nenhum valor.' },
+      { icone: 'serra', titulo: 'Mandar para a produção', texto: 'No orçamento, escolha quem vai cortar e escreva as instruções. O andamento e o custo de material aparecem no próprio orçamento.' },
+      { icone: 'regua', titulo: 'Plano de corte melhor', texto: 'Até três soluções para escolher (menos chapas, corte simples, maior sobra), chapas iguais agrupadas e desenho com cores por móvel.' },
+      { icone: 'check', titulo: 'Corte passo a passo', texto: 'A tela mostra a medida da guia em letra grande, quando girar a peça e o que cada corte separa. Peça estragada vira plano de recorte.' },
+      { icone: 'caixa', titulo: 'Estoque de retalhos', texto: 'Sobras boas são guardadas no fim de cada chapa, e o cálculo usa retalho antes de abrir chapa nova.' },
+      { icone: 'pdf', titulo: 'Projeto anexado', texto: 'Anexe o PDF do arquiteto ou fotos no orçamento. Na produção, "Medir no projeto" mostra o desenho em cima e a lista de peças embaixo, e cada peça guarda a página de onde veio a medida.' },
+      { icone: 'alerta', titulo: 'Segurança na serra', texto: 'Antes do primeiro corte, o passo a passo lembra coifa, cutelo divisor e empurrador; em tira estreita na guia paralela, avisa para usar o empurrador.' },
+      { icone: 'regua', titulo: 'Só as medidas', texto: 'O plano de corte pede só nome, medidas e quantidade. Todas as peças vão na chapa padrão da oficina (o tamanho fica em Ajustes da produção), sem escolher MDF nem fita.' },
+      { icone: 'regua', titulo: 'Tudo em centímetros', texto: 'Peças, chapas, retalhos e o passo a passo da serra em cm (aceita 72,5). Só espessura da chapa, fita e disco seguem em mm.' },
+    ],
+    acao: { rotulo: 'Cadastrar a equipe', href: '#/config/equipe' },
+  },
+  {
     id: '2026-11-editor-folha',
     data: '10 de novembro de 2026',
     titulo: 'Editor mais limpo, com as ações à mão',

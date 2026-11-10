@@ -28,9 +28,10 @@ Configuração conferida na Neon em 20/10/2026:
 | Banco | `neondb` |
 
 O banco contém as tabelas de clientes, orçamentos, itens, histórico, usuários,
-sessões e notificações, além do controle de migrações e da marca de configuração
-inicial. As migrações atuais estão na versão **8** (`server/db.js`) e são
-aplicadas automaticamente ao acessar a API.
+sessões e notificações, chapas, fitas, planos de corte, retalhos e a
+configuração da serra e anexos do projeto, além do controle de migrações e da
+marca de configuração inicial. As migrações atuais estão na versão **16**
+(`server/db.js`) e são aplicadas automaticamente ao acessar a API.
 
 1. **Neon Console → projeto esquadro → Connect**: selecione a branch
    `production`, o banco `neondb` e a role usada pela aplicação.
@@ -193,6 +194,89 @@ um banco descartável, exclusivo para testes.
 - Trocar a senha encerra sessões dos outros dispositivos; em **Ajustes → Minha
   conta** também é possível encerrar todas as sessões, inclusive a atual.
 
+## Produção (plano de corte)
+
+Área separada para quem corta na oficina, em **`/producao/`** (mesmo servidor e
+mesmo banco, login próprio). Feita para o celular ao lado da esquadrejadeira.
+
+**Acesso.** Em **Ajustes → Equipe**, o escritório cria o usuário e a senha de
+cada funcionário (`usuarios.tipo = 'producao'`). Funcionário entra com o
+usuário (ou e-mail), é levado para `/producao/` se abrir o endereço do
+escritório e só acessa as rotas `/api/producao/*` e a troca de senha; qualquer
+outra rota responde 403. Ele vê só os planos dele e **nunca recebe preços**: o
+servidor tira os preços de chapas e fitas e não manda totais do orçamento.
+Desativar o funcionário derruba as sessões na hora.
+
+**Trabalhos.** No editor do orçamento, **Mandar para a produção** escolhe o
+funcionário e as instruções; um orçamento pode virar mais de um trabalho. O
+funcionário vê cliente, ambientes, móveis e medidas (sem valores) e monta o
+plano. Ele também pode criar planos próprios. O cartão **Produção** do editor
+mostra o andamento e o custo de material (só para o escritório).
+
+**Plano.** Entrada rápida de peças (`720 x 550 x 2 Lateral`, ou colar de
+planilha), com móvel, chapa, veio e fita por lado. O cálculo
+(`public/shared/corte.js`, em Web Worker) usa só cortes de ponta a ponta, com a
+espessura do disco, o refilo e o veio, e devolve até **três soluções**: menos
+chapas novas; corte mais simples (menos giros e cortes); maior sobra inteira.
+Chapas com o mesmo desenho saem agrupadas. Retalhos do estoque entram (sem
+refilo) quando economizam chapa nova. O servidor confere cada solução antes de
+guardar e **reserva** os retalhos da solução escolhida.
+
+**Modo serra.** Passo a passo em tela cheia: pegar a chapa ou o retalho,
+esquadrejar, cada corte com a medida grande, a guia (paralela até a largura
+configurada, 900 mm na Baldan SE-3200/38; acima disso, no carro), o aviso de
+girar a peça e o que o corte separa. "Estragou" anota a peça e, no fim, gera o
+plano de recorte. No fim de cada chapa, as sobras boas vão para o estoque de
+retalhos. O andamento é salvo a cada passo e a tela fica acesa enquanto corta.
+
+**Só medidas.** O funcionário digita só nome, medidas e quantidade (e, se
+quiser, o móvel). Todas as peças vão na **chapa padrão** da oficina, sem
+escolher tipo de MDF nem fita de borda. O tamanho dela (ex.: 275 × 185 cm)
+fica em Ajustes da produção e só o escritório muda (migração 16). Sem chapa
+cadastrada, o sistema cria uma de 275 × 185 cm. Trocar o tamanho cria outra
+chapa, e os planos já calculados continuam com a antiga. A caixinha **Não girar
+esta peça** (porta e frente de amadeirado) mantém o comprimento da peça no
+sentido do comprimento da chapa; sem ela, o cálculo gira a peça quando
+aproveita melhor.
+
+**Medidas em centímetros.** A oficina trabalha em cm: peças, chapas, retalhos,
+sobras, guia, refilo e o passo a passo aparecem e são digitados em cm, com até
+uma casa decimal (72,5). Ficam em mm só a espessura da chapa, a largura da fita
+e a espessura do disco. O sistema guarda milímetros inteiros e converte na
+tela; uma medida maior que a maior chapa (ou, no retalho, maior que a chapa
+dele) gera o aviso "confira se não digitou em milímetros". Também aceita
+"455 mm" escrito assim e o ponto de milhar ("1.200").
+
+**Projeto anexado.** O escritório anexa o PDF do arquiteto e fotos no
+orçamento (cartão Produção do editor ou ao mandar para a produção); quem tem um
+trabalho daquele orçamento vê. O funcionário também anexa fotos no próprio
+plano. Na produção, **Medir no projeto** prende o desenho na metade de cima da
+tela (com zoom de pinça e páginas do PDF) e deixa a entrada de peças embaixo.
+Cada peça digitada assim guarda de qual anexo e página veio a medida
+(migração 15); na lista aparece "medida: Planta.pdf, pág. 2" e a peça tem o
+botão **Ver no projeto**, que abre o desenho naquela página. Em prancha grande
+(A1/A0), ao parar o zoom o trecho visível é redesenhado na resolução da tela.
+O PDF abre no próprio site com o pdf.js (`public/js/vendor/pdfjs`, Apache-2.0),
+sem WebAssembly (a CSP não permite): imagens JPEG 2000 e JBIG2 de PDF escaneado
+usam os decodificadores em JavaScript da pasta `wasm/`, e o worker passa por
+`public/js/pdf-worker.mjs`, que completa o que falta no Safari antes do 17.4.
+Os arquivos ficam no banco (`anexos` e `anexo_partes`), em partes de 3 MB,
+porque a Vercel limita cada requisição e cada resposta a 4,5 MB; o limite é
+25 MB por arquivo e as fotos são reduzidas no celular antes do envio (planta
+em PNG ou WebP de até 12 MB vai como está). O nome do arquivo sempre termina
+com a extensão do tipo conferido, e envio que não termina em 6 horas é apagado. Anexos
+ocupam espaço no Postgres da Neon: se o volume crescer, vale mudar para um
+armazenamento de arquivos (ex.: Vercel Blob).
+
+**Retalhos e serra.** O estoque é da oficina (todos veem). A configuração da
+serra (disco, refilo, guia paralela, curso do carro e sobra mínima) fica em
+**Ajustes** da produção e só o escritório altera.
+
+PDF para a serra (`server/pdfCorte.js`) e exportação da lista em CSV. Nada da
+produção entra na proposta, no PDF do cliente ou no link `/p/`.
+
+Pesquisa e próximas fases: [`docs/plano-de-corte.md`](docs/plano-de-corte.md).
+
 ## Decisões importantes
 
 - **Preço congelado no orçamento.** Cada item grava o preço usado
@@ -224,6 +308,11 @@ server/db.js            conexão Postgres (Neon ou PGlite) e migrações
 server/orcamentos.js    salvar, duplicar, histórico, busca, painel
 server/visaoCliente.js  dados que o cliente pode ver
 server/pdf.js           geração do PDF (PDFKit)
+server/producao.js      equipe, trabalhos, planos de corte, retalhos e serra
+server/anexos.js        projeto anexado (PDF e fotos), em partes de 3 MB
+server/pdfCorte.js      PDF de produção do plano de corte
+public/shared/corte.js  otimizador de corte, roteiro, passo a passo e conferência
+public/producao/        área da produção (/producao/), com folha própria em css/producao.css
 server/auth.js          senhas, sessões, proteção CSRF, limite de tentativas
 server/index.js         servidor local (npm start)
 tests/                  testes (node --test)

@@ -38,6 +38,35 @@ import {
 } from './orcamentos.js';
 import { relatorioComercial, listarAprovacoesRelatorio, exportarRelatorio, periodoRelatorio } from './relatorios.js';
 import { gerarPdf } from './pdf.js';
+import { gerarPdfCorte } from './pdfCorte.js';
+import { PARTE_BYTES, anexosDoOrcamento, anexosDoPlano, concluirAnexo, criarAnexo, excluirAnexo, gravarParte, lerParte } from './anexos.js';
+import {
+  CAMPOS_CHAPA,
+  CAMPOS_FITA,
+  atribuirPlano,
+  atualizarFuncionario,
+  atualizarRetalho,
+  carregarPlano,
+  criarFuncionario,
+  criarMaterial,
+  criarPlano,
+  criarRetalhos,
+  ehAdmin,
+  escolherSolucao,
+  excluirPlano,
+  lerConfig,
+  listarChapas,
+  listarFitas,
+  listarFuncionarios,
+  listarPlanos,
+  listarRetalhos,
+  normalizarChapa,
+  normalizarFita,
+  planosDoOrcamento,
+  salvarConfig,
+  salvarPlano,
+  salvarProgresso,
+} from './producao.js';
 import { ErroHttp, hoje, id, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
 import { lerInclusos, propostaPublica, visaoCliente } from './visaoCliente.js';
 
@@ -265,11 +294,12 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
 
   api.post('/auth/entrar', async (req, res) => {
     await limitador.verificar(db, req);
+    // Escritório entra com e-mail; funcionário da produção, com e-mail ou usuário.
     const email = String(req.body.email ?? '').trim().toLowerCase();
-    const usuario = await db.get('SELECT id, senha_hash FROM usuarios WHERE email = ?', email);
-    if (!usuario || !conferirSenha(String(req.body.senha ?? ''), usuario.senha_hash)) {
+    const usuario = await db.get('SELECT id, senha_hash, ativo FROM usuarios WHERE email = ?', email);
+    if (!usuario || !usuario.ativo || !conferirSenha(String(req.body.senha ?? ''), usuario.senha_hash)) {
       await limitador.falhou(db, req);
-      throw new ErroHttp(401, 'E-mail ou senha incorretos.');
+      throw new ErroHttp(401, 'Usuário ou senha incorretos.');
     }
     await limitador.limpar(db, req);
     await criarSessao(db, req, res, usuario.id);
@@ -459,6 +489,13 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
 
   // Daqui para baixo, somente usuários autenticados.
   api.use(exigirLogin(obterDb));
+
+  // Funcionário da produção só acessa a área da produção e a própria senha.
+  api.use((req, _res, next) => {
+    if (ehAdmin(req.usuario)) return next();
+    const permitido = req.path === '/producao' || req.path.startsWith('/producao/') || req.path === '/versao' || req.path === '/conta/senha';
+    next(permitido ? undefined : new ErroHttp(403, 'Esta área é só do escritório.'));
+  });
 
   api.get('/versao', (_req, res) => {
     res.json({ versao: novidades[0]?.id || 'inicio' });
@@ -984,6 +1021,174 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.post('/orcamentos/:id/link', async (req, res) => {
     const token = await garantirToken(db, id(req.params.id));
     res.json({ token, caminho: `/p/${token}` });
+  });
+
+  // ----------------------------------------------- Produção (escritório)
+  // Catálogo com preços, equipe e trabalhos mandados para a produção.
+  const cadastroMaterial = (rota, tabela, campos, normalizar, nome) => {
+    api.get(rota, async (req, res) => {
+      res.json(tabela === 'chapas' ? await listarChapas(db, req.usuario) : await listarFitas(db, req.usuario));
+    });
+    api.post(rota, async (req, res) => {
+      res.status(201).json(await criarMaterial(db, req.usuario, tabela, req.body));
+    });
+    api.put(`${rota}/:id`, async (req, res) => {
+      const dados = normalizar(req.body);
+      const r = await db.run(
+        `UPDATE ${tabela} SET ${campos.map((k) => `${k} = ?`).join(', ')}, atualizado_em = now() WHERE id = ?`,
+        ...campos.map((k) => dados[k]),
+        id(req.params.id),
+      );
+      if (!r.changes) throw naoEncontrado(`${nome} não encontrada.`);
+      res.json(await db.get(`SELECT * FROM ${tabela} WHERE id = ?`, id(req.params.id)));
+    });
+    // Excluir uma chapa ou fita em uso mudaria planos já feitos; nesse caso, desative.
+    api.delete(`${rota}/:id`, async (req, res) => {
+      const registroId = id(req.params.id);
+      const coluna = tabela === 'chapas' ? 'chapa_id' : 'fita_id';
+      const emUso =
+        (await db.get(`SELECT 1 AS ok FROM plano_pecas WHERE ${coluna} = ? LIMIT 1`, registroId)) ||
+        (tabela === 'chapas' && (await db.get(`SELECT 1 AS ok FROM retalhos WHERE chapa_id = ? AND situacao IN ('disponivel', 'reservado') LIMIT 1`, registroId)));
+      if (emUso) throw invalido(`${nome} está em uso em um plano de corte ou no estoque de retalhos. Desative em vez de excluir.`);
+      const r = await db.run(`DELETE FROM ${tabela} WHERE id = ?`, registroId);
+      if (!r.changes) throw naoEncontrado(`${nome} não encontrada.`);
+      res.json({ ok: true });
+    });
+  };
+  cadastroMaterial('/chapas', 'chapas', CAMPOS_CHAPA, normalizarChapa, 'Chapa');
+  cadastroMaterial('/fitas', 'fitas', CAMPOS_FITA, normalizarFita, 'Fita');
+
+  api.get('/funcionarios', async (_req, res) => {
+    res.json(await listarFuncionarios(db));
+  });
+  api.post('/funcionarios', async (req, res) => {
+    res.status(201).json(await criarFuncionario(db, req.body));
+  });
+  api.put('/funcionarios/:id', async (req, res) => {
+    res.json(await atualizarFuncionario(db, id(req.params.id), req.body));
+  });
+
+  api.get('/orcamentos/:id/producao', async (req, res) => {
+    const orcId = id(req.params.id);
+    if (!(await db.get('SELECT 1 AS ok FROM orcamentos WHERE id = ?', orcId))) throw naoEncontrado('Orçamento não encontrado.');
+    res.json(await planosDoOrcamento(db, orcId));
+  });
+  api.post('/orcamentos/:id/producao', async (req, res) => {
+    const planoId = await atribuirPlano(db, req.usuario, id(req.params.id), req.body);
+    res.status(201).json(await carregarPlano(db, planoId, req.usuario));
+  });
+
+  // ------------------------------------------------ Produção (oficina)
+  // Funcionário vê só os próprios planos e nunca recebe preços; o escritório vê tudo.
+  const soEscritorio = (req) => {
+    if (!ehAdmin(req.usuario)) throw new ErroHttp(403, 'Só o escritório pode fazer isso.');
+  };
+
+  api.get('/producao/inicio', async (req, res) => {
+    res.json({
+      usuario: { id: req.usuario.id, nome: req.usuario.nome, tipo: req.usuario.tipo, escritorio: ehAdmin(req.usuario) },
+      config: await lerConfig(db),
+      funcionarios: ehAdmin(req.usuario) ? await listarFuncionarios(db) : [],
+    });
+  });
+
+  api.get('/producao/planos', async (req, res) => {
+    const funcionarioId = req.query.funcionario ? id(req.query.funcionario) : null;
+    res.json(await listarPlanos(db, req.usuario, { funcionarioId, concluidos: req.query.concluidos === '1' }));
+  });
+  api.post('/producao/planos', async (req, res) => {
+    const planoId = await criarPlano(db, req.usuario, req.body);
+    res.status(201).json(await carregarPlano(db, planoId, req.usuario));
+  });
+  api.get('/producao/planos/:id', async (req, res) => {
+    res.json(await carregarPlano(db, id(req.params.id), req.usuario));
+  });
+  api.put('/producao/planos/:id', async (req, res) => {
+    res.json(await salvarPlano(db, id(req.params.id), req.usuario, req.body));
+  });
+  api.put('/producao/planos/:id/solucao', async (req, res) => {
+    res.json(await escolherSolucao(db, id(req.params.id), req.usuario, req.body));
+  });
+  api.put('/producao/planos/:id/progresso', async (req, res) => {
+    res.json(await salvarProgresso(db, id(req.params.id), req.usuario, req.body));
+  });
+  api.delete('/producao/planos/:id', async (req, res) => {
+    await excluirPlano(db, id(req.params.id), req.usuario);
+    res.json({ ok: true });
+  });
+  api.get('/producao/planos/:id/pdf', async (req, res) => {
+    const plano = await carregarPlano(db, id(req.params.id), req.usuario);
+    const empresa = await db.get('SELECT nome FROM empresa WHERE id = 1');
+    const pdf = await gerarPdfCorte(plano, empresa?.nome || '');
+    const arquivo = `plano-de-corte-${plano.orcamento_numero ? formatarNumero(plano.orcamento_numero) : plano.id}.pdf`;
+    res
+      .type('application/pdf')
+      .setHeader('Content-Disposition', `${req.query.baixar ? 'attachment' : 'inline'}; filename="${arquivo}"`)
+      .send(pdf);
+  });
+
+  api.get('/producao/chapas', async (req, res) => {
+    res.json(await listarChapas(db, req.usuario));
+  });
+  api.post('/producao/chapas', async (req, res) => {
+    res.status(201).json(await criarMaterial(db, req.usuario, 'chapas', req.body));
+  });
+  api.get('/producao/fitas', async (req, res) => {
+    res.json(await listarFitas(db, req.usuario));
+  });
+  api.post('/producao/fitas', async (req, res) => {
+    res.status(201).json(await criarMaterial(db, req.usuario, 'fitas', req.body));
+  });
+
+  api.get('/producao/retalhos', async (req, res) => {
+    res.json(await listarRetalhos(db, { situacao: req.query.situacao || 'disponivel' }));
+  });
+  api.post('/producao/retalhos', async (req, res) => {
+    res.status(201).json({ ids: await criarRetalhos(db, req.usuario, req.body) });
+  });
+  api.put('/producao/retalhos/:id', async (req, res) => {
+    res.json(await atualizarRetalho(db, id(req.params.id), req.body));
+  });
+
+  // Projeto anexado (PDF e fotos). Vai e volta em partes de 3 MB.
+  api.get('/producao/planos/:id/anexos', async (req, res) => {
+    res.json(await anexosDoPlano(db, req.usuario, id(req.params.id)));
+  });
+  api.get('/orcamentos/:id/anexos', async (req, res) => {
+    res.json(await anexosDoOrcamento(db, req.usuario, id(req.params.id)));
+  });
+  api.post('/producao/anexos', async (req, res) => {
+    res.status(201).json(await criarAnexo(db, req.usuario, req.body));
+  });
+  api.put(
+    '/producao/anexos/:id/partes/:ordem',
+    express.raw({ type: 'application/octet-stream', limit: PARTE_BYTES + 1024 }),
+    async (req, res) => {
+      await gravarParte(db, req.usuario, id(req.params.id), Number(req.params.ordem), req.body);
+      res.json({ ok: true });
+    },
+  );
+  api.post('/producao/anexos/:id/concluir', async (req, res) => {
+    await concluirAnexo(db, req.usuario, id(req.params.id));
+    res.json({ ok: true });
+  });
+  api.get('/producao/anexos/:id/partes/:ordem', async (req, res) => {
+    const dados = await lerParte(db, req.usuario, id(req.params.id), Number(req.params.ordem));
+    // no-cache: o navegador sempre pergunta (a permissão é conferida a cada vez);
+    // o ETag do Express devolve 304 quando a parte não mudou.
+    res.type('application/octet-stream').setHeader('Cache-Control', 'private, no-cache').send(dados);
+  });
+  api.delete('/producao/anexos/:id', async (req, res) => {
+    await excluirAnexo(db, req.usuario, id(req.params.id));
+    res.json({ ok: true });
+  });
+
+  api.get('/producao/config', async (_req, res) => {
+    res.json(await lerConfig(db));
+  });
+  api.put('/producao/config', async (req, res) => {
+    soEscritorio(req);
+    res.json(await salvarConfig(db, req.body));
   });
 
   api.use((_req, _res, next) => next(naoEncontrado('Endereço não encontrado.')));
