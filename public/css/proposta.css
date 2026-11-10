@@ -408,6 +408,9 @@ button { font: inherit; color: inherit; }
 #proposta { display: block; }
 #proposta.estado { display: flex; }
 .observ h2 { margin: calc(var(--u) * 8) 0 calc(var(--u) * 6); font-size: calc(var(--u) * 40); }
+.obs-junto { margin-top: calc(var(--u) * 14); padding-top: calc(var(--u) * 12); border-top: calc(var(--u) * 0.8) solid var(--linha-papel); }
+.obs-junto .sobre { margin-bottom: calc(var(--u) * 3); }
+.obs-junto p:not(.sobre) { margin-top: calc(var(--u) * 5); color: var(--tinta-2); font-size: calc(var(--u) * 10.8); line-height: 1.5; overflow-wrap: anywhere; }
 .obs-lista p { margin-top: calc(var(--u) * 11); color: var(--tinta-2); font-size: calc(var(--u) * 12.4); line-height: 1.6; overflow-wrap: anywhere; }
 /* Nomes compridos não podem quebrar o cabeçalho nem o rodapé: eles definem a área útil da página. */
 .pag-cab span, .pag-pe span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

@@ -234,14 +234,16 @@ function htmlCartao() {
     ${total > 1 ? `<div class="faixa sem-virar"><label class="oculto" for="faixa-parcelas">Número de parcelas</label><input id="faixa-parcelas" type="range" min="1" max="${total}" step="1" value="${n}" data-v="${((n - 1) / (total - 1)).toFixed(3)}"><div class="faixa-marcas num" aria-hidden="true">${D.credito.map((_, i) => `<span>${i + 1}x</span>`).join('')}</div></div>` : ''}
     <p class="sim-linha empilha"><span>Total no cartão <b id="sim-total">${brl(o.total_cents)}</b></span><span id="sim-taxa">${textoTaxa(o)}</span>${D.debito ? `<span>Débito à vista <b>${brl(D.debito.total_cents)}</b></span>` : ''}</p>`;
 }
-function pgPagamento(n) {
+function pgPagamento(n, comObservacoes = false) {
   const c = D.combinado;
+  // Observações curtas entram aqui, em vez de ocupar uma página só para elas.
+  const observacoes = comObservacoes ? `<div class="obs-junto"><p class="sobre">Observações</p>${D.observacoes.map((t) => `<p>${esc(t)}</p>`).join('')}</div>` : '';
   const fatos = `<dl class="fatos fatos-pag num"><div><dt>Entrega</dt><dd>${esc(P.prazo_entrega || 'A combinar')}</dd></div><div><dt>Válida até</dt><dd>${formatarData(P.data_validade)}</dd></div></dl>`;
   const painelCombinado = `<p class="sim-rotulo">${esc(c.rotulo)}</p><b class="sim-valor num" id="sim-combinado" data-odo="${esc(c.valor)}">${esc(c.valor)}</b>
     <p class="sim-linha empilha">${c.linhas.map((l) => `<span>${esc(l)}</span>`).join('')}</p>${D.descricaoPagamento && D.descricaoPagamento !== c.rotulo ? `<p class="sim-menor">${esc(D.descricaoPagamento)}</p>` : ''}`;
   if (!D.credito.length) {
     return `<div class="pag pagto">${cab('Pagamento')}<p class="sobre t-topo">Condições</p><h2>Pagamento e <em>prazo</em></h2>
-      <div class="sim-unica">${painelCombinado}</div>${fatos}${pe(n)}</div>`;
+      <div class="sim-unica">${painelCombinado}</div>${fatos}${observacoes}${pe(n)}</div>`;
   }
   const cartao = P.pagamento.cartao;
   const canal = cartao.nome ? ` (${esc(cartao.nome.charAt(0).toLocaleLowerCase('pt-BR') + cartao.nome.slice(1))})` : '';
@@ -253,7 +255,7 @@ function pgPagamento(n) {
       <div class="sim-painel" data-painel="combinado" aria-hidden="${estado.forma !== 'combinado'}" ${estado.forma !== 'combinado' ? 'inert' : ''}>${painelCombinado}</div>
       <div class="sim-painel" data-painel="cartao" aria-hidden="${estado.forma !== 'cartao'}" ${estado.forma !== 'cartao' ? 'inert' : ''}>${htmlCartao()}</div>
     </div>
-    ${fatos}<p class="nota">${nota}</p>${pe(n)}</div>`;
+    ${fatos}${observacoes}<p class="nota">${nota}</p>${pe(n)}</div>`;
 }
 function pgObservacoes(n, paragrafos, continua) {
   return `<div class="pag observ">${cab('Observações')}
@@ -350,8 +352,11 @@ function paginas() {
   }
   fatias(D.linhasInvestimento, (ls, cont, ult) => pgInvestimento(0, ls, cont, ult)).forEach(([x, y], k, todas) =>
     lista.push({ chave: k ? '' : 'investimento', titulo: 'Investimento', fazer: (n) => pgInvestimento(n, D.linhasInvestimento.slice(x, y), k > 0, k === todas.length - 1) }));
-  lista.push({ chave: 'pagamento', titulo: 'Pagamento', fazer: (n) => pgPagamento(n) });
-  if (D.observacoes.length) {
+  // As observações só ganham páginas próprias quando não cabem, com folga, junto do pagamento.
+  const comPagamento = pgPagamento(0, true);
+  const obsJunto = D.observacoes.length > 0 && [1, 0.94].some((z) => cabe(z === 1 ? comPagamento : comPagamento.replace('class="pag ', `data-z="${z}" class="pag `)));
+  lista.push({ chave: 'pagamento', titulo: 'Pagamento', fazer: (n) => pgPagamento(n, obsJunto) });
+  if (D.observacoes.length && !obsJunto) {
     fatias(D.observacoes, (ps, cont) => pgObservacoes(0, ps, cont)).forEach(([x, y], k) =>
       lista.push({ chave: k ? '' : 'observacoes', titulo: 'Observações', fazer: (n) => pgObservacoes(n, D.observacoes.slice(x, y), k > 0) }));
   }
