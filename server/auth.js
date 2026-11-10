@@ -82,7 +82,7 @@ export async function usuarioDaSessao(db, req) {
   return (
     (await db.get(
       `SELECT u.id, u.nome, u.email, u.tipo FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
-       WHERE s.token_hash = ? AND s.expira_em > now()`,
+       WHERE s.token_hash = ? AND s.expira_em > now() AND u.ativo = 1`,
       hashToken(token),
     )) || null
   );

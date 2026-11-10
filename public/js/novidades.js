@@ -6,18 +6,18 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
-    id: '2026-11-plano-de-corte',
+    id: '2026-11-producao',
     data: '10 de novembro de 2026',
-    titulo: 'Plano de corte para a sua serra',
-    resumo: 'Monte a lista de peças do orçamento aprovado e veja quantas chapas comprar, o desenho de cada chapa e a ordem dos cortes.',
+    titulo: 'A produção ganhou uma área própria',
+    resumo: 'Mande o orçamento aprovado para quem vai cortar. O funcionário monta o plano de corte no celular e segue a serra passo a passo.',
     itens: [
-      { icone: 'area', titulo: 'Chapas e fitas cadastradas', texto: 'Em Ajustes → Chapas e fitas, informe medida, espessura, veio e preço das chapas que você usa.' },
-      { icone: 'regua', titulo: 'Peças rápidas no celular', texto: 'Digite "720 x 550 x 2" e toque Enter, ou cole a lista inteira de uma planilha.' },
-      { icone: 'serra', titulo: 'Roteiro para a serra', texto: 'Só cortes de ponta a ponta, com a espessura da serra, o refilo e o veio. Cada chapa mostra as faixas e a medida da guia.' },
-      { icone: 'dinheiro', titulo: 'Custo de material', texto: 'Chapas e metros de fita para comprar, com o custo e quanto ele representa do orçamento. O cliente nunca vê.' },
-      { icone: 'pdf', titulo: 'PDF para levar à oficina', texto: 'Resumo, lista de peças e uma página por chapa, pronto para imprimir.' },
+      { icone: 'clientes', titulo: 'Equipe da produção', texto: 'Em Ajustes → Equipe, crie o usuário e a senha de cada funcionário. Ele entra em esquadro.site/producao e vê só os trabalhos dele, sem nenhum valor.' },
+      { icone: 'serra', titulo: 'Mandar para a produção', texto: 'No orçamento, escolha quem vai cortar e escreva as instruções. O andamento e o custo de material aparecem no próprio orçamento.' },
+      { icone: 'regua', titulo: 'Plano de corte melhor', texto: 'Até três soluções para escolher (menos chapas, corte simples, maior sobra), chapas iguais agrupadas e desenho com cores por móvel.' },
+      { icone: 'check', titulo: 'Corte passo a passo', texto: 'A tela mostra a medida da guia em letra grande, quando girar a peça e o que cada corte separa. Peça estragada vira plano de recorte.' },
+      { icone: 'caixa', titulo: 'Estoque de retalhos', texto: 'Sobras boas são guardadas no fim de cada chapa, e o cálculo usa retalho antes de abrir chapa nova.' },
     ],
-    acao: { rotulo: 'Cadastrar minhas chapas', href: '#/config/chapas' },
+    acao: { rotulo: 'Cadastrar a equipe', href: '#/config/equipe' },
   },
   {
     id: '2026-11-editor-folha',

@@ -9,6 +9,7 @@ const ABAS = [
   ['empresa', 'Empresa', 'empresa'],
   ['moveis', 'Móveis', 'preco'],
   ['chapas', 'Chapas', 'area'],
+  ['equipe', 'Equipe', 'clientes'],
   ['pagamento', 'Pagamento', 'pagamento'],
   ['conta', 'Conta', 'usuario'],
 ];
@@ -26,7 +27,7 @@ export async function paginaConfiguracoes(aba, query = new URLSearchParams()) {
   aba ||= 'empresa';
   aba = APELIDOS[aba] || aba;
   if (!ABAS.some(([a]) => a === aba) && !['padroes', 'senha'].includes(aba)) aba = 'empresa';
-  const montar = { empresa: abaEmpresa, moveis: abaMoveis, chapas: abaChapas, pagamento: abaPagamento, conta: abaConta, padroes: () => abaEmpresa({ padroes: true }), senha: () => abaConta({ soSenha: true }) }[aba];
+  const montar = { empresa: abaEmpresa, moveis: abaMoveis, chapas: abaChapas, equipe: abaEquipe, pagamento: abaPagamento, conta: abaConta, padroes: () => abaEmpresa({ padroes: true }), senha: () => abaConta({ soSenha: true }) }[aba];
   const formulario = await (aba === 'moveis' ? abaMoveis(query.get('q') || '') : montar());
   const resumoEmpresa = h('section', { class: 'config-empresa-resumo' },
     h('span', { class: 'config-logo-resumo', 'aria-hidden': 'true' },
@@ -42,7 +43,8 @@ export async function paginaConfiguracoes(aba, query = new URLSearchParams()) {
   const itensVisao = [
     ['empresa', 'Empresa', 'Logo e informações da proposta', 'empresa'],
     ['moveis', 'Móveis e preços', 'Catálogo e valores', 'preco'],
-    ['chapas', 'Chapas e fitas', 'Medidas e preços do plano de corte', 'area'],
+    ['chapas', 'Chapas e fitas', 'Medidas e preços para a produção', 'area'],
+    ['equipe', 'Equipe da produção', 'Acessos de quem corta na oficina', 'clientes'],
     ['pagamento', 'Pagamento', 'Condições da proposta', 'pagamento'],
     ['conta', 'Minha conta', 'Acesso e notificações', 'usuario'],
   ];
@@ -65,7 +67,8 @@ export async function paginaConfiguracoes(aba, query = new URLSearchParams()) {
   const textos = {
     empresa: ['Empresa', 'IDENTIDADE E CONTATOS', 'Os dados que aparecem na proposta.', 'AJUSTES / EMPRESA', 'Os dados e a identidade que acompanham suas propostas.'],
     moveis: ['Móveis e preços', 'CATÁLOGO', 'Seu catálogo e os valores de referência.', 'AJUSTES / MÓVEIS', 'Seu catálogo de móveis e os valores usados nos próximos orçamentos.'],
-    chapas: ['Chapas e fitas', 'PLANO DE CORTE', 'Medidas e preços usados no plano de corte.', 'AJUSTES / CHAPAS', 'Chapas e fitas de borda que você usa, com medida e preço, para o plano de corte.'],
+    chapas: ['Chapas e fitas', 'PRODUÇÃO', 'Medidas e preços usados nos planos de corte.', 'AJUSTES / CHAPAS', 'Chapas e fitas de borda que a oficina usa. Os preços só aparecem para você.'],
+    equipe: ['Equipe da produção', 'PRODUÇÃO', 'Quem corta na oficina e o acesso de cada um.', 'AJUSTES / EQUIPE', 'Acessos da área da produção. Cada funcionário vê só os próprios trabalhos e nunca vê valores.'],
     pagamento: ['Pagamento', 'CONDIÇÕES DE PAGAMENTO', 'Condições prontas para suas propostas.', 'AJUSTES / PAGAMENTO', 'Condições que você pode reutilizar nas propostas.'],
     conta: ['Minha conta', 'CONTA', 'Seu acesso e os avisos deste dispositivo.', 'AJUSTES / CONTA', 'Dados de acesso, senha e avisos deste dispositivo.'],
     padroes: ['Novos orçamentos', 'PADRÕES DA EMPRESA', 'Defina os valores iniciais das propostas.', 'AJUSTES / PADRÕES'],
@@ -449,8 +452,7 @@ async function abaChapas() {
       'p',
       { class: 'config-informacao' },
       h('span', { class: 'config-info-icone' }, icone('cadeado')),
-      'Só você vê estas medidas e preços. Eles servem para o plano de corte e o custo de material. ',
-      h('a', { href: '#/corte' }, 'Ver planos de corte'),
+      h('span', {}, 'Só você vê os preços. A produção usa as medidas para os planos de corte; o custo de material aparece só aqui e no orçamento. ', h('a', { href: '/producao/' }, 'Abrir a produção')),
     ),
     chapas.length
       ? h(
@@ -599,6 +601,82 @@ function formularioFita(fita, fechar) {
       h('label', { class: 'caixa-marcar' }, ativo, ' Ativa ao montar planos'),
     ],
   });
+}
+
+// ------------------------------------------------------------------ Equipe
+
+async function abaEquipe() {
+  const equipe = await api.get('/funcionarios');
+  const recarregar = () => irPara(`#/config/equipe?${Date.now()}`);
+  const editar = async (f) => {
+    const salvo = await abrirModal(f ? 'Editar funcionário' : 'Novo funcionário', (fechar) => formularioFuncionario(f, fechar), { largo: true, contexto: 'EQUIPE', classe: 'modal-funcionario' });
+    if (salvo) recarregar();
+  };
+  return h(
+    'section',
+    { class: 'config-equipe' },
+    h(
+      'div',
+      { class: 'cartao-titulo' },
+      h('h2', {}, 'Equipe da produção'),
+      h('button', { type: 'button', class: 'botao botao-primario config-acao-nova', 'aria-label': 'Novo funcionário', onclick: () => editar(null) }, icone('mais'), h('span', {}, 'Novo')),
+    ),
+    h(
+      'p',
+      { class: 'config-informacao' },
+      h('span', { class: 'config-info-icone' }, icone('cadeado')),
+      h('span', {}, 'Cada funcionário entra em ', h('a', { href: '/producao/' }, 'esquadro.site/producao'), ' com o usuário e a senha que você criar. Lá ele vê só os trabalhos dele: cliente, móveis e medidas, sem nenhum valor.'),
+    ),
+    equipe.length
+      ? h(
+          'div',
+          { class: 'lista' },
+          equipe.map((f) =>
+            h(
+              'button',
+              { type: 'button', class: `linha-orcamento${f.ativo ? '' : ' inativo'}`, onclick: () => editar(f) },
+              h(
+                'div',
+                { class: 'linha-principal' },
+                h('strong', {}, f.nome, f.ativo ? '' : ' (sem acesso)'),
+                h('span', { class: 'suave' }, [`usuário: ${f.login}`, f.abertos ? `${f.abertos} ${f.abertos === 1 ? 'trabalho em aberto' : 'trabalhos em aberto'}` : 'nenhum trabalho em aberto'].join(' · ')),
+              ),
+              h('span', { class: 'botao-icone' }, icone('editar')),
+            ),
+          ),
+        )
+      : vazio('Ninguém cadastrado ainda. Crie o acesso de quem corta na oficina.'),
+  );
+}
+
+function formularioFuncionario(f, fechar) {
+  const nome = h('input', { type: 'text', required: true, maxlength: '100', value: f?.nome || '', placeholder: 'Ex.: João da Silva' });
+  const login = h('input', { type: 'text', required: true, maxlength: '200', value: f?.login || '', autocapitalize: 'none', spellcheck: 'false', placeholder: 'Ex.: joao' });
+  const senha = h('input', { type: 'text', minlength: '6', maxlength: '200', autocomplete: 'off', required: !f, placeholder: f ? 'Deixe em branco para manter' : 'Pelo menos 6 caracteres' });
+  const ativo = h('input', { type: 'checkbox', checked: f ? Boolean(f.ativo) : true });
+  return h(
+    'form',
+    {
+      class: 'formulario',
+      onsubmit: async (e) => {
+        e.preventDefault();
+        const corpo = { nome: nome.value, login: login.value, ativo: ativo.checked, ...(senha.value ? { senha: senha.value } : {}) };
+        try {
+          if (f) await api.put(`/funcionarios/${f.id}`, corpo);
+          else await api.post('/funcionarios', corpo);
+          aviso(f ? 'Funcionário salvo.' : `Acesso criado. Passe para ${nome.value.split(' ')[0]}: usuário "${login.value.trim().toLowerCase()}" e a senha que você digitou.`);
+          fechar(true);
+        } catch (erro) {
+          avisoErro(erro);
+        }
+      },
+    },
+    campo('Nome', nome),
+    campo('Usuário para entrar', login, { dica: 'Letras sem acento, números, ponto ou hífen. Também pode ser um e-mail.' }),
+    campo(f ? 'Nova senha' : 'Senha', senha, { dica: f ? 'Ao trocar a senha, o funcionário sai dos aparelhos em que estava.' : 'Você mesmo cria e passa para ele.' }),
+    f ? h('label', { class: 'caixa-marcar' }, ativo, ' Pode entrar na produção') : null,
+    h('div', { class: 'acoes-modal' }, h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, f ? 'Salvar' : 'Criar acesso')),
+  );
 }
 
 // -------------------------------------------------------- Condições de pagamento

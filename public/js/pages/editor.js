@@ -45,7 +45,7 @@ import { avatar, selo, seletorCliente, numeroWhatsApp, excluirOrcamento, dataCom
 import { abrirEnvio, linkDaProposta } from '../envio.js';
 import { aoSairDaPagina, irPara, substituirEndereco } from '../main.js';
 import { seletorParcelas } from './config.js';
-import { abrirPlanoDoOrcamento } from './corte.js';
+import { mandarParaProducao, secaoProducao } from '../producao-escritorio.js';
 
 const SERVICOS_RAPIDOS = ['Frete', 'Montagem', 'Instalação', 'Vidro', 'Espelho', 'Iluminação', 'Serviço adicional', 'Outros'];
 const ICONE_METODO = { linear: 'regua', quadrado: 'area', unidade: 'caixa' };
@@ -281,6 +281,7 @@ export async function paginaEditor({ id, clienteId }) {
   const estadoSalvo = h('span', { class: 'estado-salvo' });
   const estadoBarra = h('span', { class: 'estado-salvo' });
   const acoesLateral = h('div', { class: 'acoes-orcamento' });
+  const producao = secaoProducao();
   const descontoCalculado = h('small', { class: 'dica' });
   const acrescimoCalculado = h('small', { class: 'dica' });
   const previaPagamento = h('div', { class: 'previa-pagamento' });
@@ -338,6 +339,7 @@ export async function paginaEditor({ id, clienteId }) {
 
   // --------------------------------------------------------------- Atualizações
   function atualizarCabecalho() {
+    producao.definir(orc.id);
     tituloEl.textContent = orc.numero ? `Orçamento ${formatarNumero(orc.numero)}` : 'Novo orçamento';
     substituir(seloStatusTopo, STATUS[orc.status] || orc.status, icone('baixo', 'icone icone-mini'));
     seloStatusTopo.setAttribute('aria-label', `Alterar status do orçamento: ${STATUS[orc.status] || orc.status}`);
@@ -375,7 +377,7 @@ export async function paginaEditor({ id, clienteId }) {
       ['olho', 'Ver como o cliente vê', verComoCliente],
       ['pdf', 'Baixar PDF', abrirPdf],
       ['copiar', 'Duplicar orçamento', duplicar, { desativado: !orc.id }],
-      ['serra', 'Plano de corte', () => abrirPlanoDoOrcamento(orc.id), { desativado: !orc.id }],
+      ['serra', 'Mandar para a produção', () => mandarParaProducao(orc.id, () => producao.recarregar()), { desativado: !orc.id }],
       '-',
       ['lixeira', 'Excluir orçamento', excluir, { perigo: true, desativado: !orc.id }],
     ];
@@ -389,7 +391,7 @@ export async function paginaEditor({ id, clienteId }) {
         h('button', { type: 'button', class: 'botao', onclick: abrirPdf }, icone('pdf'), 'Baixar PDF'),
         h('button', { type: 'button', class: 'botao', onclick: duplicar, disabled: !orc.id }, icone('copiar'), 'Duplicar'),
       ),
-      h('button', { type: 'button', class: 'botao', onclick: () => abrirPlanoDoOrcamento(orc.id), disabled: !orc.id }, icone('serra'), 'Plano de corte'),
+      h('button', { type: 'button', class: 'botao', onclick: () => mandarParaProducao(orc.id, () => producao.recarregar()), disabled: !orc.id }, icone('serra'), 'Mandar para a produção'),
     );
     substituir(menuBarra, menuSuspenso(acoes, { rotulo: 'Ações do orçamento' }));
     substituir(acoesResumo,
@@ -1657,7 +1659,7 @@ export async function paginaEditor({ id, clienteId }) {
   );
 
   // Abas: o orçamento e o histórico
-  const painelOrcamento = h('div', { class: 'editor-principal' }, secaoCliente, secaoAmbientes, secaoExtras, secaoInclusos, secaoCondicoes);
+  const painelOrcamento = h('div', { class: 'editor-principal' }, secaoCliente, secaoAmbientes, secaoExtras, secaoInclusos, secaoCondicoes, producao.elemento);
   const painelHistorico = h(
     'div',
     { class: 'editor-principal editor-painel-historico', hidden: true },

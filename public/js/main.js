@@ -11,7 +11,6 @@ import { paginaEditor } from './pages/editor.js';
 import { paginaClientes, paginaCliente, paginaEditarCliente } from './pages/clientes.js';
 import { paginaConfiguracoes } from './pages/config.js';
 import { paginaAvisos } from './pages/avisos.js';
-import { paginaPlanoCorte, paginaPlanosCorte } from './pages/corte.js';
 
 const raiz = document.getElementById('app');
 let usuario = null;
@@ -33,8 +32,6 @@ const ROTAS = [
   [/^\/clientes\/(\d+)\/editar$/, ([id]) => paginaEditarCliente(Number(id))],
   [/^\/config(?:\/(\w+))?$/, ([aba], q) => paginaConfiguracoes(aba, q)],
   [/^\/avisos$/, () => paginaAvisos()],
-  [/^\/corte$/, () => paginaPlanosCorte()],
-  [/^\/corte\/(\d+)$/, ([id]) => paginaPlanoCorte(Number(id))],
 ];
 
 // Uma página pode registrar uma verificação antes de sair (ex.: alterações não salvas).
@@ -146,9 +143,9 @@ const MENU_LATERAL = [
   ['#/', 'Painel', 'inicio', /^\/?$/],
   MENU[1], MENU[2],
   ['#/config/moveis', 'Móveis e preços', 'caixa', /^\/config\/(moveis|tipos|precos)/],
-  ['#/corte', 'Plano de corte', 'serra', /^\/(corte|config\/chapas)/],
+  ['/producao/', 'Produção', 'serra', /^\/producao/],
   ['#/relatorios', 'Relatórios', 'grafico', /^\/relatorios/],
-  ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos|chapas))/],
+  ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos))/],
 ];
 
 export const usuarioAtual = () => usuario;
@@ -435,6 +432,11 @@ export async function sair() {
 
 async function mostrarAcesso() {
   const estado = await api.get('/auth/estado');
+  // Funcionário da produção tem a área própria dele.
+  if (estado.usuario?.tipo === 'producao') {
+    location.replace('/producao/');
+    return;
+  }
   if (estado.usuario) {
     usuario = estado.usuario;
     await cache.carregarEmpresa();

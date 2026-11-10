@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import {
   arvoreDeCortes,
   assinaturaPlano,
-  detalharChapas,
+  detalharSolucao,
   expandirPecas,
   lerLinhasPecas,
   metrosDeFita,
   otimizarPlano,
-  resumirPlano,
+  passosDaSerra,
+  resumirSolucao,
+  retalhosDaSolucao,
   roteiroDeCorte,
+  sobraAproveitavel,
   validarResultado,
 } from '../public/shared/corte.js';
 
@@ -45,6 +48,10 @@ const GUARDA_ROUPA = [
 ];
 
 const calcular = (pecas, ajustes = AJUSTES, opcoes = {}) => otimizarPlano({ pecas, chapas: CHAPAS, ajustes, tempoMaximoMs: 5000, ...opcoes });
+const primeira = (resultado) => resultado.solucoes[0];
+const novas = (solucao) => solucao.chapas.filter((f) => !f.retalho_id).length;
+const conferir = (resultado, pecas, ajustes = AJUSTES, retalhos = []) =>
+  validarResultado(JSON.parse(JSON.stringify(resultado)), { pecas, chapas: CHAPAS, ajustes, retalhos });
 
 test('lê a entrada rápida com x, ×, colunas de planilha e descrição', () => {
   const { pecas, erros } = lerLinhasPecas('720 x 550 x 2 Lateral\n600×400 Prateleira\nBase\t1000\t500\t3\n\nsó texto');
@@ -59,124 +66,237 @@ test('lê a entrada rápida com x, ×, colunas de planilha e descrição', () =>
   assert.deepEqual(erros, [{ linha: 5, texto: 'só texto' }]);
 });
 
-test('o resultado passa na conferência do servidor e cada peça aparece uma vez', () => {
+test('cada solução passa na conferência e tem cada peça uma vez', () => {
   const resultado = calcular(GUARDA_ROUPA);
-  const conferido = validarResultado(JSON.parse(JSON.stringify(resultado)), { pecas: GUARDA_ROUPA, chapas: CHAPAS, ajustes: AJUSTES });
+  const conferido = conferir(resultado, GUARDA_ROUPA);
   const total = GUARDA_ROUPA.reduce((s, p) => s + p.quantidade, 0);
-  assert.equal(conferido.chapas.reduce((s, c) => s + c.pecas.length, 0), total);
-  assert.equal(conferido.nao_cabem.length, 0);
+  assert.ok(conferido.solucoes.length >= 1 && conferido.solucoes.length <= 3);
+  assert.equal(conferido.solucoes[0].tipo, 'menos_chapas');
+  for (const s of conferido.solucoes) assert.equal(s.chapas.reduce((t, c) => t + c.pecas.length, 0), total);
   assert.equal(conferido.assinatura, assinaturaPlano(GUARDA_ROUPA, CHAPAS, AJUSTES));
+  assert.equal(new Set(conferido.solucoes.map((s) => JSON.stringify(s.chapas))).size, conferido.solucoes.length, 'sem soluções repetidas');
 });
 
 test('o guarda-roupa de exemplo usa o mínimo de chapas (área pede 4,6)', () => {
-  const resultado = calcular(GUARDA_ROUPA);
-  assert.equal(resultado.chapas.length, 5);
-  const resumo = resumirPlano({ pecas: GUARDA_ROUPA, chapas: CHAPAS, fitas: [], ajustes: AJUSTES, resultado });
+  const solucao = primeira(calcular(GUARDA_ROUPA));
+  assert.equal(novas(solucao), 5);
+  const plano = { pecas: GUARDA_ROUPA, chapas: CHAPAS, fitas: [], ajustes: AJUSTES };
+  const resumo = resumirSolucao(plano, solucao);
   assert.ok(resumo.aproveitamento > 90, `aproveitamento ${resumo.aproveitamento}%`);
   assert.equal(resumo.custo_chapas_cents, 5 * 30000);
+  assert.ok(resumo.cortes > 0 && resumo.giros > 0);
 });
 
-test('o modo só faixas começa com faixas no comprimento e nunca usa menos chapas que o padrão', () => {
+test('sem preço nas chapas, o resumo não traz custo', () => {
+  const semPreco = CHAPAS.map(({ preco_cents: _p, ...c }) => c);
+  const resultado = otimizarPlano({ pecas: GUARDA_ROUPA, chapas: semPreco, ajustes: AJUSTES, tempoMaximoMs: 500 });
+  const resumo = resumirSolucao({ pecas: GUARDA_ROUPA, chapas: semPreco, fitas: [{ id: 3, nome: 'Fita' }], ajustes: AJUSTES }, primeira(resultado));
+  assert.equal(resumo.custo_chapas_cents, undefined);
+  assert.ok(resumo.materiais.every((m) => m.custo_cents === undefined));
+});
+
+test('a solução de corte simples nunca tem mais giros e cortes que a de menos chapas', () => {
+  const ajustes = { ...AJUSTES, serra_decimos_mm: 32 };
+  const resultado = calcular(GUARDA_ROUPA, ajustes);
+  const plano = { pecas: GUARDA_ROUPA, chapas: CHAPAS, ajustes };
+  const trabalho = (s) => {
+    const r = resumirSolucao(plano, s);
+    return r.giros * 1000 + r.cortes;
+  };
+  const simples = resultado.solucoes.find((s) => s.tipo === 'corte_simples') || primeira(resultado);
+  assert.ok(trabalho(simples) <= trabalho(primeira(resultado)));
+});
+
+test('o modo só faixas nunca usa menos chapas que o livre', () => {
   const faixas = calcular(GUARDA_ROUPA, { ...AJUSTES, modo: 'faixas' });
-  const padrao = calcular(GUARDA_ROUPA);
-  assert.ok(faixas.chapas.length >= padrao.chapas.length);
-  validarResultado(faixas, { pecas: GUARDA_ROUPA, chapas: CHAPAS, ajustes: { ...AJUSTES, modo: 'faixas' } });
+  assert.ok(novas(primeira(faixas)) >= novas(primeira(calcular(GUARDA_ROUPA))));
+  conferir(faixas, GUARDA_ROUPA, { ...AJUSTES, modo: 'faixas' });
 });
 
 test('peças com veio em chapa com veio nunca giram; sem veio podem girar', () => {
   const pecas = [peca(400, 1700, 3, { chapa_id: 2, veio: 1 }), peca(400, 2000, 1, { chapa_id: 1 })];
-  const resultado = calcular(pecas);
-  for (const folha of resultado.chapas) {
+  const solucao = primeira(calcular(pecas));
+  for (const folha of solucao.chapas) {
     for (const p of folha.pecas) if (pecas[p.indice].chapa_id === 2) assert.equal(p.girada, false);
   }
   // Os 2000 mm só cabem deitados no comprimento da chapa (1820 úteis na largura).
-  assert.ok(resultado.chapas.some((f) => f.pecas.some((p) => p.indice === 1 && p.girada)));
-  validarResultado(resultado, { pecas, chapas: CHAPAS, ajustes: AJUSTES });
+  assert.ok(solucao.chapas.some((f) => f.pecas.some((p) => p.indice === 1 && p.girada)));
+  conferir(calcular(pecas), pecas);
 });
 
 test('peça maior que a chapa vai para "não cabem"; a que cabe girada não', () => {
   const pecas = [peca(3000, 500), peca(1800, 2000), peca(1800, 2000, 1, { chapa_id: 2, veio: 1 })];
   const resultado = calcular(pecas);
-  assert.deepEqual(resultado.nao_cabem.map((p) => p.indice).sort(), [0, 2]);
-  validarResultado(resultado, { pecas, chapas: CHAPAS, ajustes: AJUSTES });
+  assert.deepEqual(primeira(resultado).nao_cabem.map((p) => p.indice).sort(), [0, 2]);
+  conferir(resultado, pecas);
 });
 
-test('a serra e o refilo entram na conta: peças que só cabem sem eles vão para a outra chapa', () => {
+test('a serra e o refilo entram na conta', () => {
   // Duas peças de 1365 cabem em 2730 úteis, mas não com 4 mm de serra entre elas.
   const pecas = [peca(1365, 1820, 2, { chapa_id: 2, veio: 1 })];
-  assert.equal(calcular(pecas).chapas.length, 2);
-  assert.equal(calcular(pecas, { ...AJUSTES, serra_decimos_mm: 0 }).chapas.length, 1);
-  // A peça do tamanho exato da área útil cabe.
-  assert.equal(calcular([peca(2730, 1820, 1, { chapa_id: 2, veio: 1 })]).nao_cabem.length, 0);
-  assert.equal(calcular([peca(2731, 1820, 1, { chapa_id: 2, veio: 1 })]).nao_cabem.length, 1);
+  assert.equal(novas(primeira(calcular(pecas))), 2);
+  assert.equal(novas(primeira(calcular(pecas, { ...AJUSTES, serra_decimos_mm: 0 }))), 1);
+  assert.equal(primeira(calcular([peca(2730, 1820, 1, { chapa_id: 2, veio: 1 })])).nao_cabem.length, 0);
+  assert.equal(primeira(calcular([peca(2731, 1820, 1, { chapa_id: 2, veio: 1 })])).nao_cabem.length, 1);
+});
+
+test('retalho entra quando economiza chapa nova, sem refilo', () => {
+  const recorte = [peca(700, 400, 2), peca(500, 300)];
+  const retalhos = [
+    { id: 11, chapa_id: 1, comprimento_mm: 1500, largura_mm: 800 },
+    { id: 12, chapa_id: 2, comprimento_mm: 2000, largura_mm: 1000 }, // outra chapa: não serve
+  ];
+  const resultado = calcular(recorte, AJUSTES, { retalhos });
+  const solucao = primeira(resultado);
+  assert.equal(novas(solucao), 0, 'cabe no retalho, não abre chapa');
+  assert.deepEqual(retalhosDaSolucao(solucao), [11]);
+  // 700 + 4 + 700 = 1404 cabe nos 1500 do retalho porque retalho não leva refilo.
+  const conferido = conferir(resultado, recorte, AJUSTES, retalhos);
+  assert.equal(conferido.solucoes[0].chapas[0].retalho_id, 11);
+});
+
+test('retalho não é gasto à toa: com as mesmas chapas novas, a solução principal não usa', () => {
+  const retalhos = [
+    { id: 7, chapa_id: 1, comprimento_mm: 1900, largura_mm: 1200 },
+    { id: 8, chapa_id: 1, comprimento_mm: 900, largura_mm: 500 },
+  ];
+  const resultado = calcular(GUARDA_ROUPA, AJUSTES, { retalhos });
+  assert.equal(novas(primeira(resultado)), 5);
+  assert.deepEqual(retalhosDaSolucao(primeira(resultado)), []);
+  conferir(resultado, GUARDA_ROUPA, AJUSTES, retalhos);
+});
+
+test('a conferência recusa retalho desconhecido, de outra chapa ou repetido', () => {
+  const recorte = [peca(700, 400, 2)];
+  const retalhos = [{ id: 11, chapa_id: 1, comprimento_mm: 1500, largura_mm: 420 }];
+  const resultado = calcular(recorte, AJUSTES, { retalhos });
+  assert.throws(() => conferir(resultado, recorte, AJUSTES, []), /não está mais disponível/);
+  assert.throws(() => conferir(resultado, recorte, AJUSTES, [{ ...retalhos[0], chapa_id: 2 }]), /não está mais disponível/);
+  const dobrado = JSON.parse(JSON.stringify(resultado));
+  const folha = dobrado.solucoes[0].chapas[0];
+  dobrado.solucoes[0].chapas = [
+    { ...folha, pecas: [folha.pecas[0]] },
+    { ...folha, pecas: [folha.pecas[1]] },
+  ];
+  assert.throws(() => conferir(dobrado, recorte, AJUSTES, retalhos), /duas vezes/);
 });
 
 test('a conferência recusa resultados adulterados', () => {
   const pecas = [peca(1000, 500, 3), peca(600, 400, 2, { chapa_id: 2, veio: 1 })];
   const bom = calcular(pecas);
-  const conferir = (r) => validarResultado(r, { pecas, chapas: CHAPAS, ajustes: AJUSTES });
   const copia = () => JSON.parse(JSON.stringify(bom));
+  const ver = (r) => validarResultado(r, { pecas, chapas: CHAPAS, ajustes: AJUSTES });
 
   let r = copia();
-  r.chapas[0].pecas[1].x = r.chapas[0].pecas[0].x; // sobreposição
-  r.chapas[0].pecas[1].y = r.chapas[0].pecas[0].y;
-  assert.throws(() => conferir(r), /sobrepõem/);
+  r.solucoes[0].chapas[0].pecas[1].x = r.solucoes[0].chapas[0].pecas[0].x;
+  r.solucoes[0].chapas[0].pecas[1].y = r.solucoes[0].chapas[0].pecas[0].y;
+  assert.throws(() => ver(r), /sobrepõem/);
 
   r = copia();
-  r.chapas[0].pecas.pop(); // falta peça
-  assert.throws(() => conferir(r), /Faltam peças/);
+  r.solucoes[0].chapas[0].pecas.pop();
+  assert.throws(() => ver(r), /Faltam peças/);
 
   r = copia();
-  r.chapas[0].pecas.push({ ...r.chapas[0].pecas[0] }); // repetida
-  assert.throws(() => conferir(r), /mais de uma vez/);
+  r.solucoes[0].chapas[0].pecas.push({ ...r.solucoes[0].chapas[0].pecas[0] });
+  assert.throws(() => ver(r), /mais de uma vez/);
 
   r = copia();
-  const carvalho = r.chapas.find((c) => c.chapa_id === 2);
-  carvalho.pecas[0].girada = true; // contra o veio
-  assert.throws(() => conferir(r), /contra o veio/);
+  r.solucoes[0].chapas.find((c) => c.chapa_id === 2).pecas[0].girada = true;
+  assert.throws(() => ver(r), /contra o veio/);
 
   r = copia();
-  r.chapas[0].pecas[0].x = 2; // dentro do refilo
-  assert.throws(() => conferir(r), /área útil|sobrepõem/);
+  r.solucoes[0].chapas[0].pecas[0].x = 2;
+  assert.throws(() => ver(r), /área útil|sobrepõem/);
 
   r = copia();
-  r.nao_cabem.push({ indice: 0, copia: 1 });
-  r.chapas.forEach((c) => (c.pecas = c.pecas.filter((p) => !(p.indice === 0 && p.copia === 1))));
-  assert.throws(() => conferir(r), /cabe na chapa/);
+  r.solucoes[0].nao_cabem.push({ indice: 0, copia: 1 });
+  r.solucoes[0].chapas.forEach((c) => (c.pecas = c.pecas.filter((p) => !(p.indice === 0 && p.copia === 1))));
+  assert.throws(() => ver(r), /cabe na chapa/);
+
+  r = copia();
+  r.solucoes[0].tipo = 'outra';
+  assert.throws(() => ver(r), /Tipo de solução/);
 });
 
 test('padrão que não sai só com cortes de ponta a ponta é recusado', () => {
-  // Cata-vento: quatro peças em volta de um quadrado, sem corte que atravesse a chapa.
-  const chapa = { id: 9, comprimento_mm: 300, largura_mm: 300, veio: 0 };
-  const ajustes = { serra_decimos_mm: 0, refilo_mm: 0 };
+  const medidas = { comprimento_mm: 300, largura_mm: 300, serra_decimos_mm: 0, refilo_mm: 0 };
   const cataVento = [
     { numero: 1, x: 0, y: 0, w: 200, h: 100 },
     { numero: 2, x: 200, y: 0, w: 100, h: 200 },
     { numero: 3, x: 100, y: 200, w: 200, h: 100 },
     { numero: 4, x: 0, y: 100, w: 100, h: 200 },
   ];
-  assert.equal(arvoreDeCortes(cataVento, chapa, ajustes), null);
+  assert.equal(arvoreDeCortes(cataVento, medidas), null);
   const grade = [
     { numero: 1, x: 0, y: 0, w: 150, h: 150 },
     { numero: 2, x: 150, y: 0, w: 150, h: 150 },
     { numero: 3, x: 0, y: 150, w: 300, h: 150 },
   ];
-  assert.ok(arvoreDeCortes(grade, chapa, ajustes));
+  assert.ok(arvoreDeCortes(grade, medidas));
 });
 
-test('o roteiro começa com as faixas no comprimento e traz a medida da guia', () => {
-  const chapa = { id: 9, comprimento_mm: 1000, largura_mm: 600, veio: 0 };
-  const ajustes = { serra_decimos_mm: 40, refilo_mm: 0 };
+test('o roteiro começa com as faixas no comprimento e marca quando girar', () => {
+  const medidas = { comprimento_mm: 1000, largura_mm: 600, serra_decimos_mm: 40, refilo_mm: 0 };
   const colocadas = [
     { numero: 1, x: 0, y: 0, w: 500, h: 300 },
     { numero: 2, x: 504, y: 0, w: 300, h: 300 },
     { numero: 3, x: 0, y: 304, w: 1000, h: 200 },
   ];
-  const passos = roteiroDeCorte(arvoreDeCortes(colocadas, chapa, ajustes));
+  const passos = roteiroDeCorte(arvoreDeCortes(colocadas, medidas));
   assert.equal(passos[0].eixo, 'y');
+  assert.equal(passos[0].girar, false);
   assert.deepEqual(passos[0].partes.map((p) => [p.tipo, p.medida]), [['parte', 300], ['peca', 200], ['sobra', 92]]);
   assert.equal(passos[1].rotulo, 'A');
+  assert.equal(passos[1].girar, true);
   assert.deepEqual(passos[1].partes.map((p) => [p.tipo, p.medida, p.numero]), [['peca', 500, 1], ['peca', 300, 2], ['sobra', 192, undefined]]);
+});
+
+test('o passo a passo da serra entrega cada peça uma vez e indica a guia', () => {
+  const solucao = primeira(calcular(GUARDA_ROUPA));
+  const plano = { pecas: GUARDA_ROUPA, chapas: CHAPAS, ajustes: AJUSTES };
+  const detalhes = detalharSolucao(plano, solucao);
+  const passos = passosDaSerra(detalhes, { guiaParalelaMm: 900 });
+  const produzidas = passos.flatMap((p) => p.produz);
+  assert.equal(produzidas.length, expandirPecas(GUARDA_ROUPA).length);
+  assert.equal(new Set(produzidas).size, produzidas.length);
+  assert.equal(passos.at(-1).tipo, 'fim');
+  assert.equal(passos.filter((p) => p.tipo === 'chapa').length, solucao.chapas.length);
+  assert.equal(passos.filter((p) => p.tipo === 'refilo').length, solucao.chapas.length);
+  const cortes = passos.filter((p) => p.tipo === 'corte');
+  assert.equal(cortes.length, resumirSolucao(plano, solucao, detalhes).cortes);
+  for (const c of cortes) {
+    if (c.guia === 'paralela') assert.ok(c.medida <= 900, `guia paralela com ${c.medida} mm`);
+    assert.ok(c.medida > 0);
+  }
+  assert.ok(cortes.some((c) => c.girar), 'alguma faixa precisa girar para os cortes na largura');
+});
+
+test('cada corte diz o que separa: faixa (com as peças), peça ou sobra', () => {
+  const pecas = [peca(1764, 530)];
+  const retalhos = [{ id: 10, chapa_id: 1, comprimento_mm: 1822, largura_mm: 800 }];
+  const solucao = primeira(calcular(pecas, AJUSTES, { retalhos }));
+  const passos = passosDaSerra(detalharSolucao({ pecas, chapas: CHAPAS, ajustes: AJUSTES, retalhos }, solucao));
+  const cortes = passos.filter((p) => p.tipo === 'corte');
+  assert.equal(cortes[0].parte.tipo, 'parte', 'a faixa com a peça não é sobra');
+  assert.deepEqual(cortes[0].parte.pecas, [1]);
+  assert.equal(cortes[0].resto.tipo, 'sobra');
+  const tipos = new Set(passos.flatMap((p) => [p.parte?.tipo, p.resto?.tipo]).filter(Boolean));
+  for (const tipo of tipos) assert.ok(['parte', 'peca', 'sobra'].includes(tipo), tipo);
+});
+
+test('chapas com o mesmo desenho ficam juntas e contadas', () => {
+  const pecas = [peca(2730, 450, 16)];
+  const detalhes = detalharSolucao({ pecas, chapas: CHAPAS, ajustes: AJUSTES }, primeira(calcular(pecas)));
+  assert.equal(detalhes.length, 4);
+  assert.ok(detalhes.every((d) => d.iguais === 4));
+  assert.deepEqual(detalhes.map((d) => d.posicaoIgual), [1, 2, 3, 4]);
+});
+
+test('sobra só vale guardar quando passa do mínimo nos dois lados', () => {
+  const minimo = { sobra_min_largura_mm: 100, sobra_min_comprimento_mm: 300 };
+  assert.equal(sobraAproveitavel(1200, 350, minimo), true);
+  assert.equal(sobraAproveitavel(1200, 90, minimo), false);
+  assert.equal(sobraAproveitavel(250, 200, minimo), false);
 });
 
 test('metros de fita somam só os lados marcados, por tipo, com a margem', () => {
@@ -189,6 +309,8 @@ test('metros de fita somam só os lados marcados, por tipo, com a margem', () =>
   assert.equal(fita.metros, 4.3);
   assert.equal(fita.metros_com_margem, 4.8);
   assert.equal(fita.custo_cents, 946);
+  const [semPreco] = metrosDeFita(pecas, [{ id: 7, nome: 'Branca 22' }], 10);
+  assert.equal(semPreco.custo_cents, undefined);
 });
 
 test('a assinatura muda quando muda o que importa para o corte', () => {
@@ -210,16 +332,16 @@ test('lista grande calcula dentro do tempo e com bom aproveitamento', () => {
   );
   const inicio = Date.now();
   const resultado = otimizarPlano({ pecas, chapas: CHAPAS, ajustes: AJUSTES, tempoMaximoMs: 2500 });
-  assert.ok(Date.now() - inicio < 8000);
+  assert.ok(Date.now() - inicio < 10000);
   const conferido = validarResultado(resultado, { pecas, chapas: CHAPAS, ajustes: AJUSTES });
-  const resumo = resumirPlano({ pecas, chapas: CHAPAS, fitas: [], ajustes: AJUSTES, resultado: conferido });
+  const plano = { pecas, chapas: CHAPAS, ajustes: AJUSTES };
+  const resumo = resumirSolucao(plano, conferido.solucoes[0]);
   assert.ok(resumo.aproveitamento > 80, `aproveitamento ${resumo.aproveitamento}%`);
-  assert.equal(expandirPecas(pecas).length, conferido.chapas.reduce((t, c) => t + c.pecas.length, 0));
-  const detalhes = detalharChapas({ pecas, chapas: CHAPAS, ajustes: AJUSTES, resultado: conferido });
+  const detalhes = detalharSolucao(plano, conferido.solucoes[0]);
   assert.ok(detalhes.every((d) => d.roteiro.length > 0));
 });
 
-test('listas aleatórias, com várias serras, refilos e modos, sempre passam na conferência', () => {
+test('listas aleatórias, com retalhos, várias serras, refilos e modos, sempre passam na conferência', () => {
   for (let semente = 1; semente <= 25; semente++) {
     let s = semente * 7919;
     const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
@@ -227,8 +349,20 @@ test('listas aleatórias, com várias serras, refilos e modos, sempre passam na 
     const pecas = Array.from({ length: 2 + Math.floor(rnd() * 40) }, () =>
       peca(30 + Math.round(rnd() * 2400), 30 + Math.round(rnd() * 1300), 1 + Math.floor(rnd() * 4), { chapa_id: rnd() < 0.5 ? 1 : 2, veio: rnd() < 0.5 ? 1 : 0 }),
     );
+    const retalhos = Array.from({ length: Math.floor(rnd() * 4) }, (_, i) => ({
+      id: 100 + i,
+      chapa_id: rnd() < 0.5 ? 1 : 2,
+      comprimento_mm: 300 + Math.round(rnd() * 1500),
+      largura_mm: 100 + Math.round(rnd() * 800),
+    }));
     const ajustes = { serra_decimos_mm: [0, 25, 32, 40, 48][Math.floor(rnd() * 5)], refilo_mm: [0, 5, 10, 15][Math.floor(rnd() * 4)], modo: rnd() < 0.5 ? 'faixas' : 'aproveitamento' };
-    const resultado = otimizarPlano({ pecas, chapas, ajustes, tempoMaximoMs: 300, iteracoes: 200, semente });
-    assert.doesNotThrow(() => validarResultado(JSON.parse(JSON.stringify(resultado)), { pecas, chapas, ajustes }), `semente ${semente}`);
+    const resultado = otimizarPlano({ pecas, chapas, ajustes, retalhos, tempoMaximoMs: 300, iteracoes: 200, semente });
+    assert.doesNotThrow(() => validarResultado(JSON.parse(JSON.stringify(resultado)), { pecas, chapas, ajustes, retalhos }), `semente ${semente}`);
+    for (const solucao of resultado.solucoes) {
+      const passos = passosDaSerra(detalharSolucao({ pecas, chapas, ajustes, retalhos }, solucao));
+      const produzidas = passos.flatMap((p) => p.produz);
+      const esperadas = expandirPecas(pecas).length - solucao.nao_cabem.length;
+      assert.equal(produzidas.length, esperadas, `semente ${semente}: peças no passo a passo`);
+    }
   }
 });

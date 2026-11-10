@@ -28,9 +28,10 @@ Configuração conferida na Neon em 20/10/2026:
 | Banco | `neondb` |
 
 O banco contém as tabelas de clientes, orçamentos, itens, histórico, usuários,
-sessões e notificações, chapas, fitas e planos de corte, além do controle de
-migrações e da marca de configuração inicial. As migrações atuais estão na
-versão **12** (`server/db.js`) e são aplicadas automaticamente ao acessar a API.
+sessões e notificações, chapas, fitas, planos de corte, retalhos e a
+configuração da serra, além do controle de migrações e da marca de configuração
+inicial. As migrações atuais estão na versão **13** (`server/db.js`) e são
+aplicadas automaticamente ao acessar a API.
 
 1. **Neon Console → projeto esquadro → Connect**: selecione a branch
    `production`, o banco `neondb` e a role usada pela aplicação.
@@ -193,32 +194,47 @@ um banco descartável, exclusivo para testes.
 - Trocar a senha encerra sessões dos outros dispositivos; em **Ajustes → Minha
   conta** também é possível encerrar todas as sessões, inclusive a atual.
 
-## Plano de corte
+## Produção (plano de corte)
 
-Etapa de produção, separada do orçamento (o orçamento continua por metro, m²
-ou unidade). Abra pelo menu do orçamento (**Plano de corte**) ou em
-**Plano de corte → Novo plano**.
+Área separada para quem corta na oficina, em **`/producao/`** (mesmo servidor e
+mesmo banco, login próprio). Feita para o celular ao lado da esquadrejadeira.
 
-- **Ajustes → Chapas e fitas**: medida, espessura, veio e preço de cada chapa;
-  largura e preço por metro de cada fita de borda.
-- **Peças**: entrada rápida (`720 x 550 x 2 Lateral` + Enter) ou colar uma lista
-  de planilha. Cada peça tem móvel, chapa, "seguir o veio" e fita por lado
-  (C1/C2 no comprimento, L1/L2 na largura). A lista salva sozinha.
-- **Cálculo** (`public/shared/corte.js`, rodando em Web Worker): só cortes de
-  ponta a ponta (guilhotina), com espessura da serra, refilo e veio. O modo
-  **Menos chapas** testa faixas e cortes livres (heurísticas de Jylänki) e, entre
-  planos com o mesmo número de chapas, fica com o roteiro mais simples. O modo
-  **Só faixas** corta faixas no comprimento e depois as peças, mesmo que gaste
-  mais chapa.
-- **O servidor confere o resultado** antes de guardar: cada peça uma vez, na
-  chapa e na medida certas, sem girar contra o veio, dentro da área útil, com a
-  serra entre as peças e separável só com cortes de ponta a ponta. Se a lista
-  ou os ajustes mudarem, o cálculo deixa de valer e a tela pede outro.
-- **Resultado**: chapas e metros de fita para comprar, custo de material (e a
-  parte do orçamento que ele representa), desenho de cada chapa, roteiro de
-  cortes com a medida da guia e sobras aproveitáveis. **PDF para a serra**
-  (`server/pdfCorte.js`) e exportação da lista em CSV.
-- Nada do plano de corte entra na proposta, no PDF do cliente ou no link `/p/`.
+**Acesso.** Em **Ajustes → Equipe**, o escritório cria o usuário e a senha de
+cada funcionário (`usuarios.tipo = 'producao'`). Funcionário entra com o
+usuário (ou e-mail), é levado para `/producao/` se abrir o endereço do
+escritório e só acessa as rotas `/api/producao/*` e a troca de senha; qualquer
+outra rota responde 403. Ele vê só os planos dele e **nunca recebe preços**: o
+servidor tira os preços de chapas e fitas e não manda totais do orçamento.
+Desativar o funcionário derruba as sessões na hora.
+
+**Trabalhos.** No editor do orçamento, **Mandar para a produção** escolhe o
+funcionário e as instruções; um orçamento pode virar mais de um trabalho. O
+funcionário vê cliente, ambientes, móveis e medidas (sem valores) e monta o
+plano. Ele também pode criar planos próprios. O cartão **Produção** do editor
+mostra o andamento e o custo de material (só para o escritório).
+
+**Plano.** Entrada rápida de peças (`720 x 550 x 2 Lateral`, ou colar de
+planilha), com móvel, chapa, veio e fita por lado. O cálculo
+(`public/shared/corte.js`, em Web Worker) usa só cortes de ponta a ponta, com a
+espessura do disco, o refilo e o veio, e devolve até **três soluções**: menos
+chapas novas; corte mais simples (menos giros e cortes); maior sobra inteira.
+Chapas com o mesmo desenho saem agrupadas. Retalhos do estoque entram (sem
+refilo) quando economizam chapa nova. O servidor confere cada solução antes de
+guardar e **reserva** os retalhos da solução escolhida.
+
+**Modo serra.** Passo a passo em tela cheia: pegar a chapa ou o retalho,
+esquadrejar, cada corte com a medida grande, a guia (paralela até a largura
+configurada, 900 mm na Baldan SE-3200/38; acima disso, no carro), o aviso de
+girar a peça e o que o corte separa. "Estragou" anota a peça e, no fim, gera o
+plano de recorte. No fim de cada chapa, as sobras boas vão para o estoque de
+retalhos. O andamento é salvo a cada passo e a tela fica acesa enquanto corta.
+
+**Retalhos e serra.** O estoque é da oficina (todos veem). A configuração da
+serra (disco, refilo, guia paralela, curso do carro e sobra mínima) fica em
+**Ajustes** da produção e só o escritório altera.
+
+PDF para a serra (`server/pdfCorte.js`) e exportação da lista em CSV. Nada da
+produção entra na proposta, no PDF do cliente ou no link `/p/`.
 
 Pesquisa e próximas fases: [`docs/plano-de-corte.md`](docs/plano-de-corte.md).
 
@@ -253,9 +269,10 @@ server/db.js            conexão Postgres (Neon ou PGlite) e migrações
 server/orcamentos.js    salvar, duplicar, histórico, busca, painel
 server/visaoCliente.js  dados que o cliente pode ver
 server/pdf.js           geração do PDF (PDFKit)
-server/corte.js         chapas, fitas e planos de corte
+server/producao.js      equipe, trabalhos, planos de corte, retalhos e serra
 server/pdfCorte.js      PDF de produção do plano de corte
-public/shared/corte.js  otimizador de corte, roteiro e conferência (servidor e navegador)
+public/shared/corte.js  otimizador de corte, roteiro, passo a passo e conferência
+public/producao/        área da produção (/producao/), com folha própria em css/producao.css
 server/auth.js          senhas, sessões, proteção CSRF, limite de tentativas
 server/index.js         servidor local (npm start)
 tests/                  testes (node --test)
