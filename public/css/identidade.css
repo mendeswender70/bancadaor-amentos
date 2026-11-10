@@ -430,3 +430,58 @@ html:root .estrutura .pagina-clientes .lc-lista { gap: 0; }
   html:root .estrutura .pagina-cliente .cf-contato { padding-top: 0; border-top: 0; }
   .cf-dados:not(:has(> div:nth-child(2))) { display: none; }
 }
+
+/* ---------- Abas em texto: ajustes e avisos (as mesmas do editor) ---------- */
+html:root .estrutura .pagina-config nav.abas,
+html:root .estrutura .pagina-avisos .central-avisos-abas { display: flex; gap: 4px 24px; flex-wrap: nowrap; overflow-x: auto; width: auto; height: auto; margin: 0 0 18px; padding: 0 0 0; border: 0; border-bottom: 1px solid var(--pc-borda); border-radius: 0; background: none; box-shadow: none; scrollbar-width: none; }
+html:root .estrutura .pagina-config nav.abas > a,
+html:root .estrutura .pagina-avisos .central-avisos-abas > button { flex: none; width: auto; min-height: 38px; height: auto; padding: 8px 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--pc-suave); font: 500 14px/1.2 'Inter', sans-serif; text-decoration: none; }
+html:root .estrutura .pagina-config nav.abas > a:hover,
+html:root .estrutura .pagina-avisos .central-avisos-abas > button:hover { color: var(--pc-texto); }
+html:root .estrutura .pagina-config nav.abas > a.ativo,
+html:root .estrutura .pagina-avisos .central-avisos-abas > button.ativo { color: var(--pc-texto); box-shadow: inset 0 -2px var(--pc-acento); }
+html:root .estrutura .pagina-config nav.abas > a .icone { display: none; }
+
+/* ---------- Relatórios: a mesma régua e as mesmas seções do painel ---------- */
+html:root .estrutura .pagina-relatorios .rpt-metricas { gap: 0; margin-bottom: 34px; padding-top: 7px;
+  background: linear-gradient(var(--pc-texto), var(--pc-texto)) 0 0 / 100% 1.5px no-repeat, linear-gradient(90deg, var(--pc-suave) 0 1px, transparent 1px) 0 0 / 2.5% 7px repeat-x; }
+html:root .estrutura .pagina-relatorios .rpt-metrica { padding: 14px 18px 4px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .pagina-relatorios .rpt-metrica + .rpt-metrica { padding-left: 18px; border-left: 1px solid var(--pc-borda); }
+html:root .estrutura .pagina-relatorios .rpt-metrica .rpt-icone { display: none; }
+html:root .estrutura .pagina-relatorios .rpt-metrica-topo { color: var(--pc-suave); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+html:root .estrutura .pagina-relatorios .rpt-metrica > strong { margin: 8px 0 6px; font: 400 clamp(24px, 2.3vw, 31px)/1.05 var(--fonte-titulo); letter-spacing: -0.035em; font-variant-numeric: lining-nums tabular-nums; }
+html:root .estrutura .pagina-relatorios .rpt-metrica.rpt-destaque > strong { color: var(--pc-acento); }
+/* Painéis viram seções com filete, como no painel */
+html:root .estrutura .pagina-relatorios .rpt-painel { padding: 13px 0 0; border: 0; border-top: 1.5px solid var(--pc-texto); border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .pagina-relatorios .rpt-visao { gap: 34px 30px; margin-bottom: 34px; }
+html:root .estrutura .pagina-relatorios .rpt-titulo h2 { font: 400 19px/1.25 var(--fonte-titulo); letter-spacing: -0.015em; }
+html:root .estrutura .pagina-relatorios .rpt-titulo h2 .icone { display: none; }
+/* Leituras: uma faixa com divisórias, sem caixas */
+html:root .estrutura .pagina-relatorios .rpt-leituras { gap: 0; margin-bottom: 34px; border-top: 1px solid var(--pc-borda); border-bottom: 1px solid var(--pc-borda); }
+html:root .estrutura .pagina-relatorios .rpt-leitura { padding: 16px 18px 16px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .pagina-relatorios .rpt-leitura + .rpt-leitura { padding-left: 18px; border-left: 1px solid var(--pc-borda); }
+html:root .estrutura .pagina-relatorios .rpt-leitura .rpt-icone { display: none; }
+html:root .estrutura .pagina-relatorios .rpt-leitura strong { font: 400 22px/1.1 var(--fonte-titulo); letter-spacing: -0.03em; }
+@media (max-width: 1023px) {
+  html:root .estrutura .pagina-relatorios .rpt-metrica:nth-child(odd) { padding-left: 0; border-left: 0; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica:nth-child(n + 3) { border-top: 1px solid var(--pc-borda); }
+}
+@media (max-width: 767px) {
+  html:root .estrutura .pagina-relatorios .rpt-metrica { padding: 12px 10px 8px 0; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica + .rpt-metrica { padding-left: 10px; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica:nth-child(odd) { padding-left: 0; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica > strong { font-size: 21px; white-space: nowrap; }
+  html:root .estrutura .pagina-relatorios .rpt-leituras { grid-template-columns: 1fr; }
+  html:root .estrutura .pagina-relatorios .rpt-leitura + .rpt-leitura { padding-left: 0; border-left: 0; border-top: 1px solid var(--pc-borda); }
+}
+
+/* ---------- Ajustes ---------- */
+/* Preços do catálogo na letra do livro */
+html:root .estrutura .pagina-config .lista-moveis :is(.preco-com-unidade input, .preco-valor, .movel-preco) { font-family: var(--fonte-titulo); font-size: 18px; letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
+
+/* ---------- Tema claro: o que ainda usava as cores do escuro ---------- */
+html[data-tema='claro'] .estrutura .pagina-editar-cliente .formulario-cliente { border-color: var(--borda); background: var(--superficie, #fffdf8); box-shadow: 0 2px 4px #5540250a; }
+html[data-tema='claro'] .estrutura .pagina-editar-cliente .formulario-cliente :is(.cliente-copiar-whats, .cliente-campos-adicionais > summary) { border-color: var(--borda); background: #f8f3eb; color: var(--texto); }
+html[data-tema='claro'] .estrutura .pagina-avisos .avisos-voltar { border-color: var(--borda); background: var(--superficie, #fffdf8); color: var(--texto); }
+html:root .estrutura .config-salvar-precos .config-precos-alterados { color: var(--pc-suave); font-size: 12.5px; }
+@media (max-width: 767px) { .acesso-chamada h2 + p { margin-top: 12px; } }
