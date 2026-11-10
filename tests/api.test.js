@@ -510,6 +510,35 @@ test('itens "já está incluso": lista da empresa, cópia fixada no orçamento e
   assert.deepEqual(r.dados.inclusos, [garantia]);
 });
 
+test('meta de vendas: a empresa define o valor do mês e o painel acompanha o ritmo', async () => {
+  let painel = (await chamar('GET', '/dashboard')).dados;
+  assert.deepEqual(
+    { mensal: painel.comercial.meta.mensal_cents, valor: painel.comercial.meta.valor_cents, ritmo: painel.comercial.meta.ritmo },
+    { mensal: 0, valor: 0, ritmo: null },
+    'sem meta definida',
+  );
+
+  for (const invalida of [-1, 1.5, 'muito', 3_000_000_000]) {
+    assert.equal((await chamar('PUT', '/empresa/meta', { meta_mensal_cents: invalida })).status, 400);
+  }
+  const r = await chamar('PUT', '/empresa/meta', { meta_mensal_cents: 9_000_000 });
+  assert.equal(r.status, 200, JSON.stringify(r.dados));
+  assert.equal(r.dados.meta_mensal_cents, 9_000_000);
+
+  painel = (await chamar('GET', '/dashboard')).dados;
+  const meta = painel.comercial.meta;
+  assert.equal(meta.valor_cents, 9_000_000);
+  assert.equal(meta.aprovados_cents, painel.comercial.atual.aprovados_cents);
+  assert.ok(meta.ritmo >= 1 && meta.ritmo <= 100);
+  assert.ok(meta.dias_restantes >= 0 && meta.dias_restantes <= 30);
+  assert.equal((await chamar('GET', '/dashboard?periodo=trimestre')).dados.comercial.meta.valor_cents, 27_000_000, 'trimestre soma três metas mensais');
+
+  // Salvar os dados da empresa não mexe na meta.
+  const { tem_logo, ambientes_sugeridos, inclusos, id: _id, ...dados } = (await chamar('GET', '/empresa')).dados;
+  assert.equal((await chamar('PUT', '/empresa', dados)).dados.meta_mensal_cents, 9_000_000);
+  assert.equal((await chamar('PUT', '/empresa/meta', { meta_mensal_cents: 0 })).dados.meta_mensal_cents, 0);
+});
+
 let duplicadoId;
 test('duplica o orçamento com novo número e mesmos preços', async () => {
   const r = await chamar('POST', `/orcamentos/${orcamentoId}/duplicar`);

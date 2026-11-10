@@ -25,7 +25,26 @@ export function filtroAtencao(tipo, hoje) {
   }
 }
 
-export async function dadosComerciais(db, hoje, periodo, { atual, anterior, aprovadosMensais, situacoes }) {
+const diasEntre = (inicio, fim) => Math.round((Date.parse(`${fim}T12:00:00Z`) - Date.parse(`${inicio}T12:00:00Z`)) / 86_400_000);
+
+/**
+ * Meta de valor aprovado no período: a meta mensal vezes os meses do período. `ritmo` é a
+ * porcentagem do período que já passou, ou seja, onde o aprovado deveria estar hoje.
+ */
+export function metaDoPeriodo(hoje, periodo, metaMensalCents, aprovadosCents) {
+  const mensal = Math.max(0, Math.round(Number(metaMensalCents) || 0));
+  const total = diasEntre(periodo.inicio, periodo.fim);
+  const passados = Math.min(total, Math.max(0, diasEntre(periodo.inicio, hoje) + 1));
+  return {
+    mensal_cents: mensal,
+    valor_cents: mensal * periodo.meses,
+    aprovados_cents: aprovadosCents,
+    ritmo: mensal ? Math.round((passados / total) * 100) : null,
+    dias_restantes: total - passados,
+  };
+}
+
+export async function dadosComerciais(db, hoje, periodo, { atual, anterior, aprovadosMensais, situacoes, metaMensalCents = 0 }) {
   const atencoes = ['visualizadas', 'vencimentos', 'aprovados', 'sem_resposta'].map((tipo) => ({ tipo, ...filtroAtencao(tipo, hoje) }));
   const inicioSerie = deslocarMes(periodo.fim, -6);
   const consultas = [
@@ -59,6 +78,7 @@ export async function dadosComerciais(db, hoje, periodo, { atual, anterior, apro
   const pendentes = situacoes.filter((s) => ['enviado','negociacao'].includes(s.status)).reduce((n,s) => n+s.quantidade,0);
   return {
     periodo, atual, anterior, atencao, pendentes, ambientes, atividades,
+    meta: metaDoPeriodo(hoje, periodo, metaMensalCents, atual.aprovados_cents),
     conversao: { enviados: conversaoAnterior.enviados, aprovados: conversaoAnterior.aprovados },
     conversao_anterior: { enviados: conversaoAnterior.enviados_anteriores, aprovados: conversaoAnterior.aprovados_anteriores },
     // Mesmo cálculo dos relatórios: valor médio de cada venda aprovada.

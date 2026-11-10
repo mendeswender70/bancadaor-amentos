@@ -1,0 +1,111 @@
+/* Identidade do livro no app.
+   O app e a proposta são o mesmo produto: a lateral é a capa do livro (tecido escuro em espinha de
+   peixe, gravação dourada), os títulos usam a Fraunces e a régua do símbolo do esquadro marca a meta.
+   Esta folha entra por último e é o lugar do visual novo; as telas vão sendo trazidas para cá
+   uma a uma, e as regras antigas de cada tela saem das outras folhas quando ela é refeita. */
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/fraunces-latin-opsz-normal.woff2') format('woff2-variations');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/fraunces-latin-opsz-italic.woff2') format('woff2-variations');
+}
+
+.estrutura {
+  --capa: #13100d;
+  --capa-creme: #f1e9dc;
+  --capa-creme-2: #b8ac9b;
+  --capa-ouro: #d9b77e;
+  --espinha: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='20' viewBox='0 0 40 20'%3E%3Cg fill='none' stroke-width='1'%3E%3Cpath d='M-2 11 10 -1 20 9 30 -1 42 11M-2 21 10 9 20 19 30 9 42 21' stroke='%23000' stroke-opacity='.5'/%3E%3Cpath d='M-2 10 10 -2 20 8 30 -2 42 10M-2 20 10 8 20 18 30 8 42 20' stroke='%23fff' stroke-opacity='.07'/%3E%3C/g%3E%3C/svg%3E");
+  --fonte-titulo: 'Fraunces', 'Playfair Display', Georgia, serif;
+}
+
+/* ---------- Lateral: a capa do livro, igual nos temas claro e escuro ---------- */
+html:root .estrutura .lateral { border-right: 0; background: var(--capa) var(--espinha) 0 0 / 30px 15px; box-shadow: inset -1px 0 0 rgb(217 183 126 / 20%); color: var(--capa-creme); }
+html:root .estrutura .lateral::after { content: ''; position: absolute; inset: 0; z-index: 0; background: radial-gradient(130% 46% at 30% 0%, rgb(255 215 160 / 11%), transparent 70%), linear-gradient(180deg, transparent 60%, rgb(0 0 0 / 35%)); pointer-events: none; }
+html:root .estrutura .lateral > * { position: relative; z-index: 1; }
+html:root .estrutura .lateral .marca-app { color: var(--capa-creme); font-family: var(--fonte-titulo); font-weight: 500; letter-spacing: -0.02em; }
+html:root .estrutura .lateral .menu-link { border-color: transparent; background: none; color: rgb(241 233 220 / 72%); }
+html:root .estrutura .lateral .menu-link:hover { background: rgb(241 233 220 / 7%); color: var(--capa-creme); }
+html:root .estrutura .lateral .menu-link.ativo { border-color: rgb(217 183 126 / 26%); background: rgb(217 183 126 / 13%); color: var(--capa-ouro); }
+html:root .estrutura .lateral .menu-link .icone { color: inherit; }
+html:root .estrutura .lateral :focus-visible { outline-color: var(--capa-ouro); }
+
+/* ---------- Celular: a barra de baixo é a lombada do livro ---------- */
+@media (max-width: 1023px) {
+  html:root .estrutura .menu-inferior { border-color: rgb(217 183 126 / 28%); background: var(--capa) var(--espinha) 0 0 / 30px 15px; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset 0 1px rgb(255 255 255 / 7%), 0 10px 26px rgb(0 0 0 / 40%); }
+  html:root .estrutura .menu-inferior .menu-link { color: rgb(241 233 220 / 62%); }
+  html:root .estrutura .menu-inferior .menu-link .icone { border-color: rgb(241 233 220 / 15%); background: rgb(241 233 220 / 5%); color: inherit; box-shadow: none; }
+  html:root .estrutura .menu-inferior .menu-link.ativo { color: var(--capa-ouro); }
+  html:root .estrutura .menu-inferior .menu-link.ativo .icone { border-color: rgb(217 183 126 / 48%); }
+  html:root .estrutura .menu-inferior .botao-central > span:first-child { border-color: rgb(255 243 214 / 60%); background: linear-gradient(135deg, #f3dcae, var(--capa-ouro) 55%, #b98b4c); color: #1c1407; box-shadow: 0 6px 14px rgb(0 0 0 / 40%); }
+  html:root .estrutura .menu-inferior .botao-central > span:last-child { color: var(--capa-ouro); }
+}
+
+/* ---------- Painel: abre com uma frase sobre o período ---------- */
+.estrutura .painel-comercial .pc-abertura { align-items: flex-end; flex-wrap: wrap; gap: 14px 20px; min-height: 0; margin: 4px 8px 16px; }
+.pc-abertura-texto { flex: 1 1 420px; min-width: 0; }
+.estrutura .painel-comercial .pc-sobre { margin: 0 0 8px; color: var(--pc-suave); font-size: 10px; font-weight: 600; letter-spacing: .16em; line-height: 1.4; text-transform: uppercase; }
+.estrutura .painel-comercial h1.pc-frase { max-width: 27em; margin: 0 0 8px; font: 400 clamp(24px, 2.7vw, 34px)/1.14 var(--fonte-titulo); letter-spacing: -0.03em; text-wrap: balance; font-variant-numeric: lining-nums; }
+.pc-frase a { color: var(--pc-acento); }
+.pc-frase em { font-style: italic; font-weight: 300; }
+.pc-frase small { color: var(--pc-suave); font: inherit; letter-spacing: inherit; }
+.estrutura .painel-comercial .pc-saudacao { margin: 0; color: var(--pc-texto); font-size: 12.5px; line-height: 1.5; opacity: .86; }
+.painel-comercial .pc-saudacao a { color: var(--pc-acento); font-weight: 600; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+/* Números de apoio numa faixa só. A borda de cima é uma régua, com marca a cada 2,5%. */
+.pc-apoio { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 8px 14px; padding-top: 7px;
+  background: linear-gradient(var(--pc-suave), var(--pc-suave)) 0 0 / 100% 1px no-repeat, linear-gradient(90deg, var(--pc-suave) 0 1px, transparent 1px) 0 0 / 2.5% 7px repeat-x; }
+.painel-comercial .pc-apoio-item { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; padding: 12px 16px 2px 0; }
+.painel-comercial .pc-apoio-item + .pc-apoio-item { padding-left: 16px; border-left: 1px solid var(--pc-borda); }
+.pc-apoio-rotulo { color: var(--pc-suave); font-size: 9.5px; font-weight: 600; letter-spacing: .14em; line-height: 1.4; text-transform: uppercase; }
+.pc-apoio-item strong { color: var(--pc-texto); font: 400 clamp(22px, 2.1vw, 28px)/1.05 var(--fonte-titulo); letter-spacing: -0.035em; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.painel-comercial .pc-apoio-item:hover strong { color: var(--pc-acento); }
+.pc-apoio .pc-comparacao { font-size: 9.5px; white-space: normal; }
+
+/* ---------- A régua do esquadro: meta do período ---------- */
+.painel-comercial .pc-meta { display: grid; grid-template-columns: minmax(0, 230px) minmax(0, 1fr); gap: 6px 26px; align-items: center; margin-bottom: 11px; padding: 16px 18px; }
+.estrutura .painel-comercial .pc-meta h2 { display: block; font: 400 17px/1.2 var(--fonte-titulo); letter-spacing: -0.015em; }
+.pc-meta-numero { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 9px; margin-top: 6px; }
+.pc-meta-numero strong { font: 400 40px/1 var(--fonte-titulo); letter-spacing: -0.045em; font-variant-numeric: lining-nums tabular-nums; }
+.pc-meta-numero span { color: var(--pc-suave); font-size: 11px; }
+.painel-comercial .pc-meta-ajustar { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; margin-top: 10px; padding: 0 10px; border: 1px solid var(--pc-borda); border-radius: 8px; background: none; color: var(--pc-texto); font: 600 11px 'Inter', sans-serif; cursor: pointer; }
+.painel-comercial .pc-meta-ajustar:hover { border-color: var(--pc-acento); color: var(--pc-acento); }
+.painel-comercial .pc-meta-ajustar .icone { width: 14px; height: 14px; }
+.pc-regua { min-width: 0; padding-top: 8px; }
+.pc-regua-fita { position: relative; height: 16px; border-radius: 3px; background: var(--tema-vidro-fundo, #ffffff0a); box-shadow: inset 0 0 0 1px var(--pc-suave); }
+.pc-regua-cheio { position: absolute; inset: 0 auto 0 0; border-radius: 3px 0 0 3px; background: linear-gradient(90deg, #c89454, #95612f); }
+.pc-regua-ponteiro { position: absolute; bottom: 100%; width: 0; height: 0; margin: 0 0 1px -5px; border: 5px solid transparent; border-top-color: var(--pc-texto); }
+.pc-regua-ritmo { position: absolute; top: -6px; bottom: -6px; border-left: 1.5px dashed var(--pc-texto); }
+.pc-regua-marcas { height: 15px; border-right: 1.5px solid var(--pc-texto); background:
+  linear-gradient(90deg, var(--pc-texto) 0 1.5px, transparent 1.5px) 0 0 / 25% 100% repeat-x,
+  linear-gradient(90deg, var(--pc-suave) 0 1px, transparent 1px) 0 0 / 2.5% 55% repeat-x; }
+.pc-regua-numeros { display: flex; justify-content: space-between; margin-top: 4px; color: var(--pc-suave); font-size: 10px; font-variant-numeric: tabular-nums; }
+.estrutura .painel-comercial .pc-regua-nota { margin: 9px 0 0; color: var(--pc-suave); font-size: 11.5px; line-height: 1.5; }
+.pc-regua-nota i { display: inline-block; width: 14px; height: 0; margin-right: 7px; border-top: 1.5px dashed var(--pc-texto); vertical-align: middle; }
+.pc-regua-nota b { color: var(--pc-texto); font-weight: 600; }
+.painel-comercial .pc-meta-vazia { grid-template-columns: minmax(0, 1fr) auto; }
+.estrutura .painel-comercial .pc-meta-vazia p { margin: 4px 0 0; color: var(--pc-suave); font-size: 12px; line-height: 1.5; }
+.painel-comercial .pc-meta-vazia .pc-meta-ajustar { margin-top: 0; }
+
+@media (max-width: 1023px) {
+  .pc-apoio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .painel-comercial .pc-apoio-item:nth-child(odd) { padding-left: 0; border-left: 0; }
+  .painel-comercial .pc-apoio-item:nth-child(n + 3) { border-top: 1px solid var(--pc-borda); }
+  .painel-comercial .pc-meta { grid-template-columns: 1fr; }
+  .pc-apoio .pc-comparacao .icone { display: none; }
+  .pc-regua-marcas { background:
+    linear-gradient(90deg, var(--pc-texto) 0 1.5px, transparent 1.5px) 0 0 / 25% 100% repeat-x,
+    linear-gradient(90deg, var(--pc-suave) 0 1px, transparent 1px) 0 0 / 5% 55% repeat-x; }
+}
+@media (max-width: 480px) {
+  .painel-comercial .pc-meta-vazia { grid-template-columns: 1fr; }
+}

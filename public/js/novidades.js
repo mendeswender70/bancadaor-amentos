@@ -6,6 +6,18 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
+    id: '2026-11-painel-frase-e-meta',
+    data: '10 de novembro de 2026',
+    titulo: 'O painel agora conta como vai o mês',
+    resumo: 'O app ganhou a cara do livro da proposta, e o painel abre dizendo em uma frase quanto você já aprovou.',
+    itens: [
+      { icone: 'grafico', titulo: 'Uma frase no lugar das caixas', texto: 'O painel abre com o valor aprovado do período, e orçado, taxa de aprovação, pendentes e ticket médio ficam numa faixa logo abaixo.' },
+      { icone: 'regua', titulo: 'Meta do mês em régua', texto: 'Defina quanto quer aprovar por mês. A régua mostra quanto já foi, quanto falta e se você está à frente ou atrás do ritmo.' },
+      { icone: 'projeto', titulo: 'Visual do livro no app', texto: 'O menu lateral virou a capa do livro e os títulos usam a mesma letra da proposta.' },
+    ],
+    acao: { rotulo: 'Definir a meta do mês', href: '#/' },
+  },
+  {
     id: '2026-11-proposta-em-livro',
     data: '10 de novembro de 2026',
     titulo: 'A proposta do cliente virou um livro',

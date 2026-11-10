@@ -1,8 +1,11 @@
-import { h, icone, substituir, haQuanto } from './ui.js';
-import { formatarDinheiro, formatarData, formatarNumero, STATUS } from '/shared/calc.js';
+import { h, icone, substituir, haQuanto, abrirModal, campo, aviso } from './ui.js';
+import { formatarDinheiro, formatarData, formatarNumero, STATUS, lerDinheiro, dinheiroParaCampo } from '/shared/calc.js';
+import { api } from './api.js';
 import { selo, menuOrcamento } from './comum.js';
 
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const MESES_LONGOS = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const DIAS = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
 const CORES = ['#95612f','#c89454','#76ad91','#aa8abd','#b8b3aa'];
 const moeda = (v) => formatarDinheiro(v || 0);
 const compacto = (v) => new Intl.NumberFormat('pt-BR', { style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:0 }).format(v / 100);
@@ -25,10 +28,6 @@ function variacao(atual,anterior,rotulo='em relação ao período anterior',pont
   const v = pontos ? atual-anterior : (atual-anterior)/anterior*100;
   return h('span',{class:`pc-comparacao${v < 0 ? ' pc-queda' : ''}`},h('b',{},`${v < 0 ? '▼' : '▲'} ${v > 0 ? '+' : ''}${numero(v)}${pontos ? ' p.p.' : '%'}`),' ',rotulo);
 }
-function indicador(ic,nome,valor,detalhe,href,classe='') {
-  return h('a',{class:'pc-metrica',href},h('div',{class:'pc-metrica-principal'},iconeFundo(ic,classe),h('div',{},h('span',{},nome),h('strong',{},valor))),detalhe);
-}
-
 function atencao(c) {
   const linhas = [
     ['visualizadas','olho','Propostas visualizadas\nsem resposta','pc-perigo'],
@@ -139,6 +138,88 @@ function agenda(linhas,hoje) {
   })):vazio('Nenhuma proposta em aberto com vencimento futuro.'));
 }
 
+// Abertura do painel: como vai o período, em uma frase. O valor aprovado leva à lista das aprovações.
+function abertura(d, c, periodo, filtro) {
+  const hoje = new Date(`${d.data_hoje}T12:00:00`);
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const nome = document.querySelector('.gestao-conta strong, .lateral-usuario strong')?.textContent.trim().split(/\s+/)[0];
+  const mes = MESES_LONGOS[Number(c.periodo.inicio.slice(5, 7)) - 1];
+  const mesMaiusculo = mes.charAt(0).toLocaleUpperCase('pt-BR') + mes.slice(1);
+  const inicio = periodo === 'mes' ? `${mesMaiusculo} vai em ` : periodo === 'anterior' ? `${mesMaiusculo} fechou em ` : `Os últimos ${c.periodo.meses} meses somam `;
+  const m = c.meta, aprovado = c.atual.aprovados_cents, falta = m.valor_cents - aprovado;
+  const pct = m.valor_cents ? Math.round((aprovado / m.valor_cents) * 100) : null;
+  const complemento = pct === null ? 'Defina a meta do mês para acompanhar o ritmo.'
+    : falta <= 0 ? `Meta batida, com ${moeda(-falta)} a mais.`
+    : m.dias_restantes > 0 ? `Faltam ${moeda(falta)} e ainda há ${m.dias_restantes} ${m.dias_restantes === 1 ? 'dia' : 'dias'}.`
+    : `Faltaram ${moeda(falta)} para a meta.`;
+  return h('header', { class: 'pc-cabecalho pc-abertura' },
+    h('div', { class: 'pc-abertura-texto' },
+      h('p', { class: 'pc-sobre' }, `${DIAS[hoje.getDay()]}, ${hoje.getDate()} de ${MESES_LONGOS[hoje.getMonth()]}`),
+      h('h1', { class: 'pc-frase' }, inicio, h('a', { href: `#/orcamentos?status=aprovado&aprovados_periodo=${periodo}` }, h('em', {}, moeda(aprovado))), pct === null ? ' aprovados. ' : ` aprovados, ${pct}% da meta. `, h('small', {}, complemento)),
+      h('p', { class: 'pc-saudacao' }, `${saudacao}${nome ? `, ${nome}` : ''}. `,
+        c.pendentes ? h('a', { href: '#/propostas?status=abertos' }, `${c.pendentes} ${c.pendentes === 1 ? 'proposta aguarda' : 'propostas aguardam'} resposta`) : 'Nenhuma proposta aguardando resposta', '.')),
+    filtro);
+}
+
+// Números de apoio da frase de abertura, numa faixa só. Cada um leva à lista correspondente.
+const apoio = (itens) => h('div', { class: 'pc-apoio' }, itens.map(([nome, valor, detalhe, href]) =>
+  h('a', { class: 'pc-apoio-item', href }, h('span', { class: 'pc-apoio-rotulo' }, nome), h('strong', {}, valor), detalhe)));
+
+function definirMeta(atualCents, aoAtualizar) {
+  abrirModal('Meta de vendas', (fechar) => {
+    const entrada = h('input', { type: 'text', inputmode: 'decimal', value: atualCents ? dinheiroParaCampo(atualCents) : '', placeholder: 'Ex.: 90.000,00', autocomplete: 'off', autofocus: true });
+    const erro = h('p', { class: 'aviso-caixa aviso-atencao', role: 'alert', hidden: true });
+    const salvar = async (cents) => {
+      try {
+        await api.put('/empresa/meta', { meta_mensal_cents: cents });
+        fechar(true);
+        aviso(cents ? 'Meta atualizada.' : 'Meta removida.');
+        aoAtualizar();
+      } catch (falha) {
+        erro.textContent = falha.message || 'Não foi possível salvar a meta.';
+        erro.hidden = false;
+      }
+    };
+    return h('form', {
+      class: 'formulario',
+      onsubmit: (e) => {
+        e.preventDefault();
+        const cents = lerDinheiro(entrada.value);
+        if (cents === null || cents <= 0) { erro.textContent = 'Digite o valor que você quer aprovar por mês.'; erro.hidden = false; return; }
+        salvar(cents);
+      },
+    },
+      campo('Valor aprovado por mês (R$)', entrada, { dica: 'O painel compara o que foi aprovado com esta meta. Em períodos de 3 ou 6 meses, ele soma as metas mensais.' }),
+      erro,
+      atualCents ? h('button', { type: 'button', class: 'link-botao incluso-remover', onclick: () => salvar(0) }, 'Remover a meta') : null,
+      h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao', onclick: () => fechar(undefined) }, 'Cancelar'), h('button', { type: 'submit', class: 'botao botao-primario' }, 'Salvar meta')));
+  });
+}
+
+// A meta é uma régua: a parte cheia é o que já foi aprovado e o tracejado é onde o período deveria estar hoje.
+function metaPeriodo(c, periodo, aoAtualizar) {
+  const m = c.meta;
+  const ajustar = h('button', { type: 'button', class: 'pc-meta-ajustar', onclick: () => definirMeta(m.mensal_cents, aoAtualizar) }, icone('editar'), m.mensal_cents ? 'Ajustar meta' : 'Definir meta');
+  if (!m.valor_cents) {
+    return h('section', { class: 'pc-painel pc-meta pc-meta-vazia' },
+      h('div', {}, h('h2', {}, 'Meta do mês'), h('p', {}, 'Defina quanto você quer aprovar por mês. O painel passa a mostrar quanto falta e se o ritmo está bom.')), ajustar);
+  }
+  const pct = Math.round((m.aprovados_cents / m.valor_cents) * 100), cheio = Math.min(100, pct), diferenca = pct - m.ritmo;
+  const em = (el, propriedade, valor) => { el.style[propriedade] = `${valor}%`; return el; };
+  const nomeMeta = c.periodo.meses === 1 ? `Meta de ${MESES_LONGOS[Number(c.periodo.inicio.slice(5, 7)) - 1]}` : `Meta dos últimos ${c.periodo.meses} meses`;
+  const nota = periodo === 'anterior'
+    ? h('p', { class: 'pc-regua-nota' }, pct >= 100 ? 'O mês fechou com a meta batida.' : `O mês fechou ${100 - pct} ${100 - pct === 1 ? 'ponto' : 'pontos'} abaixo da meta.`)
+    : h('p', { class: 'pc-regua-nota' }, h('i', { 'aria-hidden': 'true' }), `Ritmo ideal para hoje: ${m.ritmo}%. Você está `, h('b', {}, `${Math.abs(diferenca)} ${Math.abs(diferenca) === 1 ? 'ponto' : 'pontos'} ${diferenca >= 0 ? 'à frente' : 'atrás'}`), '.');
+  return h('section', { class: 'pc-painel pc-meta' },
+    h('div', {}, h('h2', {}, nomeMeta), h('div', { class: 'pc-meta-numero' }, h('strong', {}, `${pct}%`), h('span', {}, `${moeda(m.aprovados_cents)} de ${moeda(m.valor_cents)}`)), ajustar),
+    h('div', { class: 'pc-regua', role: 'img', 'aria-label': `${pct}% da meta atingida${periodo === 'anterior' ? '' : `; o ritmo ideal para hoje é ${m.ritmo}%`}` },
+      h('div', { class: 'pc-regua-fita' }, em(h('span', { class: 'pc-regua-cheio' }), 'width', cheio), periodo === 'anterior' ? null : em(h('i', { class: 'pc-regua-ritmo' }), 'left', m.ritmo), em(h('i', { class: 'pc-regua-ponteiro' }), 'left', cheio)),
+      h('div', { class: 'pc-regua-marcas' }),
+      h('div', { class: 'pc-regua-numeros' }, h('span', {}, 'R$ 0'), h('span', {}, compacto(m.valor_cents / 2)), h('span', {}, compacto(m.valor_cents))),
+      nota));
+}
+
 export function desenharDashboard(d,{periodo,metrica,aoMudarPeriodo,aoMudarMetrica,aoAtualizar}) {
   const c=d.comercial,p=c.periodo;
   const taxaAtual=taxa(c.conversao),taxaAnterior=taxa(c.conversao_anterior);
@@ -150,13 +231,14 @@ export function desenharDashboard(d,{periodo,metrica,aoMudarPeriodo,aoMudarMetri
   const filtro=h('label',{class:'pc-periodo'},icone('calendario'),h('select',{'aria-label':'Período dos indicadores',onchange:e=>aoMudarPeriodo(e.target.value)},opcoes.map(([v,t])=>h('option',{value:v,selected:periodo===v},t))));
   const deAte=`de=${p.inicio}&ate=${p.ate}`;
   return h('div',{class:'pagina painel-comercial'},
-    h('header',{class:'pc-cabecalho'},h('div',{},h('h1',{},'Painel comercial'),h('p',{},'Visão geral da sua marcenaria, orçamentos e oportunidades de vendas.')),filtro),
-    h('div',{class:'pc-metricas'},
-      indicador('orcamentos',`Valor orçado ${periodoTexto}`,moeda(c.atual.valor_cents),variacao(c.atual.valor_cents,c.anterior.valor_cents,comparacao),`#/propostas?status=apresentados&${deAte}`),
-      indicador('aprovado',`Valor aprovado ${periodoTexto}`,moeda(c.atual.aprovados_cents),variacao(c.atual.aprovados_cents,c.anterior.aprovados_cents,comparacao),`#/orcamentos?status=aprovado&aprovados_periodo=${periodo}`,'pc-sucesso'),
-      indicador('grafico','Taxa de aprovação (90 dias)',taxaAtual===null?'—':`${numero(taxaAtual)}%`,variacao(taxaAtual,taxaAnterior,'em relação ao período anterior',true),'#/orcamentos?status=aprovado'),
-      indicador('enviar','Propostas pendentes',String(c.pendentes),h('span',{class:`pc-comparacao ${c.atencao.vencimentos?'pc-aviso':'pc-neutra'}`},icone('relogio'),`${c.atencao.vencimentos} ${c.atencao.vencimentos===1?'vence':'vencem'} nos próximos 7 dias`),'#/propostas?status=abertos'),
-      indicador('moedas','Ticket médio aprovado',moeda(c.ticket_cents),variacao(c.ticket_cents,c.ticket_anterior_cents,comparacao),`#/orcamentos?status=aprovado&aprovados_periodo=${periodo}`)),
+    abertura(d,c,periodo,filtro),
+    apoio([
+      [`Valor orçado ${periodoTexto}`,moeda(c.atual.valor_cents),variacao(c.atual.valor_cents,c.anterior.valor_cents,comparacao),`#/propostas?status=apresentados&${deAte}`],
+      ['Taxa de aprovação (90 dias)',taxaAtual===null?'—':`${numero(taxaAtual)}%`,variacao(taxaAtual,taxaAnterior,'em relação ao período anterior',true),'#/orcamentos?status=aprovado'],
+      ['Propostas pendentes',String(c.pendentes),h('span',{class:`pc-comparacao ${c.atencao.vencimentos?'pc-aviso':'pc-neutra'}`},icone('relogio'),`${c.atencao.vencimentos} ${c.atencao.vencimentos===1?'vence':'vencem'} nos próximos 7 dias`),'#/propostas?status=abertos'],
+      ['Ticket médio aprovado',moeda(c.ticket_cents),variacao(c.ticket_cents,c.ticket_anterior_cents,comparacao),`#/orcamentos?status=aprovado&aprovados_periodo=${periodo}`],
+    ]),
+    metaPeriodo(c,periodo,aoAtualizar),
     h('div',{class:'pc-linha-central'},atencao(c),evolucao(c,metrica,aoMudarMetrica),barras(d.situacoes),atividades(c.atividades)),
     h('div',{class:'pc-linha-inferior'},distribuicao(c.ambientes),recentes(d.recentes,aoAtualizar),agenda(d.vencimentos,d.data_hoje)),
     h('nav',{class:'pc-mobile-atalhos','aria-label':'Mais opções do painel'},h('a',{href:'#/config/moveis'},icone('caixa'),'Móveis e preços'),h('a',{href:'#/relatorios'},icone('grafico'),'Relatórios')),

@@ -849,8 +849,9 @@ export async function resumoDashboard(db, dataHoje, escolhaPeriodo = 'mes') {
     status, quantidade: porStatus.find((s) => s.status === status)?.quantidade || 0,
     valor_cents: porStatus.find((s) => s.status === status)?.valor_cents || 0,
   }));
+  const { meta_mensal_cents: metaMensalCents } = await db.get('SELECT meta_mensal_cents FROM empresa WHERE id = 1');
   const comercial = await dadosComerciais(db, dataHoje, periodo, {
-    atual: atualOutro ?? mes, anterior: anteriorOutro ?? anterior, aprovadosMensais: totaisMensais, situacoes,
+    atual: atualOutro ?? mes, anterior: anteriorOutro ?? anterior, aprovadosMensais: totaisMensais, situacoes, metaMensalCents,
   });
   return {
     comercial,
