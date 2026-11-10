@@ -622,3 +622,7 @@ html[data-tema='claro'] :is(.nov-anteriores > h3, .modal-novidades .contexto-int
 @media (max-width: 560px) {
   .modal-novidades .modal-cabecalho h2 { font-size: 26px; line-height: 32px; }
 }
+/* A janela recebe o foco quando nenhum campo pede: sem contorno na própria janela */
+.modal:focus { outline: none; }
+/* No celular, a janela de novidades é uma folha da largura da tela, como as outras */
+@media (max-width: 767px) { .modal.modal-novidades { width: 100%; } }

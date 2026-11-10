@@ -17,9 +17,9 @@ export const novidades = [
     ],
   },
   {
-    id: '2026-11-lista-livro-caixa',
+    id: '2026-11-lista-livro‑caixa',
     data: '10 de novembro de 2026',
-    titulo: 'A lista de orçamentos virou um livro-caixa',
+    titulo: 'A lista de orçamentos virou um livro‑caixa',
     resumo: 'Mais orçamentos por tela e o valor somado de cada filtro.',
     itens: [
       { icone: 'dinheiro', titulo: 'Soma de cada filtro', texto: 'Ao lado da contagem aparece o valor somado do que o filtro encontrou. Em Aprovados, por exemplo, é quanto você já vendeu.' },

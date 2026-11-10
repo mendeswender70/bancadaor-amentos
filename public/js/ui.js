@@ -163,8 +163,14 @@ export function abrirModal(titulo, montar, { largo = false, contexto = '', subti
     dialogo.append(h('div', { class: 'modal-corpo' }, montar(fechar)));
     document.body.append(dialogo);
     dialogo.showModal();
+    // Sem campo indicado, o foco fica na própria janela: o leitor de tela anuncia o título e
+    // nenhum botão abre com o anel de foco (no iPhone ele aparecia no × e no botão do rodapé).
     const foco = dialogo.querySelector('[autofocus]');
     if (foco) foco.focus({ preventScroll: true });
+    else {
+      dialogo.tabIndex = -1;
+      dialogo.focus({ preventScroll: true });
+    }
     // O foco no botão do rodapé não deve esconder o início do conteúdo.
     for (const area of [dialogo, dialogo.querySelector('.modal-corpo')]) if (area) area.scrollTop = 0;
   });
