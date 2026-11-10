@@ -45,6 +45,7 @@ import { avatar, selo, seletorCliente, numeroWhatsApp, excluirOrcamento, dataCom
 import { abrirEnvio, linkDaProposta } from '../envio.js';
 import { aoSairDaPagina, irPara, substituirEndereco } from '../main.js';
 import { seletorParcelas } from './config.js';
+import { abrirPlanoDoOrcamento } from './corte.js';
 
 const SERVICOS_RAPIDOS = ['Frete', 'Montagem', 'Instalação', 'Vidro', 'Espelho', 'Iluminação', 'Serviço adicional', 'Outros'];
 const ICONE_METODO = { linear: 'regua', quadrado: 'area', unidade: 'caixa' };
@@ -374,6 +375,7 @@ export async function paginaEditor({ id, clienteId }) {
       ['olho', 'Ver como o cliente vê', verComoCliente],
       ['pdf', 'Baixar PDF', abrirPdf],
       ['copiar', 'Duplicar orçamento', duplicar, { desativado: !orc.id }],
+      ['serra', 'Plano de corte', () => abrirPlanoDoOrcamento(orc.id), { desativado: !orc.id }],
       '-',
       ['lixeira', 'Excluir orçamento', excluir, { perigo: true, desativado: !orc.id }],
     ];
@@ -387,6 +389,7 @@ export async function paginaEditor({ id, clienteId }) {
         h('button', { type: 'button', class: 'botao', onclick: abrirPdf }, icone('pdf'), 'Baixar PDF'),
         h('button', { type: 'button', class: 'botao', onclick: duplicar, disabled: !orc.id }, icone('copiar'), 'Duplicar'),
       ),
+      h('button', { type: 'button', class: 'botao', onclick: () => abrirPlanoDoOrcamento(orc.id), disabled: !orc.id }, icone('serra'), 'Plano de corte'),
     );
     substituir(menuBarra, menuSuspenso(acoes, { rotulo: 'Ações do orçamento' }));
     substituir(acoesResumo,

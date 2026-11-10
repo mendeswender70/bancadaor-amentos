@@ -8,6 +8,7 @@ import { seletorTema } from '../tema.js';
 const ABAS = [
   ['empresa', 'Empresa', 'empresa'],
   ['moveis', 'Móveis', 'preco'],
+  ['chapas', 'Chapas', 'area'],
   ['pagamento', 'Pagamento', 'pagamento'],
   ['conta', 'Conta', 'usuario'],
 ];
@@ -25,7 +26,7 @@ export async function paginaConfiguracoes(aba, query = new URLSearchParams()) {
   aba ||= 'empresa';
   aba = APELIDOS[aba] || aba;
   if (!ABAS.some(([a]) => a === aba) && !['padroes', 'senha'].includes(aba)) aba = 'empresa';
-  const montar = { empresa: abaEmpresa, moveis: abaMoveis, pagamento: abaPagamento, conta: abaConta, padroes: () => abaEmpresa({ padroes: true }), senha: () => abaConta({ soSenha: true }) }[aba];
+  const montar = { empresa: abaEmpresa, moveis: abaMoveis, chapas: abaChapas, pagamento: abaPagamento, conta: abaConta, padroes: () => abaEmpresa({ padroes: true }), senha: () => abaConta({ soSenha: true }) }[aba];
   const formulario = await (aba === 'moveis' ? abaMoveis(query.get('q') || '') : montar());
   const resumoEmpresa = h('section', { class: 'config-empresa-resumo' },
     h('span', { class: 'config-logo-resumo', 'aria-hidden': 'true' },
@@ -41,6 +42,7 @@ export async function paginaConfiguracoes(aba, query = new URLSearchParams()) {
   const itensVisao = [
     ['empresa', 'Empresa', 'Logo e informações da proposta', 'empresa'],
     ['moveis', 'Móveis e preços', 'Catálogo e valores', 'preco'],
+    ['chapas', 'Chapas e fitas', 'Medidas e preços do plano de corte', 'area'],
     ['pagamento', 'Pagamento', 'Condições da proposta', 'pagamento'],
     ['conta', 'Minha conta', 'Acesso e notificações', 'usuario'],
   ];
@@ -63,6 +65,7 @@ export async function paginaConfiguracoes(aba, query = new URLSearchParams()) {
   const textos = {
     empresa: ['Empresa', 'IDENTIDADE E CONTATOS', 'Os dados que aparecem na proposta.', 'AJUSTES / EMPRESA', 'Os dados e a identidade que acompanham suas propostas.'],
     moveis: ['Móveis e preços', 'CATÁLOGO', 'Seu catálogo e os valores de referência.', 'AJUSTES / MÓVEIS', 'Seu catálogo de móveis e os valores usados nos próximos orçamentos.'],
+    chapas: ['Chapas e fitas', 'PLANO DE CORTE', 'Medidas e preços usados no plano de corte.', 'AJUSTES / CHAPAS', 'Chapas e fitas de borda que você usa, com medida e preço, para o plano de corte.'],
     pagamento: ['Pagamento', 'CONDIÇÕES DE PAGAMENTO', 'Condições prontas para suas propostas.', 'AJUSTES / PAGAMENTO', 'Condições que você pode reutilizar nas propostas.'],
     conta: ['Minha conta', 'CONTA', 'Seu acesso e os avisos deste dispositivo.', 'AJUSTES / CONTA', 'Dados de acesso, senha e avisos deste dispositivo.'],
     padroes: ['Novos orçamentos', 'PADRÕES DA EMPRESA', 'Defina os valores iniciais das propostas.', 'AJUSTES / PADRÕES'],
@@ -411,6 +414,191 @@ function formularioTipo(tipo, fechar) {
       h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Salvar móvel'),
     ),
   );
+}
+
+// ------------------------------------------------------------ Chapas e fitas
+
+async function abaChapas() {
+  const [chapas, fitas] = await Promise.all([api.get('/chapas'), api.get('/fitas')]);
+  const recarregar = () => irPara(`#/config/chapas?${Date.now()}`);
+  const editar = async (tipo, registro) => {
+    const salvo = await abrirModal(
+      registro ? `Editar ${tipo === 'chapa' ? 'chapa' : 'fita'}` : tipo === 'chapa' ? 'Nova chapa' : 'Nova fita de borda',
+      (fechar) => (tipo === 'chapa' ? formularioChapa(registro, fechar) : formularioFita(registro, fechar)),
+      { largo: true, contexto: 'PLANO DE CORTE', classe: 'modal-chapa' },
+    );
+    if (salvo) recarregar();
+  };
+  const linha = (texto, detalhe, inativo, aoTocar) =>
+    h(
+      'button',
+      { type: 'button', class: `linha-orcamento${inativo ? ' inativo' : ''}`, onclick: aoTocar },
+      h('div', { class: 'linha-principal' }, h('strong', {}, texto, inativo ? ' (inativa)' : ''), h('span', { class: 'suave' }, detalhe)),
+      h('span', { class: 'botao-icone' }, icone('editar')),
+    );
+  return h(
+    'section',
+    { class: 'config-chapas' },
+    h(
+      'div',
+      { class: 'cartao-titulo' },
+      h('h2', {}, 'Chapas'),
+      h('button', { type: 'button', class: 'botao botao-primario config-acao-nova', onclick: () => editar('chapa', null) }, icone('mais'), h('span', {}, 'Nova chapa')),
+    ),
+    h(
+      'p',
+      { class: 'config-informacao' },
+      h('span', { class: 'config-info-icone' }, icone('cadeado')),
+      'Só você vê estas medidas e preços. Eles servem para o plano de corte e o custo de material. ',
+      h('a', { href: '#/corte' }, 'Ver planos de corte'),
+    ),
+    chapas.length
+      ? h(
+          'div',
+          { class: 'lista' },
+          chapas.map((c) =>
+            linha(
+              `${c.nome} ${c.espessura_mm} mm`,
+              [`${c.comprimento_mm} × ${c.largura_mm} mm`, c.veio ? 'com veio' : 'sem veio', c.preco_cents ? formatarDinheiro(c.preco_cents) : 'sem preço'].join(' · '),
+              !c.ativo,
+              () => editar('chapa', c),
+            ),
+          ),
+        )
+      : vazio('Nenhuma chapa cadastrada. Cadastre as chapas que você usa para montar o plano de corte.'),
+    h(
+      'div',
+      { class: 'cartao-titulo config-fitas-titulo' },
+      h('h2', {}, 'Fitas de borda'),
+      h('button', { type: 'button', class: 'botao', onclick: () => editar('fita', null) }, icone('mais'), h('span', {}, 'Nova fita')),
+    ),
+    fitas.length
+      ? h(
+          'div',
+          { class: 'lista' },
+          fitas.map((f) =>
+            linha(f.nome, [`${f.largura_mm} mm`, f.preco_metro_cents ? `${formatarDinheiro(f.preco_metro_cents)} por metro` : 'sem preço'].join(' · '), !f.ativo, () => editar('fita', f)),
+          ),
+        )
+      : vazio('Nenhuma fita cadastrada.'),
+  );
+}
+
+function formularioCorte({ registro, rota, nome, campos, corpo, fechar }) {
+  const excluir = async () => {
+    if (!(await confirmar(`Excluir “${registro.nome}”?`, { sim: 'Excluir', perigo: true }))) return;
+    try {
+      await api.delete(`${rota}/${registro.id}`);
+      aviso(`${nome} excluída.`);
+      fechar(true);
+    } catch (erro) {
+      avisoErro(erro);
+    }
+  };
+  return h(
+    'form',
+    {
+      class: 'formulario',
+      onsubmit: async (e) => {
+        e.preventDefault();
+        let dados;
+        try {
+          dados = corpo();
+        } catch (erro) {
+          return aviso(erro.message, 'erro');
+        }
+        try {
+          if (registro) await api.put(`${rota}/${registro.id}`, dados);
+          else await api.post(rota, dados);
+          aviso(`${nome} salva.`);
+          fechar(true);
+        } catch (erro) {
+          avisoErro(erro);
+        }
+      },
+    },
+    campos,
+    h(
+      'div',
+      { class: 'acoes-modal' },
+      registro ? h('button', { type: 'button', class: 'botao botao-perigo-texto', onclick: excluir }, 'Excluir') : null,
+      h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, `Salvar ${nome.toLowerCase()}`),
+    ),
+  );
+}
+
+const inteiroDoCampo = (el, nome, min, max) => {
+  const n = Number(String(el.value).trim());
+  if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${nome}: use um número inteiro de ${min} a ${max}.`);
+  return n;
+};
+
+function formularioChapa(chapa, fechar) {
+  const d = chapa || { nome: '', espessura_mm: 18, comprimento_mm: '', largura_mm: '', veio: 0, preco_cents: 0, ativo: 1 };
+  const nome = h('input', { type: 'text', required: true, maxlength: '100', value: d.nome, placeholder: 'Ex.: MDF Branco TX' });
+  const espessura = h('input', { type: 'text', inputmode: 'numeric', value: String(d.espessura_mm) });
+  const comprimento = h('input', { type: 'text', inputmode: 'numeric', value: String(d.comprimento_mm), placeholder: 'Ex.: 2750' });
+  const largura = h('input', { type: 'text', inputmode: 'numeric', value: String(d.largura_mm), placeholder: 'Ex.: 1840' });
+  const veio = h('input', { type: 'checkbox', checked: Boolean(d.veio) });
+  const preco = h('input', { type: 'text', inputmode: 'decimal', value: dinheiroParaCampo(d.preco_cents) });
+  const ativo = h('input', { type: 'checkbox', checked: Boolean(d.ativo) });
+  return formularioCorte({
+    registro: chapa,
+    rota: '/chapas',
+    nome: 'Chapa',
+    fechar,
+    corpo: () => {
+      const precoCents = lerDinheiro(preco.value);
+      if (precoCents === null) throw new Error('Preço da chapa inválido.');
+      return {
+        nome: nome.value,
+        espessura_mm: inteiroDoCampo(espessura, 'Espessura', 1, 100),
+        comprimento_mm: inteiroDoCampo(comprimento, 'Comprimento', 100, 6000),
+        largura_mm: inteiroDoCampo(largura, 'Largura', 100, 6000),
+        veio: veio.checked,
+        preco_cents: precoCents,
+        ativo: ativo.checked,
+      };
+    },
+    campos: [
+      campo('Nome', nome, { dica: 'Material e cor, como aparece na nota do fornecedor.' }),
+      h(
+        'div',
+        { class: 'corte-grade-3' },
+        campo('Comprimento (mm)', comprimento),
+        campo('Largura (mm)', largura),
+        campo('Espessura (mm)', espessura),
+      ),
+      h('small', { class: 'dica' }, 'Confira a medida da chapa com o fornecedor: ela muda de fabricante para fabricante.'),
+      h('label', { class: 'caixa-marcar' }, veio, ' Tem veio (padrão amadeirado no sentido do comprimento)'),
+      campo('Preço da chapa (R$)', preco, { dica: 'Usado para o custo de material. Não aparece para o cliente.' }),
+      h('label', { class: 'caixa-marcar' }, ativo, ' Ativa ao montar planos'),
+    ],
+  });
+}
+
+function formularioFita(fita, fechar) {
+  const d = fita || { nome: '', largura_mm: 22, preco_metro_cents: 0, ativo: 1 };
+  const nome = h('input', { type: 'text', required: true, maxlength: '100', value: d.nome, placeholder: 'Ex.: Fita branca TX' });
+  const largura = h('input', { type: 'text', inputmode: 'numeric', value: String(d.largura_mm) });
+  const preco = h('input', { type: 'text', inputmode: 'decimal', value: dinheiroParaCampo(d.preco_metro_cents) });
+  const ativo = h('input', { type: 'checkbox', checked: Boolean(d.ativo) });
+  return formularioCorte({
+    registro: fita,
+    rota: '/fitas',
+    nome: 'Fita',
+    fechar,
+    corpo: () => {
+      const precoCents = lerDinheiro(preco.value);
+      if (precoCents === null) throw new Error('Preço por metro inválido.');
+      return { nome: nome.value, largura_mm: inteiroDoCampo(largura, 'Largura', 1, 200), preco_metro_cents: precoCents, ativo: ativo.checked };
+    },
+    campos: [
+      campo('Nome', nome),
+      h('div', { class: 'corte-grade-2' }, campo('Largura (mm)', largura), campo('Preço por metro (R$)', preco)),
+      h('label', { class: 'caixa-marcar' }, ativo, ' Ativa ao montar planos'),
+    ],
+  });
 }
 
 // -------------------------------------------------------- Condições de pagamento

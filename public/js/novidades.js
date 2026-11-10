@@ -6,6 +6,20 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
+    id: '2026-11-plano-de-corte',
+    data: '10 de novembro de 2026',
+    titulo: 'Plano de corte para a sua serra',
+    resumo: 'Monte a lista de peças do orçamento aprovado e veja quantas chapas comprar, o desenho de cada chapa e a ordem dos cortes.',
+    itens: [
+      { icone: 'area', titulo: 'Chapas e fitas cadastradas', texto: 'Em Ajustes → Chapas e fitas, informe medida, espessura, veio e preço das chapas que você usa.' },
+      { icone: 'regua', titulo: 'Peças rápidas no celular', texto: 'Digite "720 x 550 x 2" e toque Enter, ou cole a lista inteira de uma planilha.' },
+      { icone: 'serra', titulo: 'Roteiro para a serra', texto: 'Só cortes de ponta a ponta, com a espessura da serra, o refilo e o veio. Cada chapa mostra as faixas e a medida da guia.' },
+      { icone: 'dinheiro', titulo: 'Custo de material', texto: 'Chapas e metros de fita para comprar, com o custo e quanto ele representa do orçamento. O cliente nunca vê.' },
+      { icone: 'pdf', titulo: 'PDF para levar à oficina', texto: 'Resumo, lista de peças e uma página por chapa, pronto para imprimir.' },
+    ],
+    acao: { rotulo: 'Cadastrar minhas chapas', href: '#/config/chapas' },
+  },
+  {
     id: '2026-11-editor-folha',
     data: '10 de novembro de 2026',
     titulo: 'Editor mais limpo, com as ações à mão',

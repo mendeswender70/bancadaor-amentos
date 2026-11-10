@@ -1,6 +1,30 @@
 # Plano de corte no esquadro — proposta
 
-Pesquisa e plano feitos em 10/11/2026. Nada aqui foi implementado ainda.
+Pesquisa e plano feitos em 10/11/2026.
+
+## Situação
+
+**Fase 1 implementada** (10/11/2026). Como a marcenaria corta na própria serra,
+o roteiro de cortes (que estava na fase 2) entrou já na fase 1. Diferenças em
+relação ao plano original:
+
+- **Modos.** O plano previa "Faixas" (padrão) e "Aproveitamento". No teste com
+  um guarda-roupa real, o modo só em faixas gastou 6 chapas onde o mínimo era 5.
+  Por isso o padrão virou **Menos chapas**: menor número de chapas e, entre
+  planos empatados, o roteiro com menos reposicionamentos na serra. **Só faixas**
+  continua como opção para quem prefere simplicidade.
+- **Chapa padrão.** Com mais de uma chapa cadastrada, a pessoa escolhe a chapa
+  antes de digitar as peças. O app não sugere uma, porque uma chapa errada
+  estraga o plano.
+- **Validação.** O servidor não calcula de novo: ele confere o desenho recebido,
+  incluindo se ele sai só com cortes de ponta a ponta. A mesma função gera o
+  roteiro de cortes.
+- **Testes.** Otimizador (incluindo 25 listas aleatórias com várias serras,
+  refilos e modos), conferência de resultados adulterados, API e garantia de
+  que nada vai para o cliente. O critério de aceite com projetos reais
+  (comparar com o CutList Optimizer) ainda precisa ser feito pela marcenaria.
+
+Próximo passo sugerido: usar em 2 ou 3 projetos reais antes de começar a fase 2.
 
 ## 1. O problema de partida
 

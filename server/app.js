@@ -38,6 +38,8 @@ import {
 } from './orcamentos.js';
 import { relatorioComercial, listarAprovacoesRelatorio, exportarRelatorio, periodoRelatorio } from './relatorios.js';
 import { gerarPdf } from './pdf.js';
+import { gerarPdfCorte } from './pdfCorte.js';
+import { CAMPOS_CHAPA, CAMPOS_FITA, carregarPlano, criarPlano, listarPlanos, normalizarChapa, normalizarFita, salvarPlano } from './corte.js';
 import { ErroHttp, hoje, id, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
 import { lerInclusos, propostaPublica, visaoCliente } from './visaoCliente.js';
 
@@ -984,6 +986,82 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.post('/orcamentos/:id/link', async (req, res) => {
     const token = await garantirToken(db, id(req.params.id));
     res.json({ token, caminho: `/p/${token}` });
+  });
+
+  // ------------------------------------------------------------ Plano de corte
+  // Uso interno da marcenaria: nada daqui entra na proposta do cliente.
+  const cadastroCorte = (rota, tabela, campos, normalizar, nome) => {
+    api.get(rota, async (_req, res) => {
+      res.json(await db.all(`SELECT * FROM ${tabela} ORDER BY ativo DESC, lower(nome), id`));
+    });
+    api.post(rota, async (req, res) => {
+      const dados = normalizar(req.body);
+      const r = await db.run(
+        `INSERT INTO ${tabela} (${campos.join(', ')}) VALUES (${campos.map(() => '?').join(', ')}) RETURNING id`,
+        ...campos.map((k) => dados[k]),
+      );
+      res.status(201).json(await db.get(`SELECT * FROM ${tabela} WHERE id = ?`, r.lastInsertRowid));
+    });
+    api.put(`${rota}/:id`, async (req, res) => {
+      const dados = normalizar(req.body);
+      const r = await db.run(
+        `UPDATE ${tabela} SET ${campos.map((k) => `${k} = ?`).join(', ')}, atualizado_em = now() WHERE id = ?`,
+        ...campos.map((k) => dados[k]),
+        id(req.params.id),
+      );
+      if (!r.changes) throw naoEncontrado(`${nome} não encontrada.`);
+      res.json(await db.get(`SELECT * FROM ${tabela} WHERE id = ?`, id(req.params.id)));
+    });
+    // Excluir uma chapa ou fita em uso mudaria planos já feitos; nesse caso, desative.
+    api.delete(`${rota}/:id`, async (req, res) => {
+      const registroId = id(req.params.id);
+      const coluna = tabela === 'chapas' ? 'chapa_id' : 'fita_id';
+      if (await db.get(`SELECT 1 AS ok FROM plano_pecas WHERE ${coluna} = ? LIMIT 1`, registroId)) {
+        throw invalido(`${nome} está em um plano de corte. Desative em vez de excluir.`);
+      }
+      const r = await db.run(`DELETE FROM ${tabela} WHERE id = ?`, registroId);
+      if (!r.changes) throw naoEncontrado(`${nome} não encontrada.`);
+      res.json({ ok: true });
+    });
+  };
+  cadastroCorte('/chapas', 'chapas', CAMPOS_CHAPA, normalizarChapa, 'Chapa');
+  cadastroCorte('/fitas', 'fitas', CAMPOS_FITA, normalizarFita, 'Fita');
+
+  api.get('/planos-corte', async (_req, res) => {
+    res.json(await listarPlanos(db));
+  });
+
+  api.post('/planos-corte', async (req, res) => {
+    const { id: planoId, criado } = await criarPlano(db, req.body);
+    res.status(criado ? 201 : 200).json(await carregarPlano(db, planoId));
+  });
+
+  api.get('/planos-corte/:id', async (req, res) => {
+    const plano = await carregarPlano(db, id(req.params.id));
+    if (!plano) throw naoEncontrado('Plano de corte não encontrado.');
+    res.json(plano);
+  });
+
+  api.put('/planos-corte/:id', async (req, res) => {
+    res.json(await salvarPlano(db, id(req.params.id), req.body));
+  });
+
+  api.delete('/planos-corte/:id', async (req, res) => {
+    const r = await db.run('DELETE FROM planos_corte WHERE id = ?', id(req.params.id));
+    if (!r.changes) throw naoEncontrado('Plano de corte não encontrado.');
+    res.json({ ok: true });
+  });
+
+  api.get('/planos-corte/:id/pdf', async (req, res) => {
+    const plano = await carregarPlano(db, id(req.params.id));
+    if (!plano) throw naoEncontrado('Plano de corte não encontrado.');
+    const empresa = await db.get('SELECT nome FROM empresa WHERE id = 1');
+    const pdf = await gerarPdfCorte(plano, empresa?.nome || '');
+    const arquivo = `plano-de-corte-${plano.orcamento_numero ? formatarNumero(plano.orcamento_numero) : plano.id}.pdf`;
+    res
+      .type('application/pdf')
+      .setHeader('Content-Disposition', `${req.query.baixar ? 'attachment' : 'inline'}; filename="${arquivo}"`)
+      .send(pdf);
   });
 
   api.use((_req, _res, next) => next(naoEncontrado('Endereço não encontrado.')));

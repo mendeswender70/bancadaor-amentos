@@ -28,9 +28,9 @@ Configuração conferida na Neon em 20/10/2026:
 | Banco | `neondb` |
 
 O banco contém as tabelas de clientes, orçamentos, itens, histórico, usuários,
-sessões e notificações, além do controle de migrações e da marca de configuração
-inicial. As migrações atuais estão na versão **8** (`server/db.js`) e são
-aplicadas automaticamente ao acessar a API.
+sessões e notificações, chapas, fitas e planos de corte, além do controle de
+migrações e da marca de configuração inicial. As migrações atuais estão na
+versão **12** (`server/db.js`) e são aplicadas automaticamente ao acessar a API.
 
 1. **Neon Console → projeto esquadro → Connect**: selecione a branch
    `production`, o banco `neondb` e a role usada pela aplicação.
@@ -193,6 +193,35 @@ um banco descartável, exclusivo para testes.
 - Trocar a senha encerra sessões dos outros dispositivos; em **Ajustes → Minha
   conta** também é possível encerrar todas as sessões, inclusive a atual.
 
+## Plano de corte
+
+Etapa de produção, separada do orçamento (o orçamento continua por metro, m²
+ou unidade). Abra pelo menu do orçamento (**Plano de corte**) ou em
+**Plano de corte → Novo plano**.
+
+- **Ajustes → Chapas e fitas**: medida, espessura, veio e preço de cada chapa;
+  largura e preço por metro de cada fita de borda.
+- **Peças**: entrada rápida (`720 x 550 x 2 Lateral` + Enter) ou colar uma lista
+  de planilha. Cada peça tem móvel, chapa, "seguir o veio" e fita por lado
+  (C1/C2 no comprimento, L1/L2 na largura). A lista salva sozinha.
+- **Cálculo** (`public/shared/corte.js`, rodando em Web Worker): só cortes de
+  ponta a ponta (guilhotina), com espessura da serra, refilo e veio. O modo
+  **Menos chapas** testa faixas e cortes livres (heurísticas de Jylänki) e, entre
+  planos com o mesmo número de chapas, fica com o roteiro mais simples. O modo
+  **Só faixas** corta faixas no comprimento e depois as peças, mesmo que gaste
+  mais chapa.
+- **O servidor confere o resultado** antes de guardar: cada peça uma vez, na
+  chapa e na medida certas, sem girar contra o veio, dentro da área útil, com a
+  serra entre as peças e separável só com cortes de ponta a ponta. Se a lista
+  ou os ajustes mudarem, o cálculo deixa de valer e a tela pede outro.
+- **Resultado**: chapas e metros de fita para comprar, custo de material (e a
+  parte do orçamento que ele representa), desenho de cada chapa, roteiro de
+  cortes com a medida da guia e sobras aproveitáveis. **PDF para a serra**
+  (`server/pdfCorte.js`) e exportação da lista em CSV.
+- Nada do plano de corte entra na proposta, no PDF do cliente ou no link `/p/`.
+
+Pesquisa e próximas fases: [`docs/plano-de-corte.md`](docs/plano-de-corte.md).
+
 ## Decisões importantes
 
 - **Preço congelado no orçamento.** Cada item grava o preço usado
@@ -224,6 +253,9 @@ server/db.js            conexão Postgres (Neon ou PGlite) e migrações
 server/orcamentos.js    salvar, duplicar, histórico, busca, painel
 server/visaoCliente.js  dados que o cliente pode ver
 server/pdf.js           geração do PDF (PDFKit)
+server/corte.js         chapas, fitas e planos de corte
+server/pdfCorte.js      PDF de produção do plano de corte
+public/shared/corte.js  otimizador de corte, roteiro e conferência (servidor e navegador)
 server/auth.js          senhas, sessões, proteção CSRF, limite de tentativas
 server/index.js         servidor local (npm start)
 tests/                  testes (node --test)

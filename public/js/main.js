@@ -11,6 +11,7 @@ import { paginaEditor } from './pages/editor.js';
 import { paginaClientes, paginaCliente, paginaEditarCliente } from './pages/clientes.js';
 import { paginaConfiguracoes } from './pages/config.js';
 import { paginaAvisos } from './pages/avisos.js';
+import { paginaPlanoCorte, paginaPlanosCorte } from './pages/corte.js';
 
 const raiz = document.getElementById('app');
 let usuario = null;
@@ -32,6 +33,8 @@ const ROTAS = [
   [/^\/clientes\/(\d+)\/editar$/, ([id]) => paginaEditarCliente(Number(id))],
   [/^\/config(?:\/(\w+))?$/, ([aba], q) => paginaConfiguracoes(aba, q)],
   [/^\/avisos$/, () => paginaAvisos()],
+  [/^\/corte$/, () => paginaPlanosCorte()],
+  [/^\/corte\/(\d+)$/, ([id]) => paginaPlanoCorte(Number(id))],
 ];
 
 // Uma página pode registrar uma verificação antes de sair (ex.: alterações não salvas).
@@ -143,8 +146,9 @@ const MENU_LATERAL = [
   ['#/', 'Painel', 'inicio', /^\/?$/],
   MENU[1], MENU[2],
   ['#/config/moveis', 'Móveis e preços', 'caixa', /^\/config\/(moveis|tipos|precos)/],
+  ['#/corte', 'Plano de corte', 'serra', /^\/(corte|config\/chapas)/],
   ['#/relatorios', 'Relatórios', 'grafico', /^\/relatorios/],
-  ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos))/],
+  ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos|chapas))/],
 ];
 
 export const usuarioAtual = () => usuario;
