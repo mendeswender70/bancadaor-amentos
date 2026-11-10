@@ -201,23 +201,28 @@ button { font: inherit; color: inherit; }
 
 /* Ambiente: bloco na cor da marca com numeral gigante */
 .amb { padding-top: 0; }
-.bloco-cor { position: relative; overflow: hidden; margin: 0 calc(var(--u) * -30); padding: calc(var(--u) * 34) calc(var(--u) * 30) calc(var(--u) * 24); min-height: 40%; display: flex; flex-direction: column; background: linear-gradient(155deg, var(--acento), var(--acento-fundo)); color: #fbf5ea; }
+.bloco-cor { position: relative; overflow: hidden; margin: 0 calc(var(--u) * -30); padding: calc(var(--u) * 34) calc(var(--u) * 30) calc(var(--u) * 20); min-height: 31%; display: flex; flex-direction: column; background: linear-gradient(155deg, var(--acento), var(--acento-fundo)); color: #fbf5ea; }
 .bloco-cor::before { content: ""; position: absolute; inset: 0; background-image: var(--espinha); background-size: calc(var(--u) * 30) calc(var(--u) * 15); opacity: .55; pointer-events: none; }
 .bloco-cor > * { position: relative; z-index: 1; }
 .bloco-cor .pag-cab { color: rgb(251 245 234 / 72%); }
 .bloco-cor .sobre { margin-top: auto; color: rgb(251 245 234 / 80%); }
-.bloco-cor.curto { min-height: 24%; }
+/* Páginas de continuação: faixa baixa, só para lembrar de qual ambiente são os móveis. */
+.bloco-cor.curto { min-height: 0; padding-bottom: calc(var(--u) * 14); }
+.bloco-cor.curto .sobre { margin-top: calc(var(--u) * 18); }
+.amb .curto h3 { margin-bottom: 0; font-size: calc(var(--u) * 26); }
+.curto .amb-n { bottom: calc(var(--u) * -20); font-size: calc(var(--u) * 120); }
 .amb-n { position: absolute !important; right: calc(var(--u) * 14); bottom: calc(var(--u) * -34); font: italic 300 calc(var(--u) * 210)/.8 var(--display); letter-spacing: -0.06em; color: rgb(255 255 255 / 17%); }
-.amb h3 { margin: calc(var(--u) * 6) 0 calc(var(--u) * 8); max-width: 78%; font: 400 calc(var(--u) * 44)/.94 var(--display); letter-spacing: -0.04em; }
+.amb h3 { margin: calc(var(--u) * 6) 0 calc(var(--u) * 8); max-width: 78%; font: 400 calc(var(--u) * 40)/.94 var(--display); letter-spacing: -0.04em; }
 .amb-mat { max-width: 74%; color: rgb(251 245 234 / 82%); font-size: calc(var(--u) * 11); line-height: 1.5; }
 .amb .quadro { border-color: rgb(251 245 234 / 26%); mix-blend-mode: normal; }
 .amb .quadro::before { display: none; }
-.itens { margin-top: calc(var(--u) * 10); }
-.itens li { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--u) * 3) calc(var(--u) * 8); padding: calc(var(--u) * 13) 0; border-bottom: calc(var(--u) * .8) solid var(--linha-papel); }
-.itens .nome { flex: 1 1 100%; font: 400 calc(var(--u) * 18)/1.2 var(--display); letter-spacing: -0.015em; }
-.itens .qtd { color: var(--tinta-3); font-size: calc(var(--u) * 9.8); }
-.itens i { flex: 1; border-bottom: calc(var(--u) * 1) dotted rgb(29 24 19 / 35%); transform: translateY(calc(var(--u) * -3)); }
-.itens b { font-size: calc(var(--u) * 13.2); font-weight: 600; white-space: nowrap; }
+/* Cada móvel numa linha: nome, pontilhado e valor. Nome comprido quebra e o valor acompanha a última linha. */
+.itens { margin-top: calc(var(--u) * 4); }
+.itens li { display: flex; align-items: baseline; align-items: last baseline; gap: calc(var(--u) * 8); padding: calc(var(--u) * 9.5) 0; border-bottom: calc(var(--u) * .8) solid var(--linha-papel); }
+.itens .nome { flex: 0 1 auto; min-width: 0; font: 400 calc(var(--u) * 16)/1.22 var(--display); letter-spacing: -0.012em; }
+.itens .qtd { margin-left: calc(var(--u) * 7); color: var(--tinta-3); font: 400 calc(var(--u) * 9.6)/1 var(--fonte); letter-spacing: 0; white-space: nowrap; }
+.itens i { flex: 1 1 calc(var(--u) * 12); min-width: calc(var(--u) * 8); border-bottom: calc(var(--u) * 1) dotted rgb(29 24 19 / 35%); transform: translateY(calc(var(--u) * -3)); }
+.itens b { font-size: calc(var(--u) * 12.6); font-weight: 600; white-space: nowrap; }
 .amb-total { display: flex; align-items: flex-end; justify-content: space-between; gap: calc(var(--u) * 10); margin-top: auto; padding-top: calc(var(--u) * 12); border-top: calc(var(--u) * 1.6) solid var(--tinta); }
 .amb-total span { padding-bottom: calc(var(--u) * 6); color: var(--tinta-3); font-size: calc(var(--u) * 8.2); font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
 .amb-total b { font: 400 calc(var(--u) * 33)/1.1 var(--display); letter-spacing: -0.035em; white-space: nowrap; }

@@ -413,17 +413,23 @@ export function gerarPdf(v, logo, aprovacao = null) {
 
   // Ambiente: bloco na cor da marca com numeral gigante, depois os móveis com o valor de cada um.
   const medidasBloco = (a, continua) => {
-    const tTitulo = continua ? 30 : 44;
+    const tTitulo = continua ? 26 : 40;
     const hTitulo = titulo([[a.nome, 'display', COR.claro]], 0, 0, { t: tTitulo, lh: 0.94, w: UTIL * 0.8, tracking: -0.04, desenhar: false });
     const descricao = continua ? '' : String(a.descricao || '').trim();
     const hDescricao = descricao ? altura(descricao, { t: 11, w: UTIL * 0.76, lh: 1.5 }) : 0;
     const pilha = 12 + 6 + hTitulo + (hDescricao ? 8 + hDescricao : 0);
-    const minimo = ALTURA * (continua ? 0.24 : 0.4);
-    const topo = Math.max(62, minimo - 24 - pilha);
-    return { tTitulo, hTitulo, descricao, pilha, topo, altura: Math.max(minimo, topo + pilha + 24) };
+    // Continuação: faixa baixa, só para lembrar de qual ambiente são os móveis.
+    const minimo = continua ? 0 : ALTURA * 0.31;
+    const topo = continua ? 64 : Math.max(62, minimo - 20 - pilha);
+    return { tTitulo, hTitulo, descricao, pilha, topo, tNumeral: continua ? 120 : 176, altura: Math.max(minimo, topo + pilha + (continua ? 14 : 20)) };
   };
-  const alturaItem = (item) => 13 + altura(item.descricao, { f: 'serif', t: 18, w: UTIL, lh: 1.2, espac: 18 * -0.015 }) + 3 + 15 + 13;
-  const pgAmbiente = (n, a, i, itens, continua, ultima) => {
+  // Cada móvel numa linha: nome, pontilhado e valor. Nome comprido quebra e o valor acompanha a última linha.
+  // `e` é a escala da lista: antes de dividir em duas páginas, a letra pode ficar até 14% menor.
+  const estiloItem = (e) => ({ f: 'serif', t: 16 * e, lh: 1.22, espac: 16 * e * -0.012 });
+  const textoItem = (item) => `${item.descricao}${(item.quantidade || 1) > 1 ? `  ·  ${item.quantidade} un.` : ''}`;
+  const larguraNomeItem = (item, e) => UTIL - largura(formatarDinheiro(item.valor_cents), { f: 'sansForte', t: 12.6 * e }) - 14;
+  const alturaItem = (item, e = 1) => 19 * e + altura(textoItem(item), { ...estiloItem(e), w: larguraNomeItem(item, e) });
+  const pgAmbiente = (n, a, i, itens, continua, ultima, e = 1) => {
     const fechar = folha(n, { quadroClaro: true });
     const m = medidasBloco(a, continua);
     const fundo = doc.linearGradient(0, 0, u(LARGURA * 0.6), u(m.altura));
@@ -433,28 +439,31 @@ export function gerarPdf(v, logo, aprovacao = null) {
     doc.save();
     doc.rect(0, 0, doc.page.width, u(m.altura)).clip();
     const numeral = pad2(i + 1);
-    const ln = largura(numeral, { f: 'displayItalica', t: 210, espac: 210 * -0.06 });
-    usar('displayItalica', 210);
-    escrever(numeral, LARGURA - 14 - ln, m.altura + 34 - doc.currentLineHeight(true) / K + 22, { f: 'displayItalica', t: 210, espac: 210 * -0.06, cor: '#ffffff', opacidade: 0.17 });
+    const tn = m.tNumeral;
+    const ln = largura(numeral, { f: 'displayItalica', t: tn, espac: tn * -0.06 });
+    usar('displayItalica', tn);
+    escrever(numeral, LARGURA - 14 - ln, m.altura + tn * 0.27 - doc.currentLineHeight(true) / K, { f: 'displayItalica', t: tn, espac: tn * -0.06, cor: '#ffffff', opacidade: 0.17 });
     doc.restore();
     cabecalho(`Ambiente ${pad2(i + 1)} de ${pad2(ambientes.length)}`, COR.claro, 0.72);
     rotulo(continua ? 'Continuação' : 'Ambiente', ESQ, m.topo, { t: 8.4, tracking: 0.24, cor: COR.claro, opacidade: 0.8 });
     titulo([[a.nome, 'display', COR.claro]], ESQ, m.topo + 18, { t: m.tTitulo, lh: 0.94, w: UTIL * 0.8, tracking: -0.04 });
     if (m.descricao) escrever(m.descricao, ESQ, m.topo + 18 + m.hTitulo + 8, { t: 11, cor: COR.claro, opacidade: 0.82, w: UTIL * 0.76, lh: 1.5 });
 
-    let y = m.altura + 10;
+    let y = m.altura + 4;
     if (!itens.length) escrever('Itens a definir', ESQ, y + 13, { f: 'serifItalica', t: 15, cor: COR.tinta3 });
     for (const item of itens) {
-      const hNome = altura(item.descricao, { f: 'serif', t: 18, w: UTIL, lh: 1.2, espac: 18 * -0.015 });
-      escrever(item.descricao, ESQ, y + 13, { f: 'serif', t: 18, w: UTIL, lh: 1.2, espac: 18 * -0.015 });
-      const yLinha = y + 13 + hNome + 3;
-      const qtd = `${item.quantidade || 1} un.`;
-      escrever(qtd, ESQ, yLinha + 3, { t: 9.8, cor: COR.tinta3 });
+      const nome = textoItem(item);
+      const w = larguraNomeItem(item, e);
+      const estilo = estiloItem(e);
+      const hNome = altura(nome, { ...estilo, w });
+      escrever(nome, ESQ, y + 9.5 * e, { ...estilo, w });
       const valor = formatarDinheiro(item.valor_cents);
-      const lv = largura(valor, { f: 'sansForte', t: 13.2 });
-      aDireita(valor, DIR, yLinha, { f: 'sansForte', t: 13.2 });
-      fio(ESQ + largura(qtd, { t: 9.8 }) + 8, yLinha + 11, DIR - lv - 8, yLinha + 11, { opacidade: 0.35, espessura: 1, tracejado: [0.2, 2.4] });
-      y = yLinha + 15 + 13;
+      const lv = largura(valor, { f: 'sansForte', t: 12.6 * e });
+      const yValor = y + 9.5 * e + hNome - 16 * e * 1.22 + 3.4 * e; // na altura da última linha do nome
+      aDireita(valor, DIR, yValor, { f: 'sansForte', t: 12.6 * e });
+      const fimNome = ESQ + largura(nome, estilo) + 8;
+      if (hNome < 16 * e * 1.22 + 2 && DIR - lv - 8 - fimNome > 8) fio(fimNome, yValor + 10.6 * e, DIR - lv - 8, yValor + 10.6 * e, { opacidade: 0.35, espessura: 1, tracejado: [0.2, 2.4] });
+      y += 19 * e + hNome;
       fio(ESQ, y, DIR, y);
     }
     if (ultima) {
@@ -474,15 +483,16 @@ export function gerarPdf(v, logo, aprovacao = null) {
     const fatias = [];
     let inicio = 0;
     while (inicio < itens.length) {
-      const topo = medidasBloco(a, inicio > 0).altura + 10;
-      const cabem = (limite) => {
+      const topo = medidasBloco(a, inicio > 0).altura + 4;
+      const cabem = (limite, e = 1) => {
         let y = topo, k = inicio;
-        while (k < itens.length && y + alturaItem(itens[k]) <= limite) y += alturaItem(itens[k++]);
+        while (k < itens.length && y + alturaItem(itens[k], e) <= limite) y += alturaItem(itens[k++], e);
         return k;
       };
-      let fim = cabem(LIMITE - 52); // com o total do ambiente
-      if (fim < itens.length) fim = Math.max(inicio + 1, cabem(LIMITE - 24)); // com "continua"
-      fatias.push([inicio, fim]);
+      // O que falta cabe nesta página, com o total do ambiente, se a letra diminuir um pouco?
+      const escala = [1, 0.93, 0.86].find((e) => cabem(LIMITE - 52, e) === itens.length);
+      const fim = escala ? itens.length : Math.max(inicio + 1, cabem(LIMITE - 24)); // senão, "continua"
+      fatias.push([inicio, fim, escala || 1]);
       inicio = fim;
     }
     return fatias;
@@ -518,15 +528,15 @@ export function gerarPdf(v, logo, aprovacao = null) {
 
   const TOPO_INVESTIMENTO = 158;
   const ALTURA_TOTAL = 132;
-  const alturaLinha = (l) => altura(l.nome, { t: 12.6, w: UTIL - 110 }) + 20;
-  const pgInvestimento = (n, linhas, continua, ultima) => {
+  const alturaLinha = (l, e = 1) => altura(l.nome, { t: 12.6 * e, w: UTIL - 110 }) + 20 * e;
+  const pgInvestimento = (n, linhas, continua, ultima, e = 1) => {
     const fechar = folha(n);
     abertura('Investimento', continua ? 'Continuação' : 'Valores', [T('O seu '), E('investimento')], 44);
     let y = TOPO_INVESTIMENTO;
     for (const l of linhas) {
-      const h = alturaLinha(l);
-      escrever(l.nome, ESQ, y + 10, { t: 12.6, cor: l.especial ? COR.ok : COR.tinta2, w: UTIL - 110 });
-      aDireita(l.valor, DIR, y + 10, { f: 'sansForte', t: 12.6, cor: l.especial ? COR.ok : COR.tinta });
+      const h = alturaLinha(l, e);
+      escrever(l.nome, ESQ, y + 10 * e, { t: 12.6 * e, cor: l.especial ? COR.ok : COR.tinta2, w: UTIL - 110 });
+      aDireita(l.valor, DIR, y + 10 * e, { f: 'sansForte', t: 12.6 * e, cor: l.especial ? COR.ok : COR.tinta });
       fio(ESQ, y + h, DIR, y + h);
       y += h;
     }
@@ -555,6 +565,10 @@ export function gerarPdf(v, logo, aprovacao = null) {
     fechar();
   };
   const fatiasInvestimento = () => {
+    // Tudo numa página só, com o total, se a letra puder diminuir um pouco.
+    const tudo = (e) => linhasInvestimento.reduce((soma, l) => soma + alturaLinha(l, e), 0);
+    const escala = [1, 0.92, 0.84, 0.76].find((e) => TOPO_INVESTIMENTO + tudo(e) <= LIMITE - ALTURA_TOTAL - 12);
+    if (escala) return [[0, linhasInvestimento.length, escala]];
     const fatias = [];
     let inicio = 0;
     do {
@@ -759,8 +773,8 @@ export function gerarPdf(v, logo, aprovacao = null) {
   // Primeiro o roteiro (para o sumário saber em que página cada parte começa), depois o desenho.
   doc.addPage({ size: 'A4', margins: 0 }); // página de rascunho: as medições precisam de uma página aberta
   const roteiro = [{ chave: 'capa', fazer: () => pgCapa() }, { chave: 'carta', fazer: (n) => pgCarta(n) }, { chave: 'sumario' }];
-  ambientes.forEach((a, i) => fatiasAmbiente(a).forEach(([x, y], k, todas) =>
-    roteiro.push({ chave: k ? '' : `amb-${i}`, fazer: (n) => pgAmbiente(n, a, i, (a.itens || []).slice(x, y), k > 0, k === todas.length - 1) })));
+  ambientes.forEach((a, i) => fatiasAmbiente(a).forEach(([x, y, e], k, todas) =>
+    roteiro.push({ chave: k ? '' : `amb-${i}`, fazer: (n) => pgAmbiente(n, a, i, (a.itens || []).slice(x, y), k > 0, k === todas.length - 1, e) })));
   if (inclusos.length) {
     let inicio = 0;
     while (inicio < inclusos.length) {
@@ -772,8 +786,8 @@ export function gerarPdf(v, logo, aprovacao = null) {
       inicio = fim;
     }
   }
-  fatiasInvestimento().forEach(([x, y], k, todas) =>
-    roteiro.push({ chave: k ? '' : 'investimento', fazer: (n) => pgInvestimento(n, linhasInvestimento.slice(x, y), k > 0, k === todas.length - 1) }));
+  fatiasInvestimento().forEach(([x, y, e], k, todas) =>
+    roteiro.push({ chave: k ? '' : 'investimento', fazer: (n) => pgInvestimento(n, linhasInvestimento.slice(x, y), k > 0, k === todas.length - 1, e) }));
   roteiro.push({ chave: 'pagamento', fazer: (n) => pgPagamento(n) });
   fatiasObservacoes().forEach(([x, y], k) =>
     roteiro.push({ chave: k ? '' : 'observacoes', fazer: (n) => pgObservacoes(n, observacoes.slice(x, y), k > 0) }));

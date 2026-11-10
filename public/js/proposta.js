@@ -204,7 +204,7 @@ function pgSumario(n, mapa, { comFatos = true, denso = false } = {}) {
 }
 function pgAmbiente(n, a, i, itens, continua, ultima) {
   const linhas = itens.length
-    ? itens.map((item) => `<li><span class="nome">${esc(item.descricao)}</span><span class="qtd num">${item.quantidade || 1} un.</span><i aria-hidden="true"></i><b class="num">${brl(item.valor_cents)}</b></li>`).join('')
+    ? itens.map((item) => `<li><span class="nome">${esc(item.descricao)}${(item.quantidade || 1) > 1 ? `<small class="qtd num">${item.quantidade} un.</small>` : ''}</span><i aria-hidden="true"></i><b class="num">${brl(item.valor_cents)}</b></li>`).join('')
     : '<li><span class="nome vazio">Itens a definir</span></li>';
   return `<div class="pag amb"><i class="quadro" aria-hidden="true"></i>
     <div class="bloco-cor${continua ? ' curto' : ''}">${cab(`Ambiente ${pad2(i + 1)} de ${pad2(P.ambientes.length)}`, false)}
