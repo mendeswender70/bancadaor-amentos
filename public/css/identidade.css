@@ -127,3 +127,91 @@ html:root .estrutura .rpt-metrica > strong { font-size: 29px; font-weight: 400; 
 html:root .estrutura .orcamento-total { font-size: 20px; }
 html:root .estrutura .orcamento-total::before { font-family: 'Inter', sans-serif; font-weight: 500; letter-spacing: .05em; }
 html:root .estrutura .painel-comercial .pc-distribuicao .pc-titulo h2 { font-size: 15.5px !important; }
+
+/* ---------- Painel: blocos de baixo como seções de página ----------
+   Sem caixas: cada bloco abre com um filete escuro e o título, como os capítulos do livro.
+   Só a meta continua em cartão, por ser a régua do período. O texto sobe para no mínimo 11px. */
+html:root .estrutura .painel-comercial :is(.pc-linha-central, .pc-linha-inferior) { gap: 34px 30px; margin: 0 8px 34px; }
+html:root .estrutura .painel-comercial :is(.pc-linha-central, .pc-linha-inferior) > .pc-painel {
+  height: auto; min-height: 0; padding: 13px 0 0; border: 0; border-top: 1.5px solid var(--pc-texto); border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .painel-comercial .pc-titulo { align-items: baseline; margin-bottom: 14px; }
+html:root .estrutura .painel-comercial .pc-titulo h2 { font-size: 18px; }
+html:root .estrutura .painel-comercial .pc-titulo h2 > .icone { display: none; }
+html:root .estrutura .painel-comercial .pc-link { font-size: 11px; }
+html:root .estrutura .pc-evolucao select { height: 28px; max-width: 130px; font-size: 11px; }
+
+/* Precisa de atenção: o número vem à frente, e zero fica apagado */
+html:root .estrutura .pc-atencao-lista > a { min-height: 50px; gap: 12px; }
+html:root .estrutura .pc-atencao-lista .pc-icone { display: none; }
+html:root .estrutura .pc-atencao-lista > a > span:nth-child(2) { order: 1; font-size: 12px; font-weight: 500; white-space: normal; }
+html:root .estrutura .pc-atencao-lista .pc-contagem { order: 0; min-width: 34px; height: auto; padding: 0; border-radius: 0; background: none; font: 400 26px/1 var(--fonte-titulo); letter-spacing: -0.03em; font-variant-numeric: lining-nums tabular-nums; text-align: left; }
+html:root .estrutura .pc-atencao-lista .pc-contagem:not(.pc-perigo, .pc-aviso, .pc-sucesso) { color: var(--pc-texto); }
+html:root .estrutura .pc-atencao-lista > a[data-zero] { color: var(--pc-suave); }
+html:root .estrutura .pc-atencao-lista > a[data-zero] .pc-contagem { color: var(--pc-suave); opacity: .55; }
+html:root .estrutura .pc-atencao-lista > a > .icone { order: 2; }
+
+/* Gráficos */
+html:root .estrutura .painel-comercial :is(.pc-eixo-y, .pc-eixo-x, .pc-barras-eixo) { font-size: 10px; }
+html:root .estrutura .painel-comercial .pc-barras small { font-size: 9.5px; }
+html:root .estrutura .painel-comercial .pc-barra-pista > b { font-size: 11px; }
+html:root .estrutura .painel-comercial .pc-chart-tooltip { font-size: 11px; }
+html:root .estrutura .painel-comercial .pc-cancelados { right: 0; bottom: -18px; font-size: 10.5px; }
+
+/* Atividades e vencimentos */
+html:root .estrutura .painel-comercial .pc-feed { gap: 6px; }
+html:root .estrutura .painel-comercial .pc-feed-linha { min-height: 40px; }
+html:root .estrutura .painel-comercial .pc-feed .pc-icone { background: none; box-shadow: inset 0 0 0 1px var(--pc-borda); }
+html:root .estrutura .painel-comercial .pc-feed-texto strong { font-size: 12px; font-weight: 600; }
+html:root .estrutura .painel-comercial :is(.pc-feed-texto small, .pc-feed time) { font-size: 11px; }
+html:root .estrutura .painel-comercial .pc-feed time { max-width: 70px; }
+html:root .estrutura .painel-comercial .pc-vencimento { padding: 13px 0; }
+html:root .estrutura .painel-comercial .pc-vencimento .pc-icone { display: none; }
+html:root .estrutura .painel-comercial .pc-vencimento-texto strong { font-size: 12px; }
+html:root .estrutura .painel-comercial .pc-vencimento-texto small { font-size: 11px; }
+html:root .estrutura .painel-comercial .pc-prazo { font-size: 11px; }
+
+/* Distribuição */
+html:root .estrutura .painel-comercial .pc-distribuicao { padding-left: 0; padding-right: 0; }
+html:root .estrutura .painel-comercial .pc-distribuicao-conteudo { padding-top: 4px; }
+html:root .estrutura .painel-comercial .pc-legenda li { font-size: 11px; }
+html:root .estrutura .painel-comercial .pc-donut span { font-size: 10px; }
+html:root .estrutura .painel-comercial .pc-donut strong { font-size: 26px; font-weight: 400; }
+
+/* Orçamentos recentes: tabela sem faixa no cabeçalho */
+html:root .estrutura .painel-comercial .pc-tabela { font-size: 12px; }
+html:root .estrutura .painel-comercial .pc-tabela th { height: 30px; padding-left: 0; background: none; border-bottom: 1px solid var(--pc-borda); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+html:root .estrutura .painel-comercial .pc-tabela td { height: 40px; padding-left: 0; }
+html:root .estrutura .painel-comercial .pc-tabela .pc-valor { font-variant-numeric: tabular-nums; }
+html:root .estrutura .painel-comercial .pc-tabela .selo { font-size: 10px; }
+html:root .estrutura .painel-comercial .pc-nota { margin: 0 8px; font-size: 10.5px; }
+
+@media (max-width: 767px) {
+  html:root .estrutura .painel-comercial :is(.pc-linha-central, .pc-linha-inferior) { gap: 34px; margin: 0 0 34px; }
+  html:root .estrutura .painel-comercial .pc-tabela { min-width: 560px; }
+}
+
+/* Orçamentos por status, em barras deitadas */
+.pc-status-lista { display: flex; flex-direction: column; }
+.painel-comercial .pc-status-linha { display: grid; grid-template-columns: minmax(78px, 38%) minmax(0, 1fr) 24px; align-items: center; gap: 10px; min-height: 31px; border-bottom: 1px solid var(--pc-borda); }
+.painel-comercial .pc-status-linha:last-child { border-bottom: 0; }
+.pc-status-nome { overflow: hidden; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.pc-status-pista { display: block; height: 9px; }
+.painel-comercial .pc-status-pista .pc-barra { display: block; max-width: none; height: 100%; min-height: 0; border-radius: 0 2px 2px 0; }
+.painel-comercial .pc-status-linha b { font: 400 18px/1 var(--fonte-titulo); text-align: right; font-variant-numeric: lining-nums tabular-nums; }
+.painel-comercial .pc-status-linha[data-zero] { color: var(--pc-suave); }
+.painel-comercial .pc-status-linha[data-zero] b { opacity: .55; }
+html:root .estrutura .painel-comercial .pc-cancelados { position: static; margin-top: 8px; text-align: left; }
+
+/* Tabela dos recentes: a 7ª coluna é só o menu; a data sai abaixo de 1440px */
+html:root .estrutura .painel-comercial .pc-tabela th:nth-child(7) { font-size: 0; }
+html:root .estrutura .painel-comercial .pc-tabela th:nth-child(1) { width: 10%; }
+@media (max-width: 1439px) {
+  html:root .estrutura .painel-comercial .pc-tabela :is(th, td):nth-child(6) { display: none; }
+  html:root .estrutura .painel-comercial .pc-tabela th:nth-child(1) { width: 13%; }
+  html:root .estrutura .painel-comercial .pc-tabela th:nth-child(3) { width: 24%; }
+  html:root .estrutura .painel-comercial .pc-tabela th:nth-child(4) { width: 22%; }
+  html:root .estrutura .painel-comercial .pc-tabela th:nth-child(5) { width: 19%; }
+  html:root .estrutura .painel-comercial .pc-donut strong { font-size: 22px; }
+  html:root .estrutura .painel-comercial .pc-donut span { font-size: 9px; }
+}
+html:root .estrutura .painel-comercial .pc-tabela th { overflow: hidden; text-overflow: ellipsis; }

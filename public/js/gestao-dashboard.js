@@ -35,7 +35,7 @@ function atencao(c) {
     ['aprovados','check','Orçamentos aprovados\nrecentemente','pc-sucesso'],
     ['sem_resposta','enviar','Enviados sem resposta\n(há mais de 5 dias)',''],
   ];
-  return painel('pc-atencao','Precisa de atenção','alerta',null,h('div',{class:'pc-atencao-lista'},linhas.map(([tipo,ic,nome,cor]) => h('a',{href:`#/orcamentos?atencao=${tipo}`,title:tipo==='aprovados'?'Aprovados nos últimos 7 dias':nome.replace('\n',' ')},iconeFundo(ic,cor),h('span',{},nome),h('b',{class:`pc-contagem ${cor}`},c.atencao[tipo]),icone('seta')))));
+  return painel('pc-atencao','Precisa de atenção','alerta',null,h('div',{class:'pc-atencao-lista'},linhas.map(([tipo,ic,nome,cor]) => h('a',{href:`#/orcamentos?atencao=${tipo}`,'data-zero':c.atencao[tipo]?null:'',title:tipo==='aprovados'?'Aprovados nos últimos 7 dias':nome.replace('\n',' ')},iconeFundo(ic,cor),h('span',{},nome),h('b',{class:`pc-contagem ${cor}`},c.atencao[tipo]),icone('seta')))));
 }
 
 function evolucao(c,metrica,aoMudar) {
@@ -74,20 +74,20 @@ function evolucao(c,metrica,aoMudar) {
     h('div',{class:'pc-linha-area'},h('div',{class:'pc-eixo-y','aria-hidden':'true'},[1,.8,.6,.4,.2,0].map(n=>h('span',{},compacto(max*n)))),h('div',{class:'pc-linha-conteudo'},plot,h('div',{class:'pc-eixo-x','aria-hidden':'true'},serie.map(m=>h('span',{},`${MESES[Number(m.mes.slice(5))-1]}/${m.mes.slice(2,4)}`))))));
 }
 
+// Barras deitadas: o nome cabe inteiro em qualquer largura e o comprimento compara os status.
 function barras(situacoes) {
   const estados=['rascunho','enviado','negociacao','aprovado','recusado','expirado'];
   const nomes=['Rascunho','Enviado','Em negociação','Aprovado','Recusado','Expirado'];
-  const maior=Math.max(5,...situacoes.filter(s=>estados.includes(s.status)).map(s=>s.quantidade));
-  const max=Math.ceil(maior/5)*5;
-  const cancelados=situacoes.find(s=>s.status==='cancelado').quantidade;
+  const qtd=(st)=>situacoes.find(s=>s.status===st)?.quantidade||0;
+  const maior=Math.max(1,...estados.map(qtd));
+  const cancelados=qtd('cancelado');
   return painel('pc-status','Orçamentos por status','grafico',null,
-    h('div',{class:'pc-barras-area'},h('div',{class:'pc-barras-eixo','aria-hidden':'true'},[1,.8,.6,.4,.2,0].map(n=>h('span',{},Math.round(max*n)))),
-      h('div',{class:'pc-barras'},estados.map((status,i)=>{
-        const s=situacoes.find(s=>s.status===status),barra=h('span',{class:`pc-barra pc-barra-${status}`});
-        barra.style.height=`${s.quantidade/max*100}%`;
-        const quantidade=h('b',{},s.quantidade);quantidade.style.bottom=`calc(${s.quantidade/max*100}% + 3px)`;
-        return h('a',{href:`#/orcamentos?status=${status}`,'aria-label':`${STATUS[status]}: ${s.quantidade} orçamentos`,title:`${STATUS[status]}: ${s.quantidade}`},h('div',{class:'pc-barra-pista'},barra,quantidade),h('small',{},nomes[i]));
-      }))),cancelados ? h('a',{href:'#/orcamentos?status=cancelado',class:'pc-cancelados'},`${cancelados} ${cancelados===1?'cancelado':'cancelados'}`):null);
+    h('div',{class:'pc-status-lista'},estados.map((status,i)=>{
+      const n=qtd(status),barra=h('span',{class:`pc-barra pc-barra-${status}`});
+      barra.style.width=`${n/maior*100}%`;
+      return h('a',{href:`#/orcamentos?status=${status}`,class:'pc-status-linha','data-zero':n?null:'','aria-label':`${STATUS[status]}: ${n} ${n===1?'orçamento':'orçamentos'}`},
+        h('span',{class:'pc-status-nome'},nomes[i]),h('span',{class:'pc-status-pista'},barra),h('b',{},n));
+    })),cancelados ? h('a',{href:'#/orcamentos?status=cancelado',class:'pc-cancelados'},`${cancelados} ${cancelados===1?'cancelado':'cancelados'}`):null);
 }
 
 function distribuicao(ambientes) {
@@ -104,14 +104,28 @@ function distribuicao(ambientes) {
       h('div',{class:'pc-donut'},svg('svg',{viewBox:'0 0 132 132','aria-hidden':'true'},svg('circle',{cx:66,cy:66,r:51,fill:'none',stroke:'var(--pc-grade)','stroke-width':21}),arcos),h('div',{},h('strong',{},total),h('span',{},'orçamentos'))),
       h('ul',{class:'pc-legenda'},dados.map(d=>{const ponto=h('i',{'aria-hidden':'true'});ponto.style.background=d.cor;return h('li',{},ponto,h('span',{},d.nome),h('b',{},`${numero(total?d.n/total*100:0)}%`));}))));
 }
+// Mudança de status vale pelo destino: "Status: Enviado → Recusado" é uma recusa, não um envio.
+const DESTINOS = {
+  enviado: ['enviar', 'Proposta enviada para {c}', ''],
+  'em negociação': ['historico', 'Em negociação com {c}', ''],
+  aprovado: ['check', 'Proposta aprovada', 'pc-sucesso'],
+  recusado: ['alerta', 'Proposta recusada', 'pc-perigo'],
+  expirado: ['relogio', 'Proposta expirada', ''],
+  cancelado: ['historico', 'Orçamento cancelado', ''],
+  rascunho: ['editar', 'Voltou para rascunho', ''],
+};
 function descreverAtividade(a) {
-  const e=a.evento;
-  if (/Cliente cadastrado/i.test(e)) return ['usuarioMais','Cliente cadastrado',a.cliente_nome,''];
-  if (/Cliente abriu/i.test(e)) return ['olho','Cliente abriu a proposta',`${a.cliente_nome} · ${a.ambiente_nome||'Proposta'}`,''];
-  if (/aprovad/i.test(e) && !/→.*(?:rascunho|enviado|negocia|recus|cancel|expir)/i.test(e)) return ['check','Proposta aprovada',`${a.cliente_nome} · ${a.ambiente_nome||'Proposta'}`,'pc-sucesso'];
-  if (/duplicad/i.test(e)) return ['copiar','Orçamento duplicado',`${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`,''];
-  if (/enviad/i.test(e)) return ['enviar',`Proposta enviada para ${a.cliente_nome}`,`${a.ambiente_nome||'Proposta'} · Nº ${formatarNumero(a.numero)}`,''];
-  return ['historico',e.startsWith('Status:')?`Orçamento ${e.split('→').at(-1).trim().toLocaleLowerCase('pt-BR')}`:e,`${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`,''];
+  const e = a.evento, ambiente = `${a.cliente_nome} · ${a.ambiente_nome || 'Proposta'}`, numero = `${a.cliente_nome} · Nº ${formatarNumero(a.numero)}`;
+  if (/^Status:/.test(e)) {
+    const destino = e.split('→').at(-1).trim().toLocaleLowerCase('pt-BR');
+    const [ic, titulo, classe] = DESTINOS[destino] || ['historico', `Orçamento ${destino}`, ''];
+    return [ic, titulo.replace('{c}', a.cliente_nome), titulo.includes('{c}') ? `${a.ambiente_nome || 'Proposta'} · Nº ${formatarNumero(a.numero)}` : ambiente, classe];
+  }
+  if (/Cliente cadastrado/i.test(e)) return ['usuarioMais', 'Cliente cadastrado', a.cliente_nome, ''];
+  if (/Cliente abriu/i.test(e)) return ['olho', 'Cliente abriu a proposta', ambiente, ''];
+  if (/aprovad/i.test(e)) return ['check', 'Proposta aprovada', ambiente, 'pc-sucesso'];
+  if (/duplicad|criado a partir/i.test(e)) return ['copiar', 'Orçamento duplicado', numero, ''];
+  return ['historico', e, numero, ''];
 }
 function atividades(linhas) {
   return painel('pc-atividades','Atividades recentes','atividade',link('Ver todas','#/avisos'),linhas.length ? h('div',{class:'pc-feed'},linhas.map(a=>{
@@ -127,7 +141,7 @@ function recentes(linhas,aoAtualizar) {
     h('td',{},selo(o.status)),h('td',{class:'pc-valor'},moeda(o.total_cents)),
     h('td',{},formatarData(o.data)),h('td',{},menuOrcamento(o,aoAtualizar))));
   const tabela=h('div',{class:'pc-tabela-scroll'},h('table',{class:'pc-tabela'},
-    h('thead',{},h('tr',{},['Nº','Cliente','Ambiente / Projeto','Status','Valor','Data',''].map(t=>h('th',{scope:'col'},t||h('span',{class:'sr-only'},'Ações'))))),
+    h('thead',{},h('tr',{},['Nº','Cliente','Ambiente','Status','Valor','Data',''].map(t=>h('th',{scope:'col'},t||h('span',{class:'sr-only'},'Ações'))))),
     h('tbody',{},linhasTabela)));
   return painel('pc-recentes','Orçamentos recentes','orcamentos',link('Ver todas','#/orcamentos'),linhas.length ? tabela : vazio('Crie seu primeiro orçamento para acompanhar as propostas.'));
 }

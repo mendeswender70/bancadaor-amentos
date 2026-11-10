@@ -14,6 +14,7 @@ export const novidades = [
       { icone: 'grafico', titulo: 'Uma frase no lugar das caixas', texto: 'O painel abre com o valor aprovado do período, e orçado, taxa de aprovação, pendentes e ticket médio ficam numa faixa logo abaixo.' },
       { icone: 'regua', titulo: 'Meta do mês em régua', texto: 'Defina quanto quer aprovar por mês. A régua mostra quanto já foi, quanto falta e se você está à frente ou atrás do ritmo.' },
       { icone: 'projeto', titulo: 'Visual do livro no app', texto: 'O menu lateral virou a capa do livro e os títulos usam a mesma letra da proposta.' },
+      { icone: 'olho', titulo: 'Painel mais fácil de ler', texto: 'Os quadros do painel perderam as caixas e ganharam letra maior. Os status viraram barras deitadas, com o nome inteiro.' },
     ],
     acao: { rotulo: 'Definir a meta do mês', href: '#/' },
   },
