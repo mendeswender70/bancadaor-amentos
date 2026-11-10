@@ -1,24 +1,31 @@
 // Inclua uma entrada aqui em cada publicação com mudanças que valem avisar.
 // O id deve ser único e mudar quando a entrada for publicada.
+//
+// Cada entrada tem: id, data, titulo, itens e, se quiser, resumo (uma frase que abre a novidade)
+// e acao ({ rotulo, href }) para levar a pessoa direto ao que mudou.
+// Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
     id: '2026-11-proposta-em-livro',
     data: '10 de novembro de 2026',
     titulo: 'A proposta do cliente virou um livro',
+    resumo: 'O link que o cliente recebe agora abre como um livro, com o nome dele na capa.',
     itens: [
-      'O link da proposta agora abre um livro: capa com o nome do cliente e páginas que ele vira arrastando ou pelas setas, no celular e no computador.',
-      'O cliente simula o pagamento no cartão, parcela por parcela, e aprova segurando um botão. A forma de pagamento escolhida aparece no histórico do orçamento e no aviso de aprovação.',
-      'Cada ambiente tem a sua página com o valor de cada móvel, seguido do que já está incluso, do investimento e das observações. O PDF continua disponível para baixar.',
+      { icone: 'projeto', titulo: 'Páginas que viram', texto: 'O cliente arrasta ou usa as setas, no celular e no computador. Cada ambiente tem a sua página, com o valor de cada móvel.' },
+      { icone: 'pagamento', titulo: 'Simulador de cartão', texto: 'Ele escolhe o número de parcelas e vê o valor na hora. A forma escolhida aparece no histórico do orçamento.' },
+      { icone: 'aprovado', titulo: 'Aprovação segurando o botão', texto: 'Dois segundos com o dedo no botão e você recebe o aviso. O PDF continua disponível para baixar.' },
     ],
+    acao: { rotulo: 'Ver meus orçamentos', href: '#/orcamentos' },
   },
   {
     id: '2026-11-ja-esta-incluso',
     data: '9 de novembro de 2026',
     titulo: 'Mostre o que já está incluso',
+    resumo: 'Uma nova etapa do orçamento para mostrar o que você entrega sem custo extra.',
     itens: [
-      'No orçamento, a nova etapa "Já está incluso" deixa você marcar o que entrega sem custo extra: medição, montagem, garantia e o que mais fizer parte do seu serviço.',
-      'A lista é sua: edite os textos, crie itens novos e escolha quais já entram marcados nos próximos orçamentos.',
-      'Os itens marcados aparecem para o cliente na proposta pelo link e no PDF. Se um deles também estiver sendo cobrado como serviço, o esquadro avisa.',
+      { icone: 'check', titulo: 'Marque o que vale para cada proposta', texto: 'Medição, montagem, garantia e o que mais fizer parte do seu serviço.' },
+      { icone: 'editar', titulo: 'A lista é sua', texto: 'Edite os textos, crie itens e escolha quais já entram marcados nos próximos orçamentos.' },
+      { icone: 'alerta', titulo: 'Aviso de cobrança em dobro', texto: 'Se um item marcado também estiver cobrado como serviço, o esquadro avisa. Os itens aparecem na proposta e no PDF.' },
     ],
   },
   {

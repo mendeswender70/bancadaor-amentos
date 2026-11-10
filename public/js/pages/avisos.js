@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { h, icone, substituir, vazioIlustrado, haQuanto, diasAte } from '../ui.js';
 import { cabecalhoPagina } from '../comum.js';
 import { novidades } from '../novidades.js';
+import { pontosNovidade, resumoNovidade } from '../novidades-ui.js';
 
 const CHAVE_AVISOS_LIDAS = 'esquadro.avisos.lidas';
 const CHAVE_NOVIDADES_LIDAS = 'esquadro.novidades.lidas';
@@ -90,8 +91,8 @@ export async function paginaAvisos() {
           h('span', { class: 'novidade-data' }, n.data),
           h('h2', {}, 'O que mudou'),
           h('h3', {}, n.titulo),
-          h('p', {}, n.itens[0] || ''),
-          n.itens.length > 1 ? h('ul', {}, n.itens.slice(1).map((item) => h('li', {}, item))) : null,
+          n.resumo ? h('p', {}, n.resumo) : null,
+          pontosNovidade(n),
         ),
       );
       return;
@@ -107,7 +108,7 @@ export async function paginaAvisos() {
         h('section', { class: 'novidades-grupo' }, h('h2', {}, data),
           lista.map((n) => h('article', { class: 'novidade' },
             h('time', { class: 'novidade-data' }, `${dataCurta(n.data)}${novidadesLidas.has(n.id) ? '' : ' · NOVO'}`),
-            h('h3', {}, n.titulo), h('p', {}, n.itens[0] || ''),
+            h('h3', {}, n.titulo), h('p', {}, resumoNovidade(n)),
             h('button', { type: 'button', class: 'link-botao', onclick: () => { novidadeAberta = n; marcarNovidade(n.id); renderNovidades(); } }, 'Ver os detalhes →'),
           )),
         ),
