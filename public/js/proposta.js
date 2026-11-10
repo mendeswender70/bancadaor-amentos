@@ -222,7 +222,7 @@ function pgIncluso(n, itens, continua, inicio = 0) {
 function pgInvestimento(n, linhas, continua, ultima) {
   const maior = D.credito.length > 1 ? D.credito.at(-1) : null;
   const nota = maior ? `ou ${D.credito.length}x de ${brl(parcelaDe(maior))} no cartão` : D.descricaoPagamento;
-  return `<div class="pag inv${ultima && !semMovimento() ? ' espera' : ''}">${cab('Investimento')}
+  return `<div class="pag inv">${cab('Investimento')}
     <p class="sobre t-topo">${continua ? 'Continuação' : 'Valores'}</p><h2>O seu <em>investimento</em></h2>
     <ul class="inv-linhas num">${linhas.map((l) => `<li${l.especial ? ' class="especial"' : ''}><span>${esc(l.nome)}</span><b>${l.valor}</b></li>`).join('')}</ul>
     ${ultima ? `<div class="inv-total">${filete}<small>Total da proposta</small><b class="num" id="total-odo" data-odo="${brl(P.total_cents)}">${brl(P.total_cents)}</b><p>${esc(nota)}</p></div>` : '<p class="segue">continua na próxima página</p>'}${pe(n)}</div>`;
@@ -435,6 +435,7 @@ async function montarLivro() {
     aoVirar();
     return;
   }
+  $('#livro-caixa').classList.remove('leve');
   flip = new PageFlip($('#livro'), { width: 380, height: hb, size: 'stretch', minWidth: 240, maxWidth: 520, minHeight: Math.round((240 * hb) / 380), maxHeight: Math.round((520 * hb) / 380), showCover: true, usePortrait: false, mobileScrollSupport: false, maxShadowOpacity: 0.55, flippingTime: semMovimento() ? 10 : 850, swipeDistance: 24, disableFlipByClick: true, showPageCorners: true, drawShadow: true, startPage: atual });
   flip.loadFromHTML($$('#livro .pagina'));
   flip.on('flip', (e) => { atual = e.data; jaVirou = true; aoVirar(); });
@@ -442,36 +443,61 @@ async function montarLivro() {
   medirFolhas();
   aoVirar();
 }
-// Celular: uma página por vez, com dobra própria. A folha é recortada numa linha de dobra que
-// acompanha o dedo, e uma aba (o verso do papel) cobre o trecho já virado.
+// Celular: uma página por vez, com dobra própria. A página atual fica por cima e é "cortada" na linha
+// da dobra por dois deslocamentos opostos (a página anda para um lado, o conteúdo dela para o outro);
+// a página de destino já está pintada embaixo. Só transform muda a cada quadro, então a virada roda
+// na placa de vídeo e não repinta as páginas, o que no celular fazia a virada engasgar.
 function livroSimples() {
-  const el = $('#livro'), pgs = $$('.pagina', el);
+  const el = $('#livro'), pgs = $$('.pagina', el), palco = $('#palco');
   el.classList.add('simples');
+  $('#livro-caixa').classList.add('leve');
   el.style.aspectRatio = `380 / ${alturaBase()}`;
   const dobra = document.createElement('div');
   dobra.className = 'dobra';
   dobra.hidden = true;
   el.append(dobra);
-  let anim = 0, turno = null, gesto = null;
+  let anim = 0, turno = null, gesto = null, larg = el.clientWidth;
+  // p é a posição da dobra, de 0 (borda esquerda) a 100 (borda direita).
+  const mover = (p) => {
+    const cima = pgs[atual], frente = turno.dir > 0;
+    // Ao avançar, fica à vista o trecho [0, p]; ao voltar, o trecho [p, 100].
+    const x = Math.round((larg * (frente ? 100 - p : p)) / 100) * (frente ? -1 : 1);
+    cima.style.transform = `translate3d(${x}px,0,0)`;
+    cima.firstElementChild.style.transform = `translate3d(${-x}px,0,0)`;
+    // A aba é o verso da folha dobrada: vai da dobra para a esquerda, até a borda do livro.
+    const esquerda = Math.max(0, 2 * p - 100);
+    dobra.style.transform = `translate3d(${((larg * esquerda) / 100).toFixed(1)}px,0,0) scaleX(${(Math.max(0, p - esquerda) / 100).toFixed(4)})`;
+  };
   const pintar = () => {
     pgs.forEach((pg, i) => {
-      const v = !!turno && i === turno.vira, b = turno ? i === turno.baixo : i === atual;
-      pg.classList.toggle('virando', v);
-      pg.classList.toggle('mostra', v || b);
-      pg.inert = !!turno || i !== atual;
+      const cima = i === atual;
+      pg.classList.toggle('mostra', cima);
+      // As vizinhas ficam prontas (já pintadas) embaixo da atual: a virada começa sem esperar a pintura.
+      pg.classList.toggle('perto', !cima && Math.abs(i - atual) === 1);
+      pg.classList.toggle('destino', !!turno && i === turno.alvo);
+      pg.classList.toggle('virando', cima && !!turno);
+      pg.inert = !!turno || !cima;
+      pg.setAttribute('aria-hidden', String(!cima));
+      if (!(cima && turno)) {
+        pg.style.transform = '';
+        pg.firstElementChild.style.transform = '';
+      }
     });
     dobra.hidden = !turno;
+    palco.classList.toggle('em-virada', !!turno);
     if (turno) {
-      el.style.setProperty('--p', turno.p.toFixed(2));
-      dobra.classList.toggle('escura', !!$('.capa', pgs[turno.vira]));
+      // A aba mostra o verso da folha que está em movimento: a atual, ao avançar; a anterior, ao voltar.
+      dobra.classList.toggle('escura', !!$('.capa', pgs[turno.dir > 0 ? atual : turno.alvo]));
+      mover(turno.p);
     }
   };
-  // dir > 0: a página atual dobra para a esquerda (p vai de 100 a 0). dir < 0: a anterior volta por cima (p de 0 a 100).
+  // dir > 0: a atual dobra para a esquerda (p vai de 100 a 0). dir < 0: a anterior é desdobrada sobre ela (p de 0 a 100).
   const comecar = (dir) => {
     if (turno) return false;
     const alvo = atual + dir;
     if (alvo < 0 || alvo >= pgs.length) return false;
-    turno = dir > 0 ? { dir, vira: atual, baixo: alvo, alvo, p: 100 } : { dir, vira: alvo, baixo: atual, alvo, p: 0 };
+    larg = el.clientWidth;
+    turno = { dir, alvo, p: dir > 0 ? 100 : 0 };
     pintar();
     return true;
   };
@@ -483,8 +509,7 @@ function livroSimples() {
     const passo = (agora) => {
       const k = Math.min(1, (agora - t0) / d), e = 1 - Math.pow(1 - k, 3);
       t.p = ini + (fim - ini) * e;
-      el.style.setProperty('--p', t.p.toFixed(2));
-      if (k < 1) { anim = requestAnimationFrame(passo); return; }
+      if (k < 1) { mover(t.p); anim = requestAnimationFrame(passo); return; }
       turno = null;
       if (completa) { atual = t.alvo; jaVirou = true; }
       pintar();
@@ -492,7 +517,7 @@ function livroSimples() {
     };
     anim = requestAnimationFrame(passo);
   };
-  const virarAnim = (dir) => { if (comecar(dir)) concluir(true, 640); };
+  const virarAnim = (dir) => { if (comecar(dir)) concluir(true, 520); };
   const ir = (i) => {
     i = Math.max(0, Math.min(pgs.length - 1, i));
     if (i === atual || turno) return;
@@ -508,7 +533,7 @@ function livroSimples() {
     const t = ponto(ev);
     gesto = { x: t.clientX, y: t.clientY, t: performance.now(), ativo: false, w: el.clientWidth };
   };
-  const mover = (ev) => {
+  const arrastar = (ev) => {
     if (!gesto) return;
     const t = ponto(ev), dx = t.clientX - gesto.x, dy = t.clientY - gesto.y;
     if (!gesto.ativo) {
@@ -520,7 +545,7 @@ function livroSimples() {
     const noSentido = (dx < 0) === (turno.dir > 0);
     const prog = noSentido ? Math.min(100, (Math.abs(dx) / gesto.w) * 115) : 0;
     turno.p = turno.dir > 0 ? 100 - prog : prog;
-    el.style.setProperty('--p', turno.p.toFixed(2));
+    mover(turno.p);
   };
   const soltar = () => {
     if (!gesto) return;
@@ -528,18 +553,24 @@ function livroSimples() {
     gesto = null;
     if (!g.ativo || !turno) return;
     const prog = turno.dir > 0 ? 100 - turno.p : turno.p;
-    concluir(prog > 28 || (performance.now() - g.t < 300 && prog > 8), 520);
+    concluir(prog > 28 || (performance.now() - g.t < 300 && prog > 8), 420);
   };
-  el.addEventListener('touchstart', inicio, { passive: true });
-  el.addEventListener('touchmove', mover, { passive: false });
+  // No iPhone, arrastar a partir da borda da tela é o gesto de "voltar" do navegador, que tiraria o
+  // cliente da proposta ao tentar voltar uma página. Segurar o toque nas bordas mantém o gesto no livro.
+  el.addEventListener('touchstart', (ev) => {
+    const x = ev.touches[0]?.clientX ?? 0;
+    if ((x < 30 || x > innerWidth - 30) && ev.cancelable && !ev.target.closest('button, a, input, .sem-virar, .sum')) ev.preventDefault();
+    inicio(ev);
+  }, { passive: false });
+  el.addEventListener('touchmove', arrastar, { passive: false });
   el.addEventListener('touchend', soltar);
   el.addEventListener('touchcancel', soltar);
   el.addEventListener('mousedown', inicio);
-  el.addEventListener('mousemove', (ev) => { if (ev.buttons) mover(ev); });
+  el.addEventListener('mousemove', (ev) => { if (ev.buttons) arrastar(ev); });
   el.addEventListener('mouseup', soltar);
   el.addEventListener('mouseleave', soltar);
   pintar();
-  return { simples: true, flipNext: () => virarAnim(1), flipPrev: () => virarAnim(-1), flip: ir, turnToPage: ir, getOrientation: () => 'portrait', update() {}, destroy() { cancelAnimationFrame(anim); }, getSettings: () => ({}) };
+  return { simples: true, flipNext: () => virarAnim(1), flipPrev: () => virarAnim(-1), flip: ir, turnToPage: ir, getOrientation: () => 'portrait', update() { larg = el.clientWidth; }, destroy() { cancelAnimationFrame(anim); palco.classList.remove('em-virada'); }, getSettings: () => ({}) };
 }
 function visiveis() {
   const out = [atual];
@@ -558,9 +589,9 @@ function aoVirar() {
   $('[data-virar="1"]').disabled = vis.at(-1) >= lista.length - 1;
   const iApr = lista.findIndex((p) => p.chave === 'aprovacao');
   vis.forEach((i) => {
-    const pg = $('.inv.espera', els[i]);
-    if (pg) { pg.classList.remove('espera'); odometro($('[data-odo]', pg)); }
-    if ($('.inv-total', els[i])) totalVisto = true;
+    const total = $('.inv-total [data-odo]', els[i]);
+    if (total && !totalVisto) contar(total);
+    if (total) totalVisto = true;
   });
   // Aba dourada que sai do livro, como um marcador.
   const zap = D.situacao === 'aprovada' ? linkWhatsApp(`Olá! Aprovei a proposta nº ${P.numero}. Qual o próximo passo?`) : D.situacao === 'vencida' ? linkWhatsApp(`Olá! A proposta nº ${P.numero} venceu. Pode me enviar uma versão atualizada?`) : '';
@@ -633,33 +664,24 @@ function encerrarAbertura() {
   $('#palco')?.classList.remove('abrindo');
 }
 
-// ------------------------------------------------------------------ Contador que gira
+// ------------------------------------------------------------------ Valor que conta
 
-let telaMedida = null;
-function odometro(el, de) {
+// O valor sobe até o total, trocando só o texto: nada de recortes ou camadas, então funciona igual em
+// qualquer navegador. Se algo falhar, o valor certo já está escrito na página.
+function contar(el, de) {
   if (!el) return;
   const texto = el.dataset.odo || el.textContent;
-  if (semMovimento()) { el.textContent = texto; return; }
-  const a = (de ?? texto.replace(/\d/g, '0')).padStart(texto.length, ' ').slice(-texto.length);
-  el.classList.remove('rolando');
-  el.setAttribute('aria-label', texto);
-  el.innerHTML = [...texto].map((ch, i) => (/\d/.test(ch)
-    ? `<span class="odo-col" aria-hidden="true"><span class="odo-fita" data-de="${/\d/.test(a[i]) ? a[i] : 0}" data-para="${ch}" data-i="${i}">${'0123456789'.split('').map((d) => `<span>${d}</span>`).join('')}</span></span>`
-    : `<span class="odo-fixo" aria-hidden="true">${esc(ch)}</span>`)).join('');
-  const cs = getComputedStyle(el);
-  telaMedida ||= document.createElement('canvas').getContext('2d');
-  telaMedida.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-  const ls = parseFloat(cs.letterSpacing) || 0;
-  $$('.odo-fita', el).forEach((f) => {
-    f.style.setProperty('--de', f.dataset.de);
-    f.style.setProperty('--para', f.dataset.para);
-    f.style.setProperty('--i', f.dataset.i);
-    f.parentElement.style.width = `${(telaMedida.measureText(f.dataset.para).width + ls).toFixed(2)}px`;
-  });
-  void el.offsetWidth;
-  el.classList.add('rolando');
-  clearTimeout(el._odo);
-  el._odo = setTimeout(() => { el.classList.remove('rolando'); el.textContent = texto; el.removeAttribute('aria-label'); }, 1450 + texto.length * 45);
+  const alvo = Number(texto.replace(/\D/g, ''));
+  cancelAnimationFrame(el._contagem);
+  if (semMovimento() || brl(alvo) !== texto) { el.textContent = texto; return; }
+  const inicio = de ? Number(String(de).replace(/\D/g, '')) || 0 : 0;
+  const t0 = performance.now(), dur = 800;
+  const passo = (t) => {
+    const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 4);
+    el.textContent = k < 1 ? brl(Math.round(inicio + (alvo - inicio) * e)) : texto;
+    if (k < 1) el._contagem = requestAnimationFrame(passo);
+  };
+  el._contagem = requestAnimationFrame(passo);
 }
 
 // ------------------------------------------------------------------ Simulador
@@ -671,7 +693,7 @@ function escolherForma(f) {
   if (seg) seg.dataset.forma = f;
   $$('.seg [data-forma]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.forma === f)));
   $$('.sim-painel').forEach((p) => { const on = p.dataset.painel === f; p.setAttribute('aria-hidden', String(!on)); p.inert = !on; });
-  odometro(f === 'combinado' ? $('#sim-combinado') : $('#sim-parcela'));
+  contar(f === 'combinado' ? $('#sim-combinado') : $('#sim-parcela'));
   if ($('#resumo-forma')) $('#resumo-forma').textContent = textoForma();
   navigator.vibrate?.(6);
 }
@@ -680,7 +702,7 @@ function mudarParcelas(n) {
   estado.parcelas = n;
   const o = D.credito[n - 1], el = $('#sim-parcela'), de = el.dataset.odo;
   el.dataset.odo = brl(parcelaDe(o));
-  odometro(el, de);
+  contar(el, de);
   $('#sim-total').textContent = brl(o.total_cents);
   $('#sim-taxa').textContent = textoTaxa(o);
   $('#sim-rotulo').textContent = n === 1 ? 'Crédito à vista' : `${n} parcelas de`;

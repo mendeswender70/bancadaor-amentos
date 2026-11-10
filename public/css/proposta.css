@@ -98,11 +98,19 @@ button { font: inherit; color: inherit; }
 @keyframes pousa { from { opacity: 0; transform: translateY(46px) scale(.9) rotate(-4deg); } }
 @keyframes acende { from { opacity: 0; } 45% { opacity: .8; } }
 
-#livro.simples { position: relative; width: 100%; clip-path: inset(-60px -40px -40px 0); user-select: none; -webkit-user-select: none; touch-action: pan-y; }
-#livro.simples .pagina { position: absolute; inset: 0; z-index: 1; visibility: hidden; }
-#livro.simples .pagina.mostra { visibility: visible; }
-#livro.simples .pagina.virando { z-index: 3; clip-path: inset(0 calc(100% - var(--p) * 1%) 0 0); }
-.dobra { position: absolute; z-index: 4; top: 0; bottom: 0; left: calc((2 * var(--p) - 100) * 1%); width: calc((100 - var(--p)) * 1%); background: linear-gradient(90deg, #c9bfab, #f6f0e4 42%, #ebe3d3 78%, #b9af9a); box-shadow: 0 0 22px rgb(0 0 0 / 38%); pointer-events: none; }
+/* Celular: uma página por vez. A atual fica por cima; as vizinhas já ficam pintadas embaixo dela, cada uma
+   na sua camada. Na virada só mudam transforms (feitos em proposta.js), sem repintar nada. */
+#livro.simples { position: relative; width: 100%; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
+#livro.simples .pagina { position: absolute; inset: 0; z-index: 0; visibility: hidden; }
+#livro.simples .pagina.perto { visibility: visible; will-change: transform; }
+#livro.simples .pagina.mostra { z-index: 1; visibility: visible; will-change: transform; }
+#livro.simples .pagina.mostra > .folha { will-change: transform; }
+#livro.simples .pagina.destino { z-index: 2; }
+#livro.simples .pagina.virando { z-index: 3; overflow: hidden; background: none; }
+.dobra { position: absolute; z-index: 4; top: 0; bottom: 0; left: 0; width: 100%; transform-origin: 0 0; will-change: transform; background: linear-gradient(90deg, #c9bfab, #f6f0e4 42%, #ebe3d3 78%, #b9af9a); box-shadow: 0 0 22px rgb(0 0 0 / 38%); pointer-events: none; }
+/* Sombra do livro sem filtro: um filtro em volta do livro era refeito a cada quadro da virada. */
+#livro-caixa.leve { isolation: isolate; filter: none; box-shadow: 0 3px 3px rgb(0 0 0 / 55%), 0 22px 26px rgb(0 0 0 / 70%); }
+.palco.em-virada .luz-mov { animation-play-state: paused; }
 .dobra::after { content: ""; position: absolute; top: 0; bottom: 0; left: 100%; width: 54px; background: linear-gradient(90deg, rgb(0 0 0 / 32%), transparent); }
 .dobra.escura { background: linear-gradient(90deg, #0b0907, #2c261f 42%, #1c1814 78%, #060504); }
 /* ---------- Página ---------- */
@@ -251,7 +259,6 @@ button { font: inherit; color: inherit; }
 .inv-total b { display: block; margin-top: calc(var(--u) * 6); font: 400 calc(var(--u) * 43)/1.1 var(--display); letter-spacing: -0.045em; white-space: nowrap; background: linear-gradient(180deg, #fff6e6, #ecc994 58%, #b88a4c); -webkit-background-clip: text; background-clip: text; color: transparent; transition: opacity .6s; }
 .inv-total p { margin-top: calc(var(--u) * 4); color: var(--creme-2); font-size: calc(var(--u) * 11); }
 .inv-total .filete { margin: 0 auto calc(var(--u) * 10); }
-.espera .inv-total b { opacity: 0; }
 
 /* Pagamento */
 .pagto h2 { margin: calc(var(--u) * 8) 0 calc(var(--u) * 18); font-size: calc(var(--u) * 38); }
@@ -323,13 +330,6 @@ button { font: inherit; color: inherit; }
 .obs { align-self: stretch; padding-top: calc(var(--u) * 10); border-top: calc(var(--u) * .8) solid var(--linha-papel); color: var(--tinta-3); font-size: calc(var(--u) * 9.8); line-height: 1.5; text-align: left; }
 .obs b { color: var(--tinta-2); }
 
-/* Contador que gira */
-.odo-col, .odo-fixo { display: inline-block; height: 1.1em; line-height: 1.1; vertical-align: top; }
-.odo-col { overflow: hidden; }
-.odo-fita { display: flex; flex-direction: column; transform: translateY(calc(var(--de) * -1.1em)); }
-.odo-fita span { display: block; height: 1.1em; white-space: nowrap; }
-.rolando .odo-fita { transform: translateY(calc(var(--para) * -1.1em)); transition: transform 1.3s cubic-bezier(.2,.75,.15,1); transition-delay: calc(var(--i) * 45ms); }
-.inv-total b.rolando { background: none; color: #f3dcae; }
 
 /* Sucesso */
 .explosao { position: fixed; z-index: 89; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: radial-gradient(circle, #fff3d6, var(--ouro) 45%, #6e4520 78%); pointer-events: none; animation: explode .95s cubic-bezier(.6,0,.3,1) forwards; }
