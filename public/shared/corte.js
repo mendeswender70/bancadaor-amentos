@@ -125,8 +125,11 @@ export function numerosDasPecas(pecas) {
   return new Map(expandirPecas(pecas).map((inst) => [`${inst.indice}:${inst.copia}`, inst.numero]));
 }
 
-/** A peça só não pode girar quando a chapa tem veio e a peça precisa seguir o veio. */
-export const podeGirar = (peca, chapa) => !(chapa?.veio && peca.veio);
+/**
+ * Peça marcada "não girar" (veio do amadeirado, por exemplo) fica com o
+ * comprimento no sentido do comprimento da chapa, em qualquer chapa.
+ */
+export const podeGirar = (peca) => !peca.veio;
 
 /** A sobra vale guardar quando os dois lados passam do mínimo da oficina. */
 export const sobraAproveitavel = (w, h, minimo = CONFIG_PADRAO) =>

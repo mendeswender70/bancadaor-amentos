@@ -67,6 +67,7 @@ function formularioPeca(peca, { chapas, chapaPadraoId, grupos, novo = false, soP
   const comprimento = medidaCm(dados.comprimento_mm, 'Comprimento em cm', { autofocus: novo });
   const largura = medidaCm(dados.largura_mm, 'Largura em cm');
   const quantidade = numero(dados.quantidade || 1, 'Quantidade');
+  const naoGirar = h('input', { type: 'checkbox', checked: Boolean(dados.veio) });
   const chapaDaPeca = chapas.find((c) => c.id === (dados.chapa_id ?? chapaPadraoId)) || chapas.find((c) => c.id === chapaPadraoId);
   const ler = (el, min, max, nome) => {
     const n = Number(el.value.trim());
@@ -91,7 +92,7 @@ function formularioPeca(peca, { chapas, chapaPadraoId, grupos, novo = false, soP
       onsubmit: (e) => {
         e.preventDefault();
         try {
-          const lida = { ...dados, grupo: grupo.value.trim(), chapa_id: dados.chapa_id ?? chapaPadraoId };
+          const lida = { ...dados, grupo: grupo.value.trim(), chapa_id: dados.chapa_id ?? chapaPadraoId, veio: naoGirar.checked ? 1 : 0 };
           if (!soPadrao) {
             Object.assign(lida, {
               descricao: descricao.value.trim(),
@@ -109,6 +110,8 @@ function formularioPeca(peca, { chapas, chapaPadraoId, grupos, novo = false, soP
     h('datalist', { id: listaId }, grupos.map((g) => h('option', { value: g }))),
     soPadrao ? campo('Móvel', grupo, { dica: 'Agrupa as peças por cor no desenho. Pode deixar em branco.' }) : h('div', { class: 'grade-2' }, campo('Peça', descricao), campo('Móvel', grupo)),
     soPadrao ? null : h('div', { class: 'grade-3' }, campo('Comp. (cm)', comprimento), campo('Larg. (cm)', largura), campo('Qtd.', quantidade)),
+    h('label', { class: 'caixa-marcar' }, naoGirar, soPadrao ? 'Não girar as próximas peças' : 'Não girar esta peça'),
+    h('small', { class: 'dica' }, 'O comprimento fica no sentido do comprimento da chapa. Use em porta e frente de amadeirado, para o veio não virar.'),
     origem
       ? h(
           'p',
@@ -253,12 +256,12 @@ export async function paginaPlano(planoId, params) {
   const botaoPadrao = h('button', { type: 'button', class: 'p-padrao' }, icone('regua'), h('span', {}, h('small', {}, 'Próximas peças'), textoPadrao), icone('editar', 'icone icone-mini'));
   const desenharPadrao = () => {
     const chapa = chapasPorId.get(padrao.chapa_id);
-    textoPadrao.textContent = [padrao.grupo || 'Sem móvel', chapa ? `chapa ${formatarCm(chapa.comprimento_mm)} × ${formatarCm(chapa.largura_mm)} cm` : ''].filter(Boolean).join(' · ');
+    textoPadrao.textContent = [padrao.grupo || 'Sem móvel', chapa ? `chapa ${formatarCm(chapa.comprimento_mm)} × ${formatarCm(chapa.largura_mm)} cm` : '', padrao.veio ? 'não girar' : ''].filter(Boolean).join(' · ');
   };
   const editarPadrao = async () => {
     const resposta = await abrirModal('Próximas peças', (fechar) => formularioPeca(padrao, { chapas, chapaPadraoId, grupos: grupos(), soPadrao: true }, fechar), {
       contexto: 'Entrada rápida',
-      subtitulo: 'Móvel das próximas peças digitadas.',
+      subtitulo: 'Móvel e trava de giro das próximas peças digitadas.',
     });
     if (resposta?.acao === 'salvar') {
       Object.assign(padrao, resposta.peca);
@@ -374,7 +377,7 @@ export async function paginaPlano(planoId, params) {
           const origem = textoDaOrigem(p, projeto.anexos());
           // A chapa só aparece se o plano antigo tiver peça fora da chapa padrão.
           const outraChapa = chapa && p.chapa_id !== chapaPadraoId ? `chapa ${formatarCm(chapa.comprimento_mm)} × ${formatarCm(chapa.largura_mm)} cm` : null;
-          const detalhes = [outraChapa, origem ? `medida: ${origem}` : null].filter(Boolean);
+          const detalhes = [p.veio ? 'não girar' : null, outraChapa, origem ? `medida: ${origem}` : null].filter(Boolean);
           const linha = h(
             'button',
             { type: 'button', class: `p-peca${chapa ? '' : ' sem-chapa'}`, onclick: () => !concluido && editarPeca(i), disabled: concluido },
@@ -655,9 +658,9 @@ export async function paginaPlano(planoId, params) {
 
   const exportarCsv = () => {
     const campoCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const linhas = [['#', 'Móvel', 'Peça', 'Comprimento (cm)', 'Largura (cm)', 'Quantidade']];
+    const linhas = [['#', 'Móvel', 'Peça', 'Comprimento (cm)', 'Largura (cm)', 'Quantidade', 'Não girar']];
     pecas.forEach((p, i) => {
-      linhas.push([i + 1, p.grupo, p.descricao, formatarCm(p.comprimento_mm), formatarCm(p.largura_mm), p.quantidade]);
+      linhas.push([i + 1, p.grupo, p.descricao, formatarCm(p.comprimento_mm), formatarCm(p.largura_mm), p.quantidade, p.veio ? 'sim' : '']);
     });
     baixarArquivo(new Blob([`﻿${linhas.map((l) => l.map(campoCsv).join(';')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' }), `pecas-plano-${planoId}.csv`);
   };

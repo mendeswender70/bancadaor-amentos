@@ -148,6 +148,17 @@ test('o modo só faixas nunca usa menos chapas que o livre', () => {
   conferir(faixas, GUARDA_ROUPA, { ...AJUSTES, modo: 'faixas' });
 });
 
+test('peça marcada "não girar" fica no sentido da chapa, mesmo em chapa sem veio', () => {
+  const pecas = [peca(1700, 400, 4, { veio: 1 })];
+  const resultado = calcular(pecas);
+  conferir(resultado, pecas);
+  assert.ok(primeira(resultado).chapas.every((c) => c.pecas.every((p) => !p.girada)), 'nenhuma peça girada');
+  const girada = JSON.parse(JSON.stringify(resultado));
+  const p0 = primeira(girada).chapas[0].pecas[0];
+  p0.girada = true;
+  assert.throws(() => conferir(girada, pecas), /girada contra o veio/);
+});
+
 test('peças com veio em chapa com veio nunca giram; sem veio podem girar', () => {
   const pecas = [peca(400, 1700, 3, { chapa_id: 2, veio: 1 }), peca(400, 2000, 1, { chapa_id: 1 })];
   const solucao = primeira(calcular(pecas));

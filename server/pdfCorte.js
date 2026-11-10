@@ -130,7 +130,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
     ['C × L (cm)', 330, 90],
     ['Qtd', 420, 30],
     ['Chapa', 450, 170],
-    ['Veio', 620, 34],
+    ['Não gira', 620, 34],
     ['Fita', 654, 128],
   ];
   const cabecalhoTabela = () => {
@@ -157,7 +157,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
       `${formatarCm(p.comprimento_mm)} × ${formatarCm(p.largura_mm)}`,
       String(p.quantidade),
       chapa ? `${chapa.nome} ${chapa.espessura_mm} mm` : 'sem chapa',
-      p.veio && chapa?.veio ? 'sim' : '',
+      p.veio ? 'sim' : '',
       lados ? `${lados}${fita ? ` · ${fita.nome}` : ''}` : '',
     ];
     colunas.forEach(([, x, w], c) => texto(valores[c], M + x, y, { s: 8.5, width: w - 6, ellipsis: true, f: c === 3 || c === 0 ? 'media' : 'normal' }));

@@ -234,7 +234,10 @@ quiser, o móvel). Todas as peças vão na **chapa padrão** da oficina, sem
 escolher tipo de MDF nem fita de borda. O tamanho dela (ex.: 275 × 185 cm)
 fica em Ajustes da produção e só o escritório muda (migração 16). Sem chapa
 cadastrada, o sistema cria uma de 275 × 185 cm. Trocar o tamanho cria outra
-chapa, e os planos já calculados continuam com a antiga.
+chapa, e os planos já calculados continuam com a antiga. A caixinha **Não girar
+esta peça** (porta e frente de amadeirado) mantém o comprimento da peça no
+sentido do comprimento da chapa; sem ela, o cálculo gira a peça quando
+aproveita melhor.
 
 **Medidas em centímetros.** A oficina trabalha em cm: peças, chapas, retalhos,
 sobras, guia, refilo e o passo a passo aparecem e são digitados em cm, com até
