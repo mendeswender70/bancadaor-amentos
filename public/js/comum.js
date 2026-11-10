@@ -162,47 +162,56 @@ async function acaoCopiarLink(o) {
  * Lista de orçamentos: a linha abre o orçamento; à direita ficam os atalhos
  * (WhatsApp e o menu com duplicar, PDF e link).
  */
+// O que aconteceu por último com a proposta, em uma frase.
+function andamento(o) {
+  const abriu = o.visualizacoes && ['enviado', 'negociacao'].includes(o.status);
+  if (o.status === 'aprovado') return o.aprovado_pelo_link ? 'Aprovada pelo cliente' : 'Proposta aprovada';
+  if (abriu) return `Cliente abriu ${haQuanto(o.ultima_visualizacao_em)}`;
+  return {
+    enviado: 'Enviada, ainda não aberta',
+    negociacao: 'Em negociação',
+    expirado: 'Validade encerrada',
+    recusado: 'Proposta recusada',
+    cancelado: 'Proposta cancelada',
+  }[o.status] || 'Rascunho, ainda não enviado';
+}
+
+// Livro-caixa: uma linha por orçamento, sem caixa, com o total alinhado à direita.
+function linhaLivro(o, aoMudar) {
+  const ambientes = o.ambiente_nome
+    ? o.ambientes > 1 ? `${o.ambiente_nome} e mais ${o.ambientes - 1}` : o.ambiente_nome
+    : 'Sem ambiente';
+  const validade = o.data_validade && ['enviado', 'negociacao'].includes(o.status) ? ` · válida até ${diaMesCompacto(o.data_validade)}` : '';
+  return h('div', { class: 'll-linha', 'data-status': o.status },
+    h('a', { href: `#/orcamentos/${o.id}`, class: 'll-link' },
+      h('span', { class: 'll-numero' }, formatarNumero(o.numero)),
+      h('span', { class: 'll-cliente' }, h('strong', {}, o.cliente_nome), h('small', {}, h('span', { class: 'll-numero-curto' }, `Nº ${formatarNumero(o.numero)} · `), ambientes)),
+      h('span', { class: `ll-andamento${o.visualizacoes && ['enviado', 'negociacao'].includes(o.status) ? ' ll-abriu' : ''}` }, h('span', {}, andamento(o)), h('small', {}, `Emitido em ${diaMesCompacto(o.data)}${validade}`)),
+      h('span', { class: 'll-situacao' }, selo(o.status)),
+      h('strong', { class: 'll-total' }, formatarDinheiro(o.total_cents))),
+    h('div', { class: 'll-acoes' },
+      h('button', {
+        type: 'button',
+        class: 'botao-icone botao-icone-whatsapp so-computador',
+        title: 'Enviar ao cliente',
+        'aria-label': `Enviar o orçamento nº ${formatarNumero(o.numero)} ao cliente`,
+        onclick: () => enviarDaLista(o, aoMudar),
+      }, icone('whatsapp')),
+      menuOrcamento(o, aoMudar)));
+}
+
 export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, variante = 'compacta' } = {}) {
+  if (variante === 'tabela' && mostrarCliente) return h('div', { class: 'lista-livro' }, orcamentos.map((o) => linhaLivro(o, aoMudar)));
   return h(
     'div',
-    { class: `lista${variante === 'tabela' ? ' lista-orcamentos-tabela' : ''}` },
+    { class: 'lista' },
     orcamentos.map((o) => {
-      const atividade = o.status === 'aprovado'
-        ? o.aprovado_pelo_link ? 'Aprovado pelo cliente' : 'Proposta aprovada'
-        : o.status === 'visto' || (o.visualizacoes && ['enviado', 'negociacao'].includes(o.status))
-          ? `Cliente abriu a proposta ${haQuanto(o.ultima_visualizacao_em)}`
-          : o.status === 'enviado'
-            ? o.data_validade ? `Válido até ${diaMesCompacto(o.data_validade)}` : 'Proposta enviada ao cliente'
-            : o.status === 'negociacao'
-              ? 'Em negociação'
-              : o.status === 'expirado'
-                ? 'Validade da proposta encerrada'
-                : o.status === 'recusado'
-                  ? 'Proposta recusada'
-                  : o.status === 'cancelado'
-                    ? 'Proposta cancelada'
-                    : 'Rascunho aguardando envio';
       const tags = h(
         'span',
         { class: 'etiquetas' },
         etiquetasOrcamento(o).map(([tipo, texto]) => h('span', { class: `etiqueta-linha ${tipo}` }, texto)),
       );
-      const link = variante === 'tabela' && mostrarCliente
-        ? h('a', { href: `#/orcamentos/${o.id}`, class: 'linha-link orcamento-link-tabela' },
-            h('span', { class: 'orcamento-cliente' }, avatar(o.cliente_nome, 'avatar-linha'),
-              h('span', { class: 'orcamento-cliente-texto' }, h('strong', {}, o.cliente_nome), h('small', { 'data-data': dataCompacta(o.data) }, `Nº ${formatarNumero(o.numero)}`)),
-            ),
-            h('span', { class: 'orcamento-atividade', 'data-status': o.status },
-              h('strong', {}, atividade),
-              o.data_validade && ['enviado', 'negociacao'].includes(o.status) ? h('small', {}, `Válida até ${formatarData(o.data_validade)}`) : null,
-            ),
-            h('time', { class: 'orcamento-data', datetime: o.data }, formatarData(o.data)),
-            h('span', { class: 'orcamento-financeiro' },
-              h('span', { class: 'orcamento-status' }, selo(o.status)),
-              h('strong', { class: 'orcamento-total valor' }, formatarDinheiro(o.total_cents)),
-            ),
-          )
-        : h(
+      const link = h(
             'a',
             { href: `#/orcamentos/${o.id}`, class: 'linha-link' },
             mostrarCliente ? avatar(o.cliente_nome, 'avatar-linha') : h('span', { class: 'selo-icone avatar-linha' }, icone('orcamentos')),
@@ -220,7 +229,7 @@ export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, va
           );
       return h(
         'div',
-        { class: `linha-orcamento linha-com-acoes${variante === 'tabela' ? ' linha-orcamento-tabela' : ''}` },
+        { class: 'linha-orcamento linha-com-acoes' },
         link,
         h(
           'div',

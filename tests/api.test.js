@@ -569,6 +569,11 @@ test('histórico de orçamentos: busca por nome, número, status e valor', async
   assert.deepEqual(r.dados.orcamentos.map((o) => o.numero), [2]);
   r = await chamar('GET', '/orcamentos?min=1550000&max=1560000');
   assert.deepEqual(r.dados.orcamentos.map((o) => o.numero), [1]);
+  assert.equal(r.dados.soma_cents, r.dados.orcamentos[0].total_cents, 'a soma acompanha o filtro');
+  r = await chamar('GET', '/orcamentos?limite=1');
+  assert.equal(r.dados.orcamentos.length, 1);
+  const todos = (await chamar('GET', '/orcamentos?limite=200')).dados.orcamentos;
+  assert.equal(r.dados.soma_cents, todos.reduce((n, o) => n + o.total_cents, 0), 'a soma inclui o que não coube na página');
   r = await chamar('GET', '/orcamentos?de=2026-09-01&ate=2026-09-30');
   assert.equal(r.dados.total, 2);
   r = await chamar('GET', '/orcamentos?q=maria');

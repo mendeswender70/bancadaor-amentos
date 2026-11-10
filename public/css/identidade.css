@@ -215,3 +215,67 @@ html:root .estrutura .painel-comercial .pc-tabela th:nth-child(1) { width: 10%; 
   html:root .estrutura .painel-comercial .pc-donut span { font-size: 9px; }
 }
 html:root .estrutura .painel-comercial .pc-tabela th { overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Lista de orçamentos: livro-caixa ----------
+   Uma linha por orçamento, sem caixa, separadas por filete. O total fica alinhado à direita
+   na letra do livro, e o contador soma o valor de tudo o que o filtro encontrou. */
+.pagina-orcamentos { --ll-colunas: 70px minmax(0, 1.25fr) minmax(0, 1.35fr) 132px 150px; --ll-acoes: 84px; }
+.pagina-orcamentos .ll-contador { margin: 22px 0 0; color: var(--pc-suave); font-size: 12px; }
+.pagina-orcamentos .ll-contador strong { color: var(--pc-texto); font: 400 17px/1 var(--fonte-titulo); letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
+.ll-cabecalho { display: grid; grid-template-columns: var(--ll-colunas); gap: 18px; margin-top: 12px; padding: 0 calc(var(--ll-acoes) + 18px) 9px 0; border-bottom: 1.5px solid var(--pc-texto); color: var(--pc-suave); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.ll-cabecalho .num { text-align: right; }
+.lista-livro { display: flex; flex-direction: column; }
+.ll-linha { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--ll-acoes); gap: 18px; align-items: center; border-bottom: 1px solid var(--pc-borda); }
+.ll-linha:hover { background: var(--tema-hover, rgb(255 255 255 / 3%)); }
+.estrutura .ll-link { display: grid; grid-template-columns: var(--ll-colunas); gap: 18px; align-items: center; min-height: 66px; padding: 10px 0; color: var(--pc-texto); text-decoration: none; }
+.estrutura .ll-link:focus-visible { outline: 2px solid var(--pc-acento); outline-offset: -2px; }
+.ll-numero { color: var(--pc-suave); font: 400 15px/1 var(--fonte-titulo); letter-spacing: -0.01em; font-variant-numeric: lining-nums tabular-nums; }
+.ll-cliente, .ll-andamento { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ll-cliente strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.ll-cliente small, .ll-andamento small { overflow: hidden; color: var(--pc-suave); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.ll-numero-curto { display: none; }
+.ll-andamento > span { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.ll-andamento.ll-abriu > span { color: var(--pc-acento); font-weight: 600; }
+.ll-andamento.ll-abriu > span::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 7px 1px 0; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.ll-situacao { min-width: 0; }
+.estrutura .ll-situacao .selo { font-size: 11px; }
+.estrutura .ll-total { color: var(--pc-texto); font: 400 21px/1 var(--fonte-titulo); letter-spacing: -0.03em; text-align: right; white-space: nowrap; font-variant-numeric: lining-nums tabular-nums; }
+.ll-linha[data-status='cancelado'] :is(.ll-total, .ll-cliente strong), .ll-linha[data-status='recusado'] .ll-total { color: var(--pc-suave); }
+.ll-linha[data-status='cancelado'] .ll-total { text-decoration: line-through; text-decoration-thickness: 1px; }
+.ll-acoes { display: flex; justify-content: flex-end; gap: 6px; }
+.estrutura .ll-acoes .botao-icone { width: 36px; height: 36px; min-height: 0; border-color: transparent; background: none; box-shadow: none; }
+.estrutura .ll-acoes .botao-icone:hover { border-color: var(--pc-borda); }
+.pagina-orcamentos .carregar-mais { margin-top: 18px; }
+
+@media (max-width: 1199px) {
+  .pagina-orcamentos { --ll-colunas: 58px minmax(0, 1.2fr) minmax(0, 1.2fr) 120px 128px; }
+  .estrutura .ll-total { font-size: 19px; }
+}
+/* Celular e tablet em pé: duas linhas por orçamento, número junto dos ambientes */
+@media (max-width: 899px) {
+  .pagina-orcamentos { --ll-acoes: 40px; }
+  .ll-cabecalho { display: none; }
+  .pagina-orcamentos .ll-contador { margin-bottom: 4px; padding-bottom: 10px; border-bottom: 1.5px solid var(--pc-texto); }
+  .ll-linha { gap: 6px; align-items: start; }
+  .estrutura .ll-link { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'cliente total' 'andamento situacao'; gap: 8px 12px; min-height: 0; padding: 14px 0; }
+  .ll-numero { display: none; }
+  .ll-numero-curto { display: inline; }
+  .ll-cliente { grid-area: cliente; }
+  .ll-andamento { grid-area: andamento; }
+  .ll-andamento small { display: none; }
+  .ll-situacao { grid-area: situacao; justify-self: end; align-self: center; }
+  .estrutura .ll-total { grid-area: total; align-self: start; font-size: 20px; }
+  .ll-cliente strong { font-size: 15px; }
+  .ll-andamento > span { font-size: 12.5px; color: var(--pc-suave); }
+  .ll-acoes { padding-top: 9px; }
+  .estrutura .ll-acoes .botao-icone { width: 34px; height: 34px; }
+}
+/* A página é uma grade antiga (figma.css) com linha fixa para cada bloco */
+@media (min-width: 768px) { .pagina-orcamentos .ll-cabecalho { grid-column: 1 / -1; grid-row: 5; } }
+html:root .estrutura .pagina-orcamentos .ll-contador { align-items: baseline; color: var(--pc-suave); font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+html:root .estrutura .pagina-orcamentos .ll-contador::after { font-size: 10px; font-weight: 600; letter-spacing: .12em; }
+@media (max-width: 899px) {
+  html:root .estrutura .ll-acoes .botao-icone-whatsapp { display: none; }
+  html:root .estrutura .pagina-orcamentos .ll-contador::after { content: none; }
+}
+.pagina-orcamentos > :is(.ll-cabecalho, .ll-resultado, .ll-contador) { align-self: stretch; width: 100%; }
