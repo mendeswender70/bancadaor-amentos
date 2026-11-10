@@ -132,7 +132,8 @@ export function substituirEndereco(hash) {
 
 const MENU = [
   ['#/', 'Início', 'inicio', /^\/?$/],
-  ['#/orcamentos', 'Orçamentos', 'orcamentos', /^\/orcamentos(?!\/novo)/],
+  // A lista filtrada "propostas" (aberta pelos indicadores do painel) faz parte de Orçamentos.
+  ['#/orcamentos', 'Orçamentos', 'orcamentos', /^\/(orcamentos(?!\/novo)|propostas)/],
   ['#/clientes', 'Clientes', 'clientes', /^\/clientes/],
   ['#/config', 'Ajustes', 'config', /^\/config/],
 ];
@@ -141,7 +142,6 @@ const MENU_LATERAL = [
   ['#/', 'Painel', 'inicio', /^\/?$/],
   MENU[1], MENU[2],
   ['#/config/moveis', 'Móveis e preços', 'caixa', /^\/config\/(moveis|tipos|precos)/],
-  ['#/propostas', 'Propostas', 'enviar', /^\/propostas/],
   ['#/relatorios', 'Relatórios', 'grafico', /^\/relatorios/],
   ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos))/],
 ];
@@ -168,7 +168,7 @@ export function monograma() {
 function montarLayout() {
   const link = ([href, texto, ic, padrao], rotuloCurto) =>
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
-  const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'), h('option', { value: 'propostas' }, 'Propostas'), h('option', { value: 'config/moveis' }, 'Móveis'));
+  const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'), h('option', { value: 'config/moveis' }, 'Móveis'));
   const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente, orçamento, proposta ou móvel…', 'aria-label': 'Buscar no Esquadro', 'aria-keyshortcuts': ATALHO_BUSCA.aria });
   const alternarBusca = (aberta, devolverFoco = false) => {
     buscaGlobal.classList.toggle('gestao-busca-aberta', aberta);

@@ -159,6 +159,6 @@ export function desenharDashboard(d,{periodo,metrica,aoMudarPeriodo,aoMudarMetri
       indicador('moedas','Ticket médio aprovado',moeda(c.ticket_cents),variacao(c.ticket_cents,c.ticket_anterior_cents,comparacao),`#/orcamentos?status=aprovado&aprovados_periodo=${periodo}`)),
     h('div',{class:'pc-linha-central'},atencao(c),evolucao(c,metrica,aoMudarMetrica),barras(d.situacoes),atividades(c.atividades)),
     h('div',{class:'pc-linha-inferior'},distribuicao(c.ambientes),recentes(d.recentes,aoAtualizar),agenda(d.vencimentos,d.data_hoje)),
-    h('nav',{class:'pc-mobile-atalhos','aria-label':'Mais opções do painel'},h('a',{href:'#/propostas'},icone('enviar'),'Propostas'),h('a',{href:'#/config/moveis'},icone('caixa'),'Móveis e preços'),h('a',{href:'#/relatorios'},icone('grafico'),'Relatórios')),
+    h('nav',{class:'pc-mobile-atalhos','aria-label':'Mais opções do painel'},h('a',{href:'#/config/moveis'},icone('caixa'),'Móveis e preços'),h('a',{href:'#/relatorios'},icone('grafico'),'Relatórios')),
     h('p',{class:'pc-nota'},'Valor orçado considera propostas apresentadas ao cliente, sem rascunhos e cancelados. Valores aprovados representam propostas aceitas, não recebimentos. Distribuição por primeiro ambiente de cada orçamento.'));
 }
