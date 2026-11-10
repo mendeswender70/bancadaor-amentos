@@ -101,7 +101,10 @@ button { font: inherit; color: inherit; }
 #livro.simples { position: relative; width: 100%; clip-path: inset(-60px -40px -40px 0); user-select: none; -webkit-user-select: none; touch-action: pan-y; }
 #livro.simples .pagina { position: absolute; inset: 0; z-index: 1; visibility: hidden; }
 #livro.simples .pagina.mostra { visibility: visible; }
-#livro.simples .pagina.virando { z-index: 3; clip-path: inset(0 calc(100% - var(--p) * 1%) 0 0); }
+/* Quem é recortada é sempre a página que já estava na tela (pintada por inteiro). A que chega fica
+   embaixo, sem recorte: no Safari, uma página revelada a partir de um recorte vazio aparecia cortada. */
+#livro.simples .pagina.virando { z-index: 3; -webkit-clip-path: inset(0 calc(100% - var(--p) * 1%) 0 0); clip-path: inset(0 calc(100% - var(--p) * 1%) 0 0); }
+#livro.simples .pagina.voltando { z-index: 3; -webkit-clip-path: inset(0 0 0 calc(var(--p) * 1%)); clip-path: inset(0 0 0 calc(var(--p) * 1%)); }
 .dobra { position: absolute; z-index: 4; top: 0; bottom: 0; left: calc((2 * var(--p) - 100) * 1%); width: calc((100 - var(--p)) * 1%); background: linear-gradient(90deg, #c9bfab, #f6f0e4 42%, #ebe3d3 78%, #b9af9a); box-shadow: 0 0 22px rgb(0 0 0 / 38%); pointer-events: none; }
 .dobra::after { content: ""; position: absolute; top: 0; bottom: 0; left: 100%; width: 54px; background: linear-gradient(90deg, rgb(0 0 0 / 32%), transparent); }
 .dobra.escura { background: linear-gradient(90deg, #0b0907, #2c261f 42%, #1c1814 78%, #060504); }

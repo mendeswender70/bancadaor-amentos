@@ -455,23 +455,26 @@ function livroSimples() {
   let anim = 0, turno = null, gesto = null;
   const pintar = () => {
     pgs.forEach((pg, i) => {
-      const v = !!turno && i === turno.vira, b = turno ? i === turno.baixo : i === atual;
-      pg.classList.toggle('virando', v);
-      pg.classList.toggle('mostra', v || b);
+      const cima = !!turno && i === atual, baixo = !!turno && i === turno.alvo;
+      pg.classList.toggle('virando', cima && turno.dir > 0);
+      pg.classList.toggle('voltando', cima && turno.dir < 0);
+      pg.classList.toggle('mostra', turno ? cima || baixo : i === atual);
       pg.inert = !!turno || i !== atual;
     });
     dobra.hidden = !turno;
     if (turno) {
       el.style.setProperty('--p', turno.p.toFixed(2));
-      dobra.classList.toggle('escura', !!$('.capa', pgs[turno.vira]));
+      // A aba mostra o verso da folha que está em movimento: a atual, ao avançar; a anterior, ao voltar.
+      dobra.classList.toggle('escura', !!$('.capa', pgs[turno.dir > 0 ? atual : turno.alvo]));
     }
   };
-  // dir > 0: a página atual dobra para a esquerda (p vai de 100 a 0). dir < 0: a anterior volta por cima (p de 0 a 100).
+  // A página atual fica por cima, recortada na linha da dobra (p), e a de destino espera embaixo, inteira.
+  // dir > 0: a atual dobra para a esquerda (p vai de 100 a 0). dir < 0: a anterior é desdobrada sobre ela (p de 0 a 100).
   const comecar = (dir) => {
     if (turno) return false;
     const alvo = atual + dir;
     if (alvo < 0 || alvo >= pgs.length) return false;
-    turno = dir > 0 ? { dir, vira: atual, baixo: alvo, alvo, p: 100 } : { dir, vira: alvo, baixo: atual, alvo, p: 0 };
+    turno = { dir, alvo, p: dir > 0 ? 100 : 0 };
     pintar();
     return true;
   };
@@ -530,7 +533,13 @@ function livroSimples() {
     const prog = turno.dir > 0 ? 100 - turno.p : turno.p;
     concluir(prog > 28 || (performance.now() - g.t < 300 && prog > 8), 520);
   };
-  el.addEventListener('touchstart', inicio, { passive: true });
+  // No iPhone, arrastar a partir da borda da tela é o gesto de "voltar" do navegador, que tiraria o
+  // cliente da proposta ao tentar voltar uma página. Segurar o toque nas bordas mantém o gesto no livro.
+  el.addEventListener('touchstart', (ev) => {
+    const x = ev.touches[0]?.clientX ?? 0;
+    if ((x < 30 || x > innerWidth - 30) && ev.cancelable && !ev.target.closest('button, a, input, .sem-virar, .sum')) ev.preventDefault();
+    inicio(ev);
+  }, { passive: false });
   el.addEventListener('touchmove', mover, { passive: false });
   el.addEventListener('touchend', soltar);
   el.addEventListener('touchcancel', soltar);
