@@ -299,7 +299,8 @@
   .pagina-editor:not([data-secao-ativa="ambientes"]) #secao-ambientes,
   .pagina-editor:not([data-secao-ativa="extras"]) #secao-extras,
   .pagina-editor:not([data-secao-ativa="inclusos"]) #secao-inclusos,
-  .pagina-editor:not([data-secao-ativa="condicoes"]) #secao-condicoes { display: none; }
+  .pagina-editor:not([data-secao-ativa="condicoes"]) #secao-condicoes,
+  .pagina-editor:not([data-secao-ativa="condicoes"]) .producao-secao { display: none; }
   .pagina-editor:not([data-secao-ativa="ambientes"]):not(.editor-mostrando-historico) > .abas-editor { display: none; }
   .pagina-editor.editor-mostrando-historico > .editor-indice { opacity: 0; pointer-events: none; }
   .pagina-editor.editor-mostrando-historico > .abas-editor { display: flex; }
