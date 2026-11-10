@@ -5,6 +5,8 @@ import {
   assinaturaPlano,
   detalharSolucao,
   expandirPecas,
+  formatarCm,
+  lerCm,
   lerLinhasPecas,
   metrosDeFita,
   otimizarPlano,
@@ -53,17 +55,29 @@ const novas = (solucao) => solucao.chapas.filter((f) => !f.retalho_id).length;
 const conferir = (resultado, pecas, ajustes = AJUSTES, retalhos = []) =>
   validarResultado(JSON.parse(JSON.stringify(resultado)), { pecas, chapas: CHAPAS, ajustes, retalhos });
 
-test('lê a entrada rápida com x, ×, colunas de planilha e descrição', () => {
-  const { pecas, erros } = lerLinhasPecas('720 x 550 x 2 Lateral\n600×400 Prateleira\nBase\t1000\t500\t3\n\nsó texto');
+test('lê a entrada rápida em cm com x, ×, vírgula, colunas de planilha e descrição', () => {
+  const { pecas, erros } = lerLinhasPecas('72 x 55 x 2 Lateral\n60×40,5 Prateleira\nBase\t100\t50\t3\n\nsó texto');
   assert.deepEqual(
     pecas.map((p) => [p.comprimento_mm, p.largura_mm, p.quantidade, p.descricao]),
     [
       [720, 550, 2, 'Lateral'],
-      [600, 400, 1, 'Prateleira'],
+      [600, 405, 1, 'Prateleira'],
       [1000, 500, 3, 'Base'],
     ],
   );
   assert.deepEqual(erros, [{ linha: 5, texto: 'só texto' }]);
+});
+
+test('centímetros: mostra até uma casa e lê vírgula ou ponto', () => {
+  assert.equal(formatarCm(725), '72,5');
+  assert.equal(formatarCm(2750), '275');
+  assert.equal(formatarCm(12000), '1.200');
+  assert.equal(lerCm('72,5'), 725);
+  assert.equal(lerCm('72.5'), 725);
+  assert.equal(lerCm(' 55 '), 550);
+  assert.equal(lerCm('0'), null);
+  assert.equal(lerCm('5 5'), null);
+  assert.equal(lerCm('-3'), null);
 });
 
 test('cada solução passa na conferência e tem cada peça uma vez', () => {

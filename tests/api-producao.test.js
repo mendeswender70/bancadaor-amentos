@@ -144,7 +144,7 @@ test('só o dono vê o trabalho, e sem nenhum valor do orçamento', async () => 
   assert.equal(r.status, 200);
   assert.equal(r.dados.instrucoes, 'Portas com veio na vertical.');
   assert.equal(r.dados.trabalho.cliente_nome, 'Maria Souza');
-  assert.deepEqual(r.dados.trabalho.ambientes[0].itens, [{ nome: 'Guarda-roupa', tipo: 'Guarda-roupa', medida: '2,40 m', quantidade: 1 }]);
+  assert.deepEqual(r.dados.trabalho.ambientes[0].itens, [{ nome: 'Guarda-roupa', tipo: 'Guarda-roupa', medida: '240 cm', quantidade: 1 }]);
   const json = JSON.stringify(r.dados);
   assert.ok(!/cents|preco/.test(json), 'nenhum preço nem total para o funcionário');
   // O escritório vê todos os planos, filtra por funcionário e vê o total do orçamento.
@@ -289,4 +289,111 @@ test('funcionário desativado perde o acesso na hora', async () => {
 test('chapa em uso ou com retalho no estoque não é excluída', async () => {
   assert.equal((await chamar('admin', 'DELETE', `/chapas/${branco.id}`)).status, 400);
   assert.equal((await chamar('admin', 'DELETE', `/fitas/${fita.id}`)).status, 400);
+});
+
+// ------------------------------------------------------------------ Anexos
+
+async function enviarParte(quem, caminho, dados) {
+  const r = await fetch(base + caminho, {
+    method: 'PUT',
+    headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/octet-stream', cookie: cookies[quem] },
+    body: dados,
+  });
+  return { status: r.status, dados: (r.headers.get('content-type') || '').includes('json') ? await r.json() : null };
+}
+
+async function anexar(quem, destino, nome, tipo, conteudo) {
+  const criado = await chamar(quem, 'POST', '/producao/anexos', { ...destino, nome, tipo, tamanho: conteudo.length });
+  if (criado.status !== 201) return criado;
+  const { id: anexoId, partes, parte_bytes: parte } = criado.dados;
+  for (let i = 0; i < partes; i++) {
+    const r = await enviarParte(quem, `/producao/anexos/${anexoId}/partes/${i}`, conteudo.subarray(i * parte, (i + 1) * parte));
+    if (r.status !== 200) return r;
+  }
+  const fim = await chamar(quem, 'POST', `/producao/anexos/${anexoId}/concluir`);
+  return { ...fim, id: anexoId, partes };
+}
+
+async function baixar(quem, anexo) {
+  const pedacos = [];
+  for (let i = 0; i < anexo.partes; i++) {
+    const r = await chamar(quem, 'GET', `/producao/anexos/${anexo.id}/partes/${i}`);
+    if (r.status !== 200) return { status: r.status };
+    pedacos.push(r.dados);
+  }
+  return { status: 200, dados: Buffer.concat(pedacos) };
+}
+
+const pdfGrande = () => {
+  // PDF de mentira com mais de 3 MB: só o começo importa para a conferência.
+  const corpo = Buffer.alloc(3 * 1024 * 1024 + 12345);
+  for (let i = 0; i < corpo.length; i++) corpo[i] = (i * 31) % 251;
+  return Buffer.concat([Buffer.from('%PDF-1.7\n'), corpo]);
+};
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xd9]);
+
+let anexoEscritorio;
+
+test('o escritório anexa o PDF do arquiteto no orçamento e o João vê no trabalho', async () => {
+  const conteudo = pdfGrande();
+  const r = await anexar('admin', { orcamento_id: orcamentoId }, 'Projeto marcenaria.pdf', 'application/pdf', conteudo);
+  assert.equal(r.status, 200, JSON.stringify(r.dados));
+  assert.equal(r.partes, 2, 'mais de 3 MB vai em duas partes');
+  let lista = await chamar('joao', 'GET', `/producao/planos/${trabalho.id}/anexos`);
+  assert.equal(lista.status, 200);
+  [anexoEscritorio] = lista.dados;
+  assert.equal(anexoEscritorio.origem, 'orcamento');
+  assert.equal(anexoEscritorio.pode_excluir, false, 'funcionário não exclui o anexo do escritório');
+  const baixado = await baixar('joao', anexoEscritorio);
+  assert.equal(baixado.status, 200);
+  assert.ok(baixado.dados.equals(conteudo), 'o arquivo volta igual, byte a byte');
+  assert.equal((await chamar('joao', 'DELETE', `/producao/anexos/${anexoEscritorio.id}`)).status, 403);
+  lista = await chamar('admin', 'GET', `/orcamentos/${orcamentoId}/anexos`);
+  assert.equal(lista.dados.length, 1);
+  assert.equal(lista.dados[0].pode_excluir, true);
+});
+
+test('quem não tem trabalho no orçamento não vê o anexo', async () => {
+  assert.equal((await baixar('pedro', anexoEscritorio)).status, 404);
+  assert.equal((await chamar('pedro', 'GET', `/producao/planos/${trabalho.id}/anexos`)).status, 404);
+  assert.equal((await chamar('pedro', 'GET', `/orcamentos/${orcamentoId}/anexos`)).status, 403);
+  assert.equal((await chamar('joao', 'POST', '/producao/anexos', { orcamento_id: orcamentoId, nome: 'x.pdf', tipo: 'application/pdf', tamanho: 10 })).status, 403, 'só o escritório anexa no orçamento');
+});
+
+test('o João anexa a foto no plano dele e pode tirar', async () => {
+  const r = await anexar('joao', { plano_id: trabalho.id }, 'parede.jpg', 'image/jpeg', JPEG);
+  assert.equal(r.status, 200, JSON.stringify(r.dados));
+  const lista = (await chamar('joao', 'GET', `/producao/planos/${trabalho.id}/anexos`)).dados;
+  assert.deepEqual(lista.map((a) => [a.origem, a.nome, a.pode_excluir]), [
+    ['orcamento', 'Projeto marcenaria.pdf', false],
+    ['plano', 'parede.jpg', true],
+  ]);
+  assert.equal((await chamar('pedro', 'DELETE', `/producao/anexos/${r.id}`)).status, 404);
+  assert.equal((await chamar('joao', 'DELETE', `/producao/anexos/${r.id}`)).status, 200);
+});
+
+test('envio errado é recusado: tipo, tamanho, parte e conteúdo', async () => {
+  assert.equal((await chamar('joao', 'POST', '/producao/anexos', { plano_id: trabalho.id, nome: 'a.exe', tipo: 'application/x-msdownload', tamanho: 10 })).status, 400);
+  assert.equal((await chamar('joao', 'POST', '/producao/anexos', { plano_id: trabalho.id, nome: 'g.pdf', tipo: 'application/pdf', tamanho: 26 * 1024 * 1024 })).status, 400);
+  let criado = (await chamar('joao', 'POST', '/producao/anexos', { plano_id: trabalho.id, nome: 'f.jpg', tipo: 'image/jpeg', tamanho: JPEG.length })).dados;
+  assert.equal((await enviarParte('joao', `/producao/anexos/${criado.id}/partes/0`, JPEG.subarray(0, 5))).status, 400, 'parte do tamanho errado');
+  assert.equal((await enviarParte('pedro', `/producao/anexos/${criado.id}/partes/0`, JPEG)).status, 404, 'só quem começou manda as partes');
+  assert.equal((await chamar('joao', 'POST', `/producao/anexos/${criado.id}/concluir`)).status, 400, 'não conclui sem as partes');
+  // HTML disfarçado de foto não passa.
+  const falso = Buffer.from('<html><script>alert(1)</script></html>');
+  criado = (await chamar('joao', 'POST', '/producao/anexos', { plano_id: trabalho.id, nome: 'falso.jpg', tipo: 'image/jpeg', tamanho: falso.length })).dados;
+  assert.equal((await enviarParte('joao', `/producao/anexos/${criado.id}/partes/0`, falso)).status, 200);
+  const fim = await chamar('joao', 'POST', `/producao/anexos/${criado.id}/concluir`);
+  assert.equal(fim.status, 400);
+  assert.match(fim.dados.erro, /não é um PDF ou uma imagem/);
+  const lista = (await chamar('joao', 'GET', `/producao/planos/${trabalho.id}/anexos`)).dados;
+  assert.ok(lista.every((a) => a.nome !== 'falso.jpg' && a.nome !== 'f.jpg'), 'incompletos e recusados não aparecem');
+});
+
+test('excluir o orçamento leva os anexos dele junto', async () => {
+  const db = await app.locals.obterDb();
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM anexos WHERE orcamento_id = ?', orcamentoId)).n, 1);
+  assert.equal((await chamar('admin', 'DELETE', `/orcamentos/${orcamentoId}`)).status, 200);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM anexos WHERE orcamento_id = ?', orcamentoId)).n, 0);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM anexo_partes')).n, 0, 'as partes vão junto');
 });

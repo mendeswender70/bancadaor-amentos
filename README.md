@@ -29,9 +29,9 @@ Configuração conferida na Neon em 20/10/2026:
 
 O banco contém as tabelas de clientes, orçamentos, itens, histórico, usuários,
 sessões e notificações, chapas, fitas, planos de corte, retalhos e a
-configuração da serra, além do controle de migrações e da marca de configuração
-inicial. As migrações atuais estão na versão **13** (`server/db.js`) e são
-aplicadas automaticamente ao acessar a API.
+configuração da serra e anexos do projeto, além do controle de migrações e da
+marca de configuração inicial. As migrações atuais estão na versão **14**
+(`server/db.js`) e são aplicadas automaticamente ao acessar a API.
 
 1. **Neon Console → projeto esquadro → Connect**: selecione a branch
    `production`, o banco `neondb` e a role usada pela aplicação.
@@ -229,6 +229,25 @@ girar a peça e o que o corte separa. "Estragou" anota a peça e, no fim, gera o
 plano de recorte. No fim de cada chapa, as sobras boas vão para o estoque de
 retalhos. O andamento é salvo a cada passo e a tela fica acesa enquanto corta.
 
+**Medidas em centímetros.** A oficina trabalha em cm: peças, chapas, retalhos,
+sobras, guia, refilo e o passo a passo aparecem e são digitados em cm, com até
+uma casa decimal (72,5). Ficam em mm só a espessura da chapa, a largura da fita
+e a espessura do disco. O sistema guarda milímetros inteiros e converte na
+tela; uma medida maior que a maior chapa gera o aviso "confira se não digitou
+em milímetros".
+
+**Projeto anexado.** O escritório anexa o PDF do arquiteto e fotos no
+orçamento (cartão Produção do editor ou ao mandar para a produção); quem tem um
+trabalho daquele orçamento vê. O funcionário também anexa fotos no próprio
+plano. Na produção, **Medir no projeto** prende o desenho na metade de cima da
+tela (com zoom de pinça e páginas do PDF) e deixa a entrada de peças embaixo.
+O PDF abre no próprio site com o pdf.js (`public/js/vendor/pdfjs`, Apache-2.0).
+Os arquivos ficam no banco (`anexos` e `anexo_partes`), em partes de 3 MB,
+porque a Vercel limita cada requisição e cada resposta a 4,5 MB; o limite é
+25 MB por arquivo e as fotos são reduzidas no celular antes do envio. Anexos
+ocupam espaço no Postgres da Neon: se o volume crescer, vale mudar para um
+armazenamento de arquivos (ex.: Vercel Blob).
+
 **Retalhos e serra.** O estoque é da oficina (todos veem). A configuração da
 serra (disco, refilo, guia paralela, curso do carro e sobra mínima) fica em
 **Ajustes** da produção e só o escritório altera.
@@ -270,6 +289,7 @@ server/orcamentos.js    salvar, duplicar, histórico, busca, painel
 server/visaoCliente.js  dados que o cliente pode ver
 server/pdf.js           geração do PDF (PDFKit)
 server/producao.js      equipe, trabalhos, planos de corte, retalhos e serra
+server/anexos.js        projeto anexado (PDF e fotos), em partes de 3 MB
 server/pdfCorte.js      PDF de produção do plano de corte
 public/shared/corte.js  otimizador de corte, roteiro, passo a passo e conferência
 public/producao/        área da produção (/producao/), com folha própria em css/producao.css

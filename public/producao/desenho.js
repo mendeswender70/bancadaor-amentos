@@ -2,7 +2,7 @@
 // medida, fita marcada nas bordas, sobras hachuradas e as cotas das faixas.
 // O mesmo desenho serve para o plano, para a tela cheia (com zoom) e para o
 // modo de corte (com a parte da vez destacada).
-import { formatarMm, ladosNoDesenho } from '/shared/corte.js';
+import { formatarCm, ladosNoDesenho } from '/shared/corte.js';
 import { h, icone } from '/js/ui.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -59,7 +59,7 @@ export function desenharFolha(detalhe, opcoes) {
   for (const sb of sobras) {
     svg.append(
       s('rect', { x: sb.x, y: sb.y, width: sb.w, height: sb.h, class: 'd-sobra', fill: `url(#${id})` }),
-      sb.w > base * 7 && sb.h > base * 1.6 ? s('text', { x: sb.x + sb.w / 2, y: sb.y + sb.h / 2 + base * 0.35, 'font-size': base * 0.95, class: 'd-medida' }, `sobra ${formatarMm(sb.w)}×${formatarMm(sb.h)}`) : null,
+      sb.w > base * 7 && sb.h > base * 1.6 ? s('text', { x: sb.x + sb.w / 2, y: sb.y + sb.h / 2 + base * 0.35, 'font-size': base * 0.95, class: 'd-medida' }, `sobra ${formatarCm(sb.w)}×${formatarCm(sb.h)}`) : null,
     );
   }
   for (const p of colocadas) {
@@ -78,7 +78,7 @@ export function desenharFolha(detalhe, opcoes) {
       lados.esquerda ? s('line', { x1: p.x, y1: p.y, x2: p.x, y2: p.y + p.h, class: 'd-fita' }) : null,
       lados.direita ? s('line', { x1: p.x + p.w, y1: p.y, x2: p.x + p.w, y2: p.y + p.h, class: 'd-fita' }) : null,
       fs > base * 0.55 ? s('text', { x: p.x + p.w / 2, y: p.y + p.h / 2 + (cabeMedida ? -fs * 0.12 : fs * 0.36), 'font-size': fs, class: 'd-rotulo' }, `#${p.indice + 1}`) : null,
-      cabeMedida ? s('text', { x: p.x + p.w / 2, y: p.y + p.h / 2 + fs * 0.95, 'font-size': fs * 0.6, class: 'd-medida' }, `${peca.comprimento_mm}×${peca.largura_mm}`) : null,
+      cabeMedida ? s('text', { x: p.x + p.w / 2, y: p.y + p.h / 2 + fs * 0.95, 'font-size': fs * 0.6, class: 'd-medida' }, `${formatarCm(peca.comprimento_mm)}×${formatarCm(peca.largura_mm)}`) : null,
     );
     // Cor pelo CSSOM: atributo style é bloqueado pela política de segurança.
     g.style.setProperty('--cor', cor);
@@ -99,7 +99,7 @@ export function desenharFolha(detalhe, opcoes) {
       const meio = parte.regiao.y + parte.regiao.h / 2;
       svg.append(
         s('line', { x1: -margem * 0.25, y1: parte.regiao.y, x2: -margem * 0.25, y2: parte.regiao.y + parte.regiao.h, class: 'd-cota-linha' }),
-        s('text', { x: -margem * 0.62, y: meio, 'font-size': base * 0.85, class: 'd-cota', transform: `rotate(-90 ${-margem * 0.62} ${meio})` }, formatarMm(parte.medida)),
+        s('text', { x: -margem * 0.62, y: meio, 'font-size': base * 0.85, class: 'd-cota', transform: `rotate(-90 ${-margem * 0.62} ${meio})` }, formatarCm(parte.medida)),
       );
     }
   }
@@ -115,7 +115,7 @@ export function desenharFolha(detalhe, opcoes) {
 /** Texto de uma peça tocada no desenho. */
 export function descreverPeca(p, peca) {
   const lados = peca.fita_id ? ['fita_c1', 'fita_c2', 'fita_l1', 'fita_l2'].filter((k) => peca[k]).map((k) => k.slice(5).toUpperCase()).join(' ') : '';
-  return [`#${p.indice + 1}`, peca.descricao || 'Peça sem nome', peca.grupo, `${peca.comprimento_mm} × ${peca.largura_mm} mm`, p.girada ? 'girada' : '', lados ? `fita ${lados}` : '']
+  return [`#${p.indice + 1}`, peca.descricao || 'Peça sem nome', peca.grupo, `${formatarCm(peca.comprimento_mm)} × ${formatarCm(peca.largura_mm)} cm`, p.girada ? 'girada' : '', lados ? `fita ${lados}` : '']
     .filter(Boolean)
     .join(' · ');
 }

@@ -466,3 +466,43 @@ dialog.modal::backdrop { background: rgb(15 10 5 / 55%); }
 .girar45 { transform: rotate(45deg); }
 body.serra-aberta { overflow: hidden; }
 body.serra-aberta .p-novo-fixo, body.serra-aberta .p-acao-fixa { display: none; }
+
+/* ---------------------------------------------------------- Projeto anexado */
+.p-projeto .p-titulo-cartao { margin-bottom: 4px; }
+.p-projeto .dica { display: block; margin-bottom: 12px; }
+.p-anexos { display: grid; grid-auto-flow: column; grid-auto-columns: 112px; gap: 12px; overflow-x: auto; padding: 2px 2px 6px; scroll-snap-type: x proximity; }
+.p-anexo { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 0; border: 0; background: none; color: var(--texto); text-align: left; scroll-snap-align: start; }
+.p-anexo-abrir { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.p-anexo-imagem { position: relative; display: grid; place-items: center; width: 112px; height: 100px; overflow: hidden; border: 1px solid var(--borda); border-radius: 14px; background: var(--superficie-2); color: var(--primaria); }
+.p-anexo-imagem img { width: 100%; height: 100%; object-fit: cover; }
+.p-anexo-imagem[data-paginas]::after { content: attr(data-paginas); position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: var(--superficie); color: var(--texto-2); font-size: 11px; font-weight: 700; }
+.p-anexo-nome { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.p-anexo-info { overflow: hidden; color: var(--suave); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.p-anexo-excluir { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgb(20 14 8 / 62%); color: #fff; cursor: pointer; }
+.p-anexo-novo { cursor: pointer; }
+.p-anexo-novo .p-anexo-imagem { border-style: dashed; border-color: var(--borda-forte); }
+.p-anexo-enviando .p-anexo-imagem { background: var(--superficie-3); }
+
+.p-visor-area { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; background: var(--superficie-3); cursor: grab; }
+.p-visor-conteudo { width: 100%; will-change: transform; }
+.p-visor-imagem { display: block; width: 100%; height: auto; background: #fff; user-select: none; -webkit-user-drag: none; }
+.p-visor-paginas { display: flex; align-items: center; gap: 2px; }
+.p-visor-pagina { min-width: 96px; text-align: center; font-size: 13px; font-weight: 600; color: var(--texto-2); }
+.p-visor-rodape { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.p-medir {
+  position: fixed; z-index: 45; top: 0; left: 0; right: 0; height: 48dvh; display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top); background: var(--superficie); border-bottom: 3px solid var(--primaria); box-shadow: var(--sombra-forte);
+}
+.p-medir-topo { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; color: var(--primaria); }
+.p-medir-topo strong { flex: 1; overflow: hidden; color: var(--texto); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.p-medir-topo select { flex: 1; min-height: 40px; padding: 6px 10px; font-size: 15px; }
+.p-medir-corpo { display: flex; flex: 1; min-height: 0; }
+.p-medir-rodape { display: flex; align-items: center; justify-content: flex-end; gap: 2px; padding: 2px 8px; border-top: 1px solid var(--borda); }
+.p-medir-rodape .p-visor-paginas { margin-right: auto; }
+body.medindo .p-casca { padding-top: 48dvh; }
+body.medindo .p-topo { display: none; }
+body.medindo .p-abas-plano { top: 48dvh; }
+body.medindo .p-entrada { scroll-margin-top: calc(48dvh + 12px); }
+/* Medindo: os avisos não cobrem o projeto. */
+body.medindo .avisos { top: auto; bottom: calc(var(--barra) + env(safe-area-inset-bottom) + 12px); }

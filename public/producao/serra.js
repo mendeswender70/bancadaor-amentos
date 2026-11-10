@@ -1,7 +1,7 @@
 // Modo serra: o plano corte a corte, em tela cheia, para seguir no celular ao
 // lado da esquadrejadeira. Mostra a medida da guia em letra grande, quando
 // girar a peça e a parte da vez no desenho. O andamento é salvo a cada passo.
-import { detalharSolucao, expandirPecas, formatarMm, passosDaSerra, sobraAproveitavel } from '/shared/corte.js';
+import { detalharSolucao, expandirPecas, formatarCm, formatarMm, passosDaSerra, sobraAproveitavel } from '/shared/corte.js';
 import { api } from '/js/api.js';
 import { h, icone, substituir, aviso, avisoErro, abrirModal, confirmar } from '/js/ui.js';
 import { aoSairDaPagina, irPara, manterTelaLigada, nomeChapa, plural, progresso as barraProgresso, ultimoLocal, guardarLocal } from './nucleo.js';
@@ -33,7 +33,7 @@ export async function abrirSerra(planoId) {
     const p = plano.pecas[inst.indice];
     const cor = h('span', { class: 'p-cor' });
     cor.style.setProperty('--cor', corDaPeca(cores, p));
-    return { cor, texto: `#${inst.indice + 1} ${p.descricao || 'Peça'}`, medida: `${p.comprimento_mm} × ${p.largura_mm}`, grupo: p.grupo };
+    return { cor, texto: `#${inst.indice + 1} ${p.descricao || 'Peça'}`, medida: `${formatarCm(p.comprimento_mm)} × ${formatarCm(p.largura_mm)} cm`, grupo: p.grupo };
   };
 
   // ------------------------------------------------------------- Salvar
@@ -143,7 +143,7 @@ export async function abrirSerra(planoId) {
           { class: 'serra-instrucao' },
           h('span', { class: 'serra-rotulo' }, d.retalho_id ? 'Pegue o retalho' : 'Pegue a chapa'),
           h('p', { class: 'serra-titulo' }, nomeChapa(d.chapa)),
-          h('p', { class: 'serra-texto' }, `${fonte} · ${formatarMm(d.medidas.comprimento_mm)} × ${formatarMm(d.medidas.largura_mm)} mm${d.chapa.veio ? ' · veio no comprimento' : ''}`),
+          h('p', { class: 'serra-texto' }, `${fonte} · ${formatarCm(d.medidas.comprimento_mm)} × ${formatarCm(d.medidas.largura_mm)} cm${d.chapa.veio ? ' · veio no comprimento' : ''}`),
           d.retalho ? h('p', { class: 'serra-resto' }, `Está em: ${d.retalho.local || 'local não informado'}`) : null,
           d.iguais > 1 ? h('p', { class: 'serra-resto' }, `Chapa ${d.posicaoIgual} de ${d.iguais} iguais: os cortes se repetem.`) : null,
           h('p', { class: 'serra-texto' }, `Nesta chapa: ${plural(d.colocadas.length, 'peça', 'peças')}.`),
@@ -157,7 +157,7 @@ export async function abrirSerra(planoId) {
           'section',
           { class: 'serra-instrucao' },
           h('span', { class: 'serra-rotulo' }, 'Esquadrejar a chapa'),
-          h('div', { class: 'serra-medida' }, h('strong', {}, formatarMm(passo.refilo)), h('span', {}, 'mm')),
+          h('div', { class: 'serra-medida' }, h('strong', {}, formatarCm(passo.refilo)), h('span', {}, 'cm')),
           h('p', { class: 'serra-texto' }, 'Corte essa medida de um lado comprido e de um lado curto. As próximas medidas partem dessas bordas retas.'),
         ),
         mapa(passo),
@@ -167,11 +167,11 @@ export async function abrirSerra(planoId) {
       const comprido = passo.eixo === 'y' ? passo.regiao.w >= passo.regiao.h : passo.regiao.h >= passo.regiao.w;
       const guia =
         passo.guia === 'paralela'
-          ? h('span', { class: 'serra-guia' }, icone('regua'), `Guia paralela em ${formatarMm(passo.medida)} mm`)
-          : h('span', { class: 'serra-guia carro' }, icone('serra'), passo.acerto ? 'No carro, rente à borda' : `No carro: ${formatarMm(passo.medida)} mm no esquadro`);
+          ? h('span', { class: 'serra-guia' }, icone('regua'), `Guia paralela em ${formatarCm(passo.medida)} cm`)
+          : h('span', { class: 'serra-guia carro' }, icone('serra'), passo.acerto ? 'No carro, rente à borda' : `No carro: ${formatarCm(passo.medida)} cm no esquadro`);
       const resto = passo.resto
         ? passo.resto.tipo === 'peca'
-          ? h('p', { class: 'serra-resto' }, 'Do outro lado fica ', descreverParte(passo.resto), `. Confira: ${formatarMm(passo.resto.medida)} mm.`)
+          ? h('p', { class: 'serra-resto' }, 'Do outro lado fica ', descreverParte(passo.resto), `. Confira: ${formatarCm(passo.resto.medida)} cm.`)
           : passo.resto.tipo === 'parte'
             ? h('p', { class: 'serra-resto' }, 'Do outro lado fica a ', descreverParte(passo.resto), '.')
             : h('p', { class: 'serra-resto' }, 'Do outro lado fica ', descreverParte(passo.resto), '.')
@@ -182,7 +182,9 @@ export async function abrirSerra(planoId) {
           'section',
           { class: 'serra-instrucao' },
           h('span', { class: 'serra-rotulo' }, passo.acerto ? 'Acerto da borda' : comprido ? 'Corte no comprimento' : 'Corte atravessado'),
-          h('div', { class: 'serra-medida' }, h('strong', {}, formatarMm(passo.medida)), h('span', {}, 'mm')),
+          passo.acerto
+            ? h('div', { class: 'serra-medida' }, h('strong', {}, formatarMm(passo.medida)), h('span', {}, 'mm'))
+            : h('div', { class: 'serra-medida' }, h('strong', {}, formatarCm(passo.medida)), h('span', {}, 'cm')),
           guia,
           passo.acerto
             ? h('p', { class: 'serra-texto' }, 'Tire só uma tira fina para deixar a borda reta. A medida mostra a tira com o disco.')
@@ -233,7 +235,7 @@ export async function abrirSerra(planoId) {
               h('p', { class: 'serra-texto' }, 'Marque as que vai guardar. Elas entram no estoque de retalhos.'),
               passo.sobras.map((sb, i) => {
                 const caixa = h('input', { type: 'checkbox', checked: marcadas.has(i), onchange: (e) => (e.target.checked ? marcadas.add(i) : marcadas.delete(i)) });
-                return h('label', { class: 'caixa-marcar' }, caixa, h('span', { class: 'num' }, h('strong', {}, `${formatarMm(sb.w)} × ${formatarMm(sb.h)} mm`)));
+                return h('label', { class: 'caixa-marcar' }, caixa, h('span', { class: 'num' }, h('strong', {}, `${formatarCm(sb.w)} × ${formatarCm(sb.h)} cm`)));
               }),
               local,
             )

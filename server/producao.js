@@ -2,11 +2,12 @@
 // O cálculo é feito no navegador; aqui o resultado recebido é conferido
 // (validarResultado) antes de ser guardado. Funcionário (usuarios.tipo =
 // 'producao') vê só os próprios planos e nunca recebe preços.
-import { LIMITES, descreverMedida, formatarNumero } from '../public/shared/calc.js';
+import { LIMITES, formatarNumero } from '../public/shared/calc.js';
 import {
   AJUSTES_PADRAO,
   CONFIG_PADRAO,
   LIMITES_CORTE,
+  formatarCm,
   MODOS_CORTE,
   assinaturaPlano,
   detalharSolucao,
@@ -327,7 +328,10 @@ async function trabalhoDoOrcamento(db, orcamentoId) {
       orcamentoId,
     ),
   ]);
-  const item = (i) => ({ nome: i.descricao || i.tipo_nome, tipo: i.tipo_nome, medida: descreverMedida(i), quantidade: i.quantidade });
+  // A oficina trabalha em cm: o tamanho do móvel vai em cm, nunca o cálculo do preço.
+  const medida = (i) =>
+    i.metodo_calculo === 'linear' ? `${formatarCm(i.largura_mm)} cm` : i.metodo_calculo === 'quadrado' ? `${formatarCm(i.largura_mm)} × ${formatarCm(i.altura_mm)} cm` : `${i.quantidade} un.`;
+  const item = (i) => ({ nome: i.descricao || i.tipo_nome, tipo: i.tipo_nome, medida: medida(i), quantidade: i.quantidade });
   return {
     numero: orc.numero,
     cliente_nome: orc.cliente_nome,

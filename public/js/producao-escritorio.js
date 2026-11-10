@@ -2,7 +2,8 @@
 // cortar e acompanhar o andamento (com o custo de material, só aqui).
 import { formatarDinheiro } from '/shared/calc.js';
 import { api } from './api.js';
-import { h, icone, substituir, aviso, avisoErro, abrirModal, campo } from './ui.js';
+import { h, icone, substituir, aviso, avisoErro, abrirModal, campo, confirmar } from './ui.js';
+import { baixarAnexo, ehPdf, enviarAnexo, formatarTamanho } from './anexos.js';
 
 const SITUACOES = { novo: 'Novo', montando: 'Montando a lista', pronto: 'Pronto para cortar', cortando: 'Cortando', concluido: 'Concluído' };
 
@@ -29,6 +30,7 @@ export async function mandarParaProducao(orcamentoId, aoMandar) {
       const funcionario = h('select', { required: true }, equipe.map((f) => h('option', { value: String(f.id) }, `${f.nome}${f.abertos ? ` · ${f.abertos} em aberto` : ''}`)));
       const instrucoes = h('textarea', { rows: '4', maxlength: '2000', placeholder: 'Ex.: portas com veio na vertical; cortar a cozinha primeiro.' });
       const nome = h('input', { type: 'text', maxlength: '150', placeholder: 'Opcional: ex.: Cozinha da Maria' });
+      const arquivos = h('input', { type: 'file', accept: 'application/pdf,image/*', multiple: true });
       return h(
         'form',
         {
@@ -36,8 +38,22 @@ export async function mandarParaProducao(orcamentoId, aoMandar) {
           onsubmit: async (e) => {
             e.preventDefault();
             try {
+              const botao = e.submitter;
+              if (botao) botao.disabled = true;
               const plano = await api.post(`/orcamentos/${orcamentoId}/producao`, { funcionario_id: Number(funcionario.value), instrucoes: instrucoes.value, nome: nome.value });
-              aviso(`Mandado para ${plano.funcionario_nome}. Aparece agora nos trabalhos dele.`);
+              // O projeto vai no orçamento: todos os trabalhos dele veem.
+              let falhas = 0;
+              for (const arquivo of arquivos.files) {
+                try {
+                  await enviarAnexo(arquivo, { orcamento_id: orcamentoId }, (f) => {
+                    if (botao) botao.textContent = `Enviando ${arquivo.name} ${Math.round(f * 100)}%`;
+                  });
+                } catch (erro) {
+                  falhas++;
+                  avisoErro(erro);
+                }
+              }
+              aviso(`Mandado para ${plano.funcionario_nome}. Aparece agora nos trabalhos dele.${falhas ? ' Algum anexo não foi enviado: tente de novo no cartão Produção.' : ''}`);
               fechar(plano);
             } catch (erro) {
               avisoErro(erro);
@@ -47,6 +63,7 @@ export async function mandarParaProducao(orcamentoId, aoMandar) {
         campo('Quem vai cortar', funcionario),
         campo('Instruções para a oficina', instrucoes, { dica: 'O funcionário vê cliente, ambientes, móveis e medidas do orçamento. Valores nunca aparecem.' }),
         campo('Nome do trabalho', nome, { dica: 'Útil quando o mesmo orçamento vai para mais de uma pessoa.' }),
+        campo('Projeto (PDF do arquiteto ou fotos)', arquivos, { dica: 'Opcional. Fica no orçamento e aparece para quem for cortar, para conferir as medidas. Até 25 MB por arquivo.' }),
         h('div', { class: 'acoes-modal' }, h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, icone('serra'), 'Mandar')),
       );
     },
@@ -58,6 +75,8 @@ export async function mandarParaProducao(orcamentoId, aoMandar) {
 /** Cartão do editor com os trabalhos deste orçamento na produção. */
 export function secaoProducao() {
   const lista = h('div', { class: 'producao-lista' });
+  const anexosEl = h('div', { class: 'producao-anexos' });
+  const entrada = h('input', { type: 'file', accept: 'application/pdf,image/*', multiple: true, hidden: true });
   let orcamentoId = null;
   const botao = h('button', { type: 'button', class: 'botao', onclick: () => orcamentoId && mandarParaProducao(orcamentoId, () => carregar()) }, icone('serra'), 'Mandar para a produção');
   const secao = h(
@@ -65,7 +84,92 @@ export function secaoProducao() {
     { class: 'cartao producao-secao', hidden: true },
     h('div', { class: 'cartao-titulo' }, h('h2', {}, icone('serra'), 'Produção'), botao),
     lista,
+    h(
+      'div',
+      { class: 'producao-projeto' },
+      h('div', { class: 'producao-projeto-titulo' }, h('strong', {}, 'Projeto para a produção'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: () => entrada.click() }, icone('mais', 'icone icone-mini'), 'Anexar')),
+      h('p', { class: 'suave pequeno' }, 'PDF do arquiteto e fotos. Quem corta vê junto com o trabalho, para conferir de onde vem cada medida. Até 25 MB por arquivo.'),
+      anexosEl,
+      entrada,
+    ),
   );
+  entrada.addEventListener('change', async () => {
+    const arquivos = [...entrada.files];
+    entrada.value = '';
+    for (const arquivo of arquivos) {
+      const estado = h('small', { class: 'suave' }, 'Preparando…');
+      anexosEl.append(h('div', { class: 'producao-anexo' }, icone('historico', 'icone icone-mini'), h('span', {}, arquivo.name), estado));
+      try {
+        await enviarAnexo(arquivo, { orcamento_id: orcamentoId }, (f) => {
+          estado.textContent = `${Math.round(f * 100)}%`;
+        });
+        aviso(`"${arquivo.name}" anexado ao orçamento.`);
+      } catch (erro) {
+        avisoErro(erro);
+      }
+    }
+    carregarAnexos();
+  });
+  async function carregarAnexos() {
+    if (!orcamentoId) return;
+    try {
+      const anexos = await api.get(`/orcamentos/${orcamentoId}/anexos`);
+      substituir(
+        anexosEl,
+        anexos.length
+          ? anexos.map((a) =>
+              h(
+                'div',
+                { class: 'producao-anexo' },
+                icone(ehPdf(a) ? 'pdf' : 'olho', 'icone icone-mini'),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'link-botao',
+                    onclick: async () => {
+                      try {
+                        const blob = await baixarAnexo(a);
+                        const url = URL.createObjectURL(blob);
+                        const link = h('a', { href: url, download: a.nome });
+                        document.body.append(link);
+                        link.click();
+                        link.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                      } catch (erro) {
+                        avisoErro(erro);
+                      }
+                    },
+                  },
+                  a.nome,
+                ),
+                h('small', { class: 'suave' }, formatarTamanho(a.tamanho)),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'botao-icone',
+                    'aria-label': `Excluir ${a.nome}`,
+                    onclick: async () => {
+                      if (!(await confirmar(`Excluir "${a.nome}"? Quem corta deixa de ver este anexo.`, { sim: 'Excluir', perigo: true }))) return;
+                      try {
+                        await api.delete(`/producao/anexos/${a.id}`);
+                        carregarAnexos();
+                      } catch (erro) {
+                        avisoErro(erro);
+                      }
+                    },
+                  },
+                  icone('lixeira', 'icone icone-mini'),
+                ),
+              ),
+            )
+          : h('p', { class: 'suave pequeno' }, 'Nenhum arquivo anexado ainda.'),
+      );
+    } catch {
+      substituir(anexosEl, h('p', { class: 'suave pequeno' }, 'Não foi possível carregar os anexos agora.'));
+    }
+  }
   async function carregar() {
     if (!orcamentoId) return;
     try {
@@ -109,7 +213,11 @@ export function secaoProducao() {
       orcamentoId = id || null;
       secao.hidden = !orcamentoId;
       carregar();
+      carregarAnexos();
     },
-    recarregar: carregar,
+    recarregar: () => {
+      carregar();
+      carregarAnexos();
+    },
   };
 }

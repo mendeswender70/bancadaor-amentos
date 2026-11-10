@@ -1,6 +1,6 @@
 // esquadro · produção: entrada, casca com as abas e as páginas Trabalhos,
 // Retalhos e Ajustes. O plano e o modo de corte ficam em plano.js e serra.js.
-import { formatarMm } from '/shared/corte.js';
+import { formatarCm, formatarMm, lerCm } from '/shared/corte.js';
 import { api, quandoPerderSessao } from '/js/api.js';
 import { h, icone, substituir, aviso, avisoErro, abrirModal, campo, confirmar, carregando, vazioIlustrado, haQuanto, iniciais, segmentado } from '/js/ui.js';
 import { sessao, ehEscritorio, seloSituacao, plural, nomeChapa, irPara, pegarVerificacao, limparVerificacao, progresso, pedirNome, ultimoLocal, guardarLocal } from './nucleo.js';
@@ -323,7 +323,7 @@ function linhaRetalho(r, aoTocar) {
     h(
       'span',
       {},
-      h('strong', {}, `${formatarMm(r.comprimento_mm)} × ${formatarMm(r.largura_mm)}`),
+      h('strong', {}, `${formatarCm(r.comprimento_mm)} × ${formatarCm(r.largura_mm)} cm`),
       h('small', {}, [r.local || 'sem local', r.situacao === 'reservado' && r.plano_nome ? `reservado: ${r.plano_nome}` : `guardado ${haQuanto(r.criado_em)}${r.criado_por_nome ? ` por ${r.criado_por_nome}` : ''}`].join(' · ')),
     ),
     h('span', { class: 'p-retalho-id' }, `R${r.id}`),
@@ -332,11 +332,11 @@ function linhaRetalho(r, aoTocar) {
 
 function formularioRetalho(r, chapas, fechar) {
   const chapa = h('select', {}, chapas.filter((c) => c.ativo || c.id === r?.chapa_id).map((c) => h('option', { value: String(c.id), selected: c.id === r?.chapa_id }, nomeChapa(c))));
-  const comprimento = h('input', { type: 'text', inputmode: 'numeric', value: r ? String(r.comprimento_mm) : '', placeholder: 'mm' });
-  const largura = h('input', { type: 'text', inputmode: 'numeric', value: r ? String(r.largura_mm) : '', placeholder: 'mm' });
+  const comprimento = h('input', { type: 'text', inputmode: 'decimal', value: r ? formatarCm(r.comprimento_mm) : '', placeholder: 'cm' });
+  const largura = h('input', { type: 'text', inputmode: 'decimal', value: r ? formatarCm(r.largura_mm) : '', placeholder: 'cm' });
   const local = h('input', { type: 'text', maxlength: '80', value: r?.local || ultimoLocal(), placeholder: 'Ex.: prateleira A' });
   const reservado = r?.situacao === 'reservado';
-  const corpo = () => ({ chapa_id: Number(chapa.value), comprimento_mm: Number(comprimento.value), largura_mm: Number(largura.value), local: local.value });
+  const corpo = () => ({ chapa_id: Number(chapa.value), comprimento_mm: lerCm(comprimento.value), largura_mm: lerCm(largura.value), local: local.value });
   const salvar = async (extra = {}) => {
     try {
       if (r) await api.put(`/producao/retalhos/${r.id}`, { ...corpo(), ...extra });
@@ -353,7 +353,7 @@ function formularioRetalho(r, chapas, fechar) {
     { class: 'formulario', onsubmit: (e) => (e.preventDefault(), salvar()) },
     reservado ? h('p', { class: 'p-alerta info' }, icone('cadeado'), h('span', {}, `Reservado para "${r.plano_nome || 'um plano'}". Ele volta para o estoque se o plano for calculado sem ele.`)) : null,
     campo('Chapa', chapa),
-    h('div', { class: 'grade-2' }, campo('Comprimento (mm)', comprimento, { dica: 'No sentido do veio' }), campo('Largura (mm)', largura)),
+    h('div', { class: 'grade-2' }, campo('Comprimento (cm)', comprimento, { dica: 'No sentido do veio' }), campo('Largura (cm)', largura)),
     campo('Onde está guardado', local),
     reservado
       ? null
@@ -373,9 +373,10 @@ async function paginaAjustes() {
   const [config, chapas, fitas] = await Promise.all([api.get('/producao/config'), api.get('/producao/chapas'), api.get('/producao/fitas')]);
   const recarregar = () => irPara(`#/ajustes?t=${Date.now()}`);
   const podeEditar = ehEscritorio();
-  const campoNumero = (chave, rotulo, dica, decimal = false) => {
-    const valor = decimal ? formatarMm(config[chave] / 10) : String(config[chave]);
-    return campo(rotulo, h('input', { type: 'text', inputmode: decimal ? 'decimal' : 'numeric', name: chave, value: valor, disabled: !podeEditar }), { dica });
+  // Tudo em cm, menos o disco (mm, como vem do fabricante).
+  const campoNumero = (chave, rotulo, dica) => {
+    const valor = chave === 'serra_decimos_mm' ? formatarMm(config[chave] / 10) : formatarCm(config[chave]);
+    return campo(rotulo, h('input', { type: 'text', inputmode: 'decimal', name: chave, value: valor, disabled: !podeEditar }), { dica });
   };
   const formSerra = h(
     'form',
@@ -385,7 +386,9 @@ async function paginaAjustes() {
         e.preventDefault();
         const dados = Object.fromEntries(new FormData(formSerra));
         const corpo = {};
-        for (const [k, v] of Object.entries(dados)) corpo[k] = k === 'serra_decimos_mm' ? Math.round(Number(String(v).replace(',', '.')) * 10) : Number(v);
+        for (const [k, v] of Object.entries(dados)) {
+          corpo[k] = k === 'serra_decimos_mm' ? Math.round(Number(String(v).replace(',', '.')) * 10) : String(v).trim() === '0' ? 0 : lerCm(v);
+        }
         try {
           sessao.config = await api.put('/producao/config', corpo);
           aviso('Serra salva. Os próximos planos já usam estes valores.');
@@ -394,9 +397,9 @@ async function paginaAjustes() {
         }
       },
     },
-    h('div', { class: 'grade-2' }, campoNumero('serra_decimos_mm', 'Espessura do disco (mm)', 'Na dúvida, deixe um pouco a mais.', true), campoNumero('refilo_mm', 'Refilo (mm por borda)', 'Tira as bordas da chapa.')),
-    h('div', { class: 'grade-2' }, campoNumero('guia_paralela_mm', 'Largura máx. na guia paralela (mm)', 'Baldan SE-3200/38: 900 mm.'), campoNumero('curso_carro_mm', 'Curso do carro (mm)', 'Baldan SE-3200/38: 3200 mm.')),
-    h('div', { class: 'grade-2' }, campoNumero('sobra_min_largura_mm', 'Sobra mínima: largura (mm)'), campoNumero('sobra_min_comprimento_mm', 'Sobra mínima: comprimento (mm)')),
+    h('div', { class: 'grade-2' }, campoNumero('serra_decimos_mm', 'Espessura do disco (mm)', 'Na dúvida, deixe um pouco a mais.'), campoNumero('refilo_mm', 'Refilo (cm por borda)', 'Tira as bordas da chapa.')),
+    h('div', { class: 'grade-2' }, campoNumero('guia_paralela_mm', 'Largura máx. na guia paralela (cm)', 'Baldan SE-3200/38: 90 cm.'), campoNumero('curso_carro_mm', 'Curso do carro (cm)', 'Baldan SE-3200/38: 320 cm.')),
+    h('div', { class: 'grade-2' }, campoNumero('sobra_min_largura_mm', 'Sobra mínima: largura (cm)'), campoNumero('sobra_min_comprimento_mm', 'Sobra mínima: comprimento (cm)')),
     podeEditar ? h('button', { type: 'submit', class: 'botao botao-primario' }, 'Salvar serra') : h('p', { class: 'dica' }, 'Só o escritório muda estes valores.'),
   );
   const novaMaterial = async (tipo) => {
@@ -414,7 +417,7 @@ async function paginaAjustes() {
       { class: 'p-cartao' },
       h('div', { class: 'p-titulo-cartao' }, h('h2', {}, 'Chapas'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: () => novaMaterial('chapa') }, icone('mais', 'icone icone-mini'), 'Nova')),
       chapas.length
-        ? h('ul', { class: 'p-lista-simples' }, chapas.map((c) => h('li', {}, h('span', {}, h('strong', {}, nomeChapa(c)), h('small', {}, `${c.comprimento_mm} × ${c.largura_mm} mm${c.veio ? ' · com veio' : ''}${c.ativo ? '' : ' · inativa'}`)))))
+        ? h('ul', { class: 'p-lista-simples' }, chapas.map((c) => h('li', {}, h('span', {}, h('strong', {}, nomeChapa(c)), h('small', {}, `${formatarCm(c.comprimento_mm)} × ${formatarCm(c.largura_mm)} cm${c.veio ? ' · com veio' : ''}${c.ativo ? '' : ' · inativa'}`)))))
         : h('p', { class: 'suave' }, 'Nenhuma chapa cadastrada.'),
       h('p', { class: 'dica' }, ehEscritorio() ? 'Preços e edição ficam no esquadro, em Ajustes → Chapas e fitas.' : 'O escritório completa os preços no esquadro.'),
     ),
@@ -475,8 +478,8 @@ function formularioMaterial(tipo, fechar) {
   const nome = h('input', { type: 'text', required: true, maxlength: '100', placeholder: tipo === 'chapa' ? 'Ex.: MDF Branco TX' : 'Ex.: Fita branca TX' });
   const n = (valor, ph) => h('input', { type: 'text', inputmode: 'numeric', value: valor, placeholder: ph });
   const espessura = n('18', 'mm');
-  const comprimento = n('', 'Ex.: 2750');
-  const largura = n(tipo === 'chapa' ? '' : '22', tipo === 'chapa' ? 'Ex.: 1840' : 'mm');
+  const comprimento = n('', 'Ex.: 275');
+  const largura = n(tipo === 'chapa' ? '' : '22', tipo === 'chapa' ? 'Ex.: 184' : 'mm');
   const veio = h('input', { type: 'checkbox' });
   return h(
     'form',
@@ -486,7 +489,7 @@ function formularioMaterial(tipo, fechar) {
         e.preventDefault();
         try {
           if (tipo === 'chapa') {
-            await api.post('/producao/chapas', { nome: nome.value, espessura_mm: Number(espessura.value), comprimento_mm: Number(comprimento.value), largura_mm: Number(largura.value), veio: veio.checked });
+            await api.post('/producao/chapas', { nome: nome.value, espessura_mm: Number(espessura.value), comprimento_mm: lerCm(comprimento.value), largura_mm: lerCm(largura.value), veio: veio.checked });
           } else {
             await api.post('/producao/fitas', { nome: nome.value, largura_mm: Number(largura.value) });
           }
@@ -500,8 +503,8 @@ function formularioMaterial(tipo, fechar) {
     campo('Nome', nome),
     tipo === 'chapa'
       ? [
-          h('div', { class: 'grade-3' }, campo('Comprimento', comprimento), campo('Largura', largura), campo('Espessura', espessura)),
-          h('small', { class: 'dica' }, 'Em mm. Confira a medida da chapa com o fornecedor: ela muda de fabricante para fabricante.'),
+          h('div', { class: 'grade-3' }, campo('Comp. (cm)', comprimento), campo('Larg. (cm)', largura), campo('Esp. (mm)', espessura)),
+          h('small', { class: 'dica' }, 'Comprimento e largura em cm; espessura em mm, como vem na nota. Confira a medida com o fornecedor: ela muda de fabricante para fabricante.'),
           h('label', { class: 'caixa-marcar' }, veio, 'Tem veio (padrão amadeirado no comprimento)'),
         ]
       : campo('Largura (mm)', largura),

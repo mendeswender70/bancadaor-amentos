@@ -65,6 +65,22 @@ export function formatarMm(valor) {
   return decimal === '0' ? milhar : `${milhar},${decimal}`;
 }
 
+/**
+ * A marcenaria trabalha em centímetros. O sistema guarda milímetros inteiros
+ * (sem erro de arredondamento) e mostra e lê em cm, com até uma casa decimal.
+ */
+export function formatarCm(mm) {
+  return (Math.round(Number(mm) || 0) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+}
+
+/** "72,5", "72.5" ou "72" (cm) → 725 (mm). Devolve null se não for um número positivo. */
+export function lerCm(texto) {
+  const s = String(texto ?? '').trim().replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const mm = Math.round(Number(s) * 10);
+  return mm > 0 ? mm : null;
+}
+
 /** "2,75 m²" a partir de mm². */
 export function formatarArea(mm2) {
   return `${(mm2 / 1e6).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²`;
@@ -143,9 +159,10 @@ function aleatorio(semente) {
 // ------------------------------------------------------------ Entrada rápida
 
 /**
- * Lê linhas como "720 x 550 x 2 Lateral" ou colunas coladas de planilha
- * ("Lateral	720	550	2"). Os dois primeiros números são comprimento e
- * largura; o terceiro, a quantidade (1 se faltar). O resto é a descrição.
+ * Lê linhas em centímetros como "72 x 55 x 2 Lateral", "72,5 × 55" ou colunas
+ * coladas de planilha ("Lateral	72	55	2"). Os dois primeiros números são
+ * comprimento e largura (cm, devolvidos em mm); o terceiro, a quantidade
+ * (1 se faltar). O resto é a descrição.
  */
 export function lerLinhasPecas(texto) {
   const pecas = [];
@@ -160,7 +177,7 @@ export function lerLinhasPecas(texto) {
       for (const parte of limpa.split(/[\t;]|\s+|(?<=\d)\s*[x×*]\s*(?=\d)/i)) {
         const token = (parte || '').trim();
         if (!token || /^[x×*]$/i.test(token)) continue;
-        if (/^\d+([.,]\d+)?$/.test(token) && numeros.length < 3) numeros.push(Math.round(Number(token.replace(',', '.'))));
+        if (/^\d+([.,]\d+)?$/.test(token) && numeros.length < 3) numeros.push(Number(token.replace(',', '.')));
         else palavras.push(token);
       }
       if (numeros.length < 2) {
@@ -169,9 +186,9 @@ export function lerLinhasPecas(texto) {
       }
       pecas.push({
         descricao: palavras.join(' ').slice(0, 120),
-        comprimento_mm: numeros[0],
-        largura_mm: numeros[1],
-        quantidade: numeros[2] || 1,
+        comprimento_mm: Math.round(numeros[0] * 10),
+        largura_mm: Math.round(numeros[1] * 10),
+        quantidade: numeros[2] ? Math.max(1, Math.round(numeros[2])) : 1,
       });
     });
   return { pecas, erros };

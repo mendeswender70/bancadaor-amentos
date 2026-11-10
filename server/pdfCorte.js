@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { readFileSync } from 'node:fs';
 import { formatarDinheiro } from '../public/shared/calc.js';
-import { SOLUCOES, detalharSolucao, formatarMetros, formatarMm, ladosComFita, ladosNoDesenho, resumirSolucao } from '../public/shared/corte.js';
+import { SOLUCOES, detalharSolucao, formatarCm, formatarMetros, formatarMm, ladosComFita, ladosNoDesenho, resumirSolucao } from '../public/shared/corte.js';
 
 // PDF de produção para levar à serra: A4 deitado, pensado para imprimir em
 // preto e branco. Primeiro o resumo e a lista de peças; depois uma página por
@@ -77,7 +77,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
     ['Retalhos', resumo ? String(resumo.retalhos) : '—'],
     ['Aproveitamento', resumo ? `${String(resumo.aproveitamento).replace('.', ',')}%` : '—'],
     ['Cortes / giros', resumo ? `${resumo.cortes} / ${resumo.giros}` : '—'],
-    ['Disco / refilo', `${formatarMm(a.serra_decimos_mm / 10)} mm / ${a.refilo_mm} mm`],
+    ['Disco / refilo', `${formatarMm(a.serra_decimos_mm / 10)} mm / ${formatarCm(a.refilo_mm)} cm`],
     ['Solução', solucao ? SOLUCOES[solucao.tipo].nome : '—'],
   ];
   const larguraBloco = (W - 2 * M) / blocos.length;
@@ -127,7 +127,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
     ['#', 0, 30],
     ['Móvel', 30, 150],
     ['Peça', 180, 150],
-    ['C × L (mm)', 330, 90],
+    ['C × L (cm)', 330, 90],
     ['Qtd', 420, 30],
     ['Chapa', 450, 170],
     ['Veio', 620, 34],
@@ -154,7 +154,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
       String(i + 1),
       p.grupo,
       p.descricao,
-      `${p.comprimento_mm} × ${p.largura_mm}`,
+      `${formatarCm(p.comprimento_mm)} × ${formatarCm(p.largura_mm)}`,
       String(p.quantidade),
       chapa ? `${chapa.nome} ${chapa.espessura_mm} mm` : 'sem chapa',
       p.veio && chapa?.veio ? 'sim' : '',
@@ -175,7 +175,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
         ? `CHAPAS ${d.ordem} A ${d.ordem + d.iguais - 1} DE ${detalhes.length} · ${d.iguais} IGUAIS`
         : `CHAPA ${d.ordem} DE ${detalhes.length}`;
     texto(titulo, M, M, { f: 'media', s: 8, cor: COR.fraco, characterSpacing: 1.2 });
-    texto(`${chapa.nome} ${chapa.espessura_mm} mm  ·  ${medidas.comprimento_mm} × ${medidas.largura_mm} mm${d.iguais > 1 ? `  ·  corte ${d.iguais} vezes` : ''}`, M, M + 12, { f: 'forte', s: 14, width: W - 2 * M, ellipsis: true });
+    texto(`${chapa.nome} ${chapa.espessura_mm} mm  ·  ${formatarCm(medidas.comprimento_mm)} × ${formatarCm(medidas.largura_mm)} cm${d.iguais > 1 ? `  ·  corte ${d.iguais} vezes` : ''}`, M, M + 12, { f: 'forte', s: 14, width: W - 2 * M, ellipsis: true });
     texto(
       `${d.colocadas.length} ${d.colocadas.length === 1 ? 'peça' : 'peças'} por chapa  ·  aproveitamento ${String(d.aproveitamento).replace('.', ',')}%${chapa.veio ? '  ·  veio no sentido do comprimento →' : ''}${d.retalho_id ? '  ·  retalho: sem refilo' : ''}`,
       M,
@@ -198,7 +198,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
         doc.moveTo(X(s.x + t), Y(s.y + s.h)).lineTo(X(s.x + t + s.h), Y(s.y)).lineWidth(0.3).strokeColor(COR.linha).stroke();
       }
       doc.restore();
-      if (s.w * escala > 60 && s.h * escala > 16) texto(`sobra ${formatarMm(s.w)} × ${formatarMm(s.h)}`, X(s.x) + 3, Y(s.y) + 3, { s: 6.5, cor: COR.fraco });
+      if (s.w * escala > 60 && s.h * escala > 16) texto(`sobra ${formatarCm(s.w)} × ${formatarCm(s.h)}`, X(s.x) + 3, Y(s.y) + 3, { s: 6.5, cor: COR.fraco });
     }
     for (const p of d.colocadas) {
       const peca = plano.pecas[p.indice];
@@ -221,7 +221,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
         const comMedida = pw > 46 && ph > 22;
         texto(`#${p.indice + 1}`, px, py + ph / 2 - tamanho * (comMedida ? 1.1 : 0.55), { f: 'forte', s: tamanho, width: pw, align: 'center' });
         if (comMedida) {
-          texto(`${peca.comprimento_mm} × ${peca.largura_mm}`, px, py + ph / 2 + 1, { s: Math.max(5.5, tamanho - 1.5), cor: COR.suave, width: pw, align: 'center' });
+          texto(`${formatarCm(peca.comprimento_mm)} × ${formatarCm(peca.largura_mm)}`, px, py + ph / 2 + 1, { s: Math.max(5.5, tamanho - 1.5), cor: COR.suave, width: pw, align: 'center' });
         }
       }
     }
@@ -233,7 +233,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
     texto('Roteiro de cortes', colunaX, ry, { f: 'forte', s: 11 });
     ry += 15;
     texto(
-      r0 ? `Refile ${r0} mm de um lado comprido e de um lado curto. Meça cada parte a partir da borda que acabou de cortar.` : 'Retalho: as bordas já vêm cortadas. Meça cada parte a partir da borda reta.',
+      r0 ? `Medidas em cm. Refile ${formatarCm(r0)} cm de um lado comprido e de um lado curto. Meça cada parte a partir da borda que acabou de cortar.` : 'Retalho: as bordas já vêm cortadas. Meça cada parte a partir da borda reta.',
       colunaX,
       ry,
       { s: 7.5, cor: COR.suave, width: colunaW, lineBreak: true },
@@ -243,7 +243,7 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
     d.roteiro.forEach((passo, i) => {
       const titulo = `${passo.rotulo ? `Parte ${passo.rotulo}` : 'Chapa inteira'}${passo.girar ? ' (gire 90°)' : ''}: ${passo.eixo === 'y' ? 'cortes no comprimento' : 'cortes na largura'}`;
       const linha = passo.partes
-        .map((p) => (p.tipo === 'peca' ? `#${linhaDoNumero.get(p.numero)} ${formatarMm(p.medida)}` : p.tipo === 'sobra' ? `sobra ${formatarMm(p.medida)}` : `${p.rotulo} ${formatarMm(p.medida)}`))
+        .map((p) => (p.tipo === 'peca' ? `#${linhaDoNumero.get(p.numero)} ${formatarCm(p.medida)}` : p.tipo === 'sobra' ? `sobra ${formatarCm(p.medida)}` : `${p.rotulo} ${formatarCm(p.medida)}`))
         .join('   ');
       doc.font('normal').fontSize(8);
       const altura = doc.heightOfString(linha, { width: colunaW }) + 14;

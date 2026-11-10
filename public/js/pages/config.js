@@ -1,4 +1,5 @@
 import { METODOS, dinheiroParaCampo, formatarDinheiro, formatarPercentual, lerDinheiro, lerPercentual } from '/shared/calc.js';
+import { formatarCm, lerCm } from '/shared/corte.js';
 import { api, cache } from '../api.js';
 import { h, icone, campo, segmentado, abrirModal, confirmar, aviso, avisoErro, substituir, vazio } from '../ui.js';
 import { cabecalhoPagina, cabecalhoInterno } from '../comum.js';
@@ -461,7 +462,7 @@ async function abaChapas() {
           chapas.map((c) =>
             linha(
               `${c.nome} ${c.espessura_mm} mm`,
-              [`${c.comprimento_mm} × ${c.largura_mm} mm`, c.veio ? 'com veio' : 'sem veio', c.preco_cents ? formatarDinheiro(c.preco_cents) : 'sem preço'].join(' · '),
+              [`${formatarCm(c.comprimento_mm)} × ${formatarCm(c.largura_mm)} cm`, c.veio ? 'com veio' : 'sem veio', c.preco_cents ? formatarDinheiro(c.preco_cents) : 'sem preço'].join(' · '),
               !c.ativo,
               () => editar('chapa', c),
             ),
@@ -529,6 +530,12 @@ function formularioCorte({ registro, rota, nome, campos, corpo, fechar }) {
   );
 }
 
+const cmDoCampo = (el, nome) => {
+  const mm = lerCm(el.value);
+  if (!mm || mm < 100 || mm > 6000) throw new Error(`${nome}: use centímetros, de 10 a 600 (ex.: 275).`);
+  return mm;
+};
+
 const inteiroDoCampo = (el, nome, min, max) => {
   const n = Number(String(el.value).trim());
   if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${nome}: use um número inteiro de ${min} a ${max}.`);
@@ -539,8 +546,8 @@ function formularioChapa(chapa, fechar) {
   const d = chapa || { nome: '', espessura_mm: 18, comprimento_mm: '', largura_mm: '', veio: 0, preco_cents: 0, ativo: 1 };
   const nome = h('input', { type: 'text', required: true, maxlength: '100', value: d.nome, placeholder: 'Ex.: MDF Branco TX' });
   const espessura = h('input', { type: 'text', inputmode: 'numeric', value: String(d.espessura_mm) });
-  const comprimento = h('input', { type: 'text', inputmode: 'numeric', value: String(d.comprimento_mm), placeholder: 'Ex.: 2750' });
-  const largura = h('input', { type: 'text', inputmode: 'numeric', value: String(d.largura_mm), placeholder: 'Ex.: 1840' });
+  const comprimento = h('input', { type: 'text', inputmode: 'decimal', value: d.comprimento_mm ? formatarCm(d.comprimento_mm) : '', placeholder: 'Ex.: 275' });
+  const largura = h('input', { type: 'text', inputmode: 'decimal', value: d.largura_mm ? formatarCm(d.largura_mm) : '', placeholder: 'Ex.: 184' });
   const veio = h('input', { type: 'checkbox', checked: Boolean(d.veio) });
   const preco = h('input', { type: 'text', inputmode: 'decimal', value: dinheiroParaCampo(d.preco_cents) });
   const ativo = h('input', { type: 'checkbox', checked: Boolean(d.ativo) });
@@ -555,8 +562,8 @@ function formularioChapa(chapa, fechar) {
       return {
         nome: nome.value,
         espessura_mm: inteiroDoCampo(espessura, 'Espessura', 1, 100),
-        comprimento_mm: inteiroDoCampo(comprimento, 'Comprimento', 100, 6000),
-        largura_mm: inteiroDoCampo(largura, 'Largura', 100, 6000),
+        comprimento_mm: cmDoCampo(comprimento, 'Comprimento'),
+        largura_mm: cmDoCampo(largura, 'Largura'),
         veio: veio.checked,
         preco_cents: precoCents,
         ativo: ativo.checked,
@@ -567,11 +574,11 @@ function formularioChapa(chapa, fechar) {
       h(
         'div',
         { class: 'corte-grade-3' },
-        campo('Comprimento (mm)', comprimento),
-        campo('Largura (mm)', largura),
+        campo('Comprimento (cm)', comprimento),
+        campo('Largura (cm)', largura),
         campo('Espessura (mm)', espessura),
       ),
-      h('small', { class: 'dica' }, 'Confira a medida da chapa com o fornecedor: ela muda de fabricante para fabricante.'),
+      h('small', { class: 'dica' }, 'Comprimento e largura em cm; espessura em mm, como vem na nota. Confira a medida com o fornecedor: ela muda de fabricante para fabricante.'),
       h('label', { class: 'caixa-marcar' }, veio, ' Tem veio (padrão amadeirado no sentido do comprimento)'),
       campo('Preço da chapa (R$)', preco, { dica: 'Usado para o custo de material. Não aparece para o cliente.' }),
       h('label', { class: 'caixa-marcar' }, ativo, ' Ativa ao montar planos'),

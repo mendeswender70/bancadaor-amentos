@@ -39,6 +39,7 @@ import {
 import { relatorioComercial, listarAprovacoesRelatorio, exportarRelatorio, periodoRelatorio } from './relatorios.js';
 import { gerarPdf } from './pdf.js';
 import { gerarPdfCorte } from './pdfCorte.js';
+import { PARTE_BYTES, anexosDoOrcamento, anexosDoPlano, concluirAnexo, criarAnexo, excluirAnexo, gravarParte, lerParte } from './anexos.js';
 import {
   CAMPOS_CHAPA,
   CAMPOS_FITA,
@@ -1147,6 +1148,37 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   });
   api.put('/producao/retalhos/:id', async (req, res) => {
     res.json(await atualizarRetalho(db, id(req.params.id), req.body));
+  });
+
+  // Projeto anexado (PDF e fotos). Vai e volta em partes de 3 MB.
+  api.get('/producao/planos/:id/anexos', async (req, res) => {
+    res.json(await anexosDoPlano(db, req.usuario, id(req.params.id)));
+  });
+  api.get('/orcamentos/:id/anexos', async (req, res) => {
+    res.json(await anexosDoOrcamento(db, req.usuario, id(req.params.id)));
+  });
+  api.post('/producao/anexos', async (req, res) => {
+    res.status(201).json(await criarAnexo(db, req.usuario, req.body));
+  });
+  api.put(
+    '/producao/anexos/:id/partes/:ordem',
+    express.raw({ type: 'application/octet-stream', limit: PARTE_BYTES + 1024 }),
+    async (req, res) => {
+      await gravarParte(db, req.usuario, id(req.params.id), Number(req.params.ordem), req.body);
+      res.json({ ok: true });
+    },
+  );
+  api.post('/producao/anexos/:id/concluir', async (req, res) => {
+    await concluirAnexo(db, req.usuario, id(req.params.id));
+    res.json({ ok: true });
+  });
+  api.get('/producao/anexos/:id/partes/:ordem', async (req, res) => {
+    const dados = await lerParte(db, req.usuario, id(req.params.id), Number(req.params.ordem));
+    res.type('application/octet-stream').setHeader('Cache-Control', 'private, max-age=86400').send(dados);
+  });
+  api.delete('/producao/anexos/:id', async (req, res) => {
+    await excluirAnexo(db, req.usuario, id(req.params.id));
+    res.json({ ok: true });
   });
 
   api.get('/producao/config', async (_req, res) => {

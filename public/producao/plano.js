@@ -11,8 +11,10 @@ import {
   detalharSolucao,
   expandirPecas,
   formatarArea,
+  formatarCm,
   formatarMetros,
   formatarMm,
+  lerCm,
   ladosComFita,
   lerLinhasPecas,
   resumirSolucao,
@@ -21,6 +23,7 @@ import { api, baixarBlob } from '/js/api.js';
 import { h, icone, substituir, aviso, avisoErro, abrirModal, campo, confirmar, segmentado, menuSuspenso, haQuanto } from '/js/ui.js';
 import { sessao, ehEscritorio, seloSituacao, plural, contagem, nomeChapa, irPara, aoSairDaPagina, baixarArquivo, pedirNome } from './nucleo.js';
 import { abrirVisualizador, coresDosMoveis, corDaPeca, desenharFolha } from './desenho.js';
+import { abrirMedir, fecharMedir, secaoProjeto } from './projeto.js';
 
 // ------------------------------------------------------------------ Cálculo
 
@@ -58,11 +61,12 @@ export function calcularNoWorker(dados) {
 function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = false }, fechar) {
   const dados = { ...peca };
   const numero = (valor, rotulo, extra = {}) => h('input', { type: 'text', inputmode: 'numeric', value: valor ? String(valor) : '', 'aria-label': rotulo, ...extra });
+  const medidaCm = (mm, rotulo, extra = {}) => h('input', { type: 'text', inputmode: 'decimal', value: mm ? formatarCm(mm) : '', 'aria-label': rotulo, ...extra });
   const listaId = `grupos-${Math.random().toString(36).slice(2)}`;
   const grupo = h('input', { type: 'text', value: dados.grupo || '', maxlength: '120', list: listaId, placeholder: 'Ex.: Cozinha · aéreo' });
   const descricao = h('input', { type: 'text', value: dados.descricao || '', maxlength: '120', placeholder: 'Ex.: Lateral' });
-  const comprimento = numero(dados.comprimento_mm, 'Comprimento', { autofocus: novo });
-  const largura = numero(dados.largura_mm, 'Largura');
+  const comprimento = medidaCm(dados.comprimento_mm, 'Comprimento em cm', { autofocus: novo });
+  const largura = medidaCm(dados.largura_mm, 'Largura em cm');
   const quantidade = numero(dados.quantidade || 1, 'Quantidade');
   const chapa = h(
     'select',
@@ -89,6 +93,11 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
     if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${nome}: use um número inteiro de ${min} a ${max}.`);
     return n;
   };
+  const lerMedida = (el, nome) => {
+    const mm = lerCm(el.value);
+    if (!mm || mm > LIMITES_CORTE.medidaMax) throw new Error(`${nome}: use centímetros, de 0,1 a ${formatarCm(LIMITES_CORTE.medidaMax)} (ex.: 72,5).`);
+    return mm;
+  };
   return h(
     'form',
     {
@@ -101,8 +110,8 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
           if (!soPadrao) {
             Object.assign(lida, {
               descricao: descricao.value.trim(),
-              comprimento_mm: ler(comprimento, 1, LIMITES_CORTE.medidaMax, 'Comprimento'),
-              largura_mm: ler(largura, 1, LIMITES_CORTE.medidaMax, 'Largura'),
+              comprimento_mm: lerMedida(comprimento, 'Comprimento'),
+              largura_mm: lerMedida(largura, 'Largura'),
               quantidade: ler(quantidade, 1, LIMITES_CORTE.quantidade, 'Quantidade'),
             });
           }
@@ -114,7 +123,7 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
     },
     h('datalist', { id: listaId }, grupos.map((g) => h('option', { value: g }))),
     soPadrao ? campo('Móvel', grupo) : h('div', { class: 'grade-2' }, campo('Móvel', grupo), campo('Peça', descricao)),
-    soPadrao ? null : h('div', { class: 'grade-3' }, campo('Comp. (mm)', comprimento, { dica: 'No veio' }), campo('Larg. (mm)', largura), campo('Qtd.', quantidade)),
+    soPadrao ? null : h('div', { class: 'grade-3' }, campo('Comp. (cm)', comprimento, { dica: 'No veio' }), campo('Larg. (cm)', largura), campo('Qtd.', quantidade)),
     campo('Chapa', chapa),
     h('label', { class: 'caixa-marcar' }, veio, 'Seguir o veio (não girar a peça)'),
     campo('Fita de borda', fita),
@@ -217,6 +226,7 @@ export async function paginaPlano(planoId, params) {
   };
 
   const verificarSaida = async () => {
+    fecharMedir();
     if (!sujo && !salvando) return true;
     if (await salvarAgora()) return true;
     return confirmar('Não foi possível salvar as últimas alterações. Sair mesmo assim?', { sim: 'Sair sem salvar', perigo: true });
@@ -234,8 +244,8 @@ export async function paginaPlano(planoId, params) {
     alterou();
   };
 
-  const entradaC = h('input', { type: 'text', inputmode: 'numeric', enterkeyhint: 'next', placeholder: 'Comp.', 'aria-label': 'Comprimento em mm' });
-  const entradaL = h('input', { type: 'text', inputmode: 'numeric', enterkeyhint: 'next', placeholder: 'Larg.', 'aria-label': 'Largura em mm' });
+  const entradaC = h('input', { type: 'text', inputmode: 'decimal', enterkeyhint: 'next', placeholder: 'Comp.', 'aria-label': 'Comprimento em cm' });
+  const entradaL = h('input', { type: 'text', inputmode: 'decimal', enterkeyhint: 'next', placeholder: 'Larg.', 'aria-label': 'Largura em cm' });
   const entradaQ = h('input', { type: 'text', inputmode: 'numeric', enterkeyhint: 'next', value: '1', 'aria-label': 'Quantidade' });
   const entradaD = h('input', { type: 'text', maxlength: '120', enterkeyhint: 'done', placeholder: 'Nome da peça (ex.: Lateral)', 'aria-label': 'Nome da peça' });
   const textoPadrao = h('span', {});
@@ -259,14 +269,22 @@ export async function paginaPlano(planoId, params) {
   botaoPadrao.addEventListener('click', editarPadrao);
   desenharPadrao();
 
+  // Medida maior que a maior chapa quase sempre é alguém digitando em milímetros.
+  const maiorChapa = Math.max(0, ...chapas.map((c) => Math.max(c.comprimento_mm, c.largura_mm)));
+  const pareceMilimetro = (mm) => maiorChapa && mm > maiorChapa;
   const adicionar = () => {
-    const c = Number(entradaC.value.trim());
-    const l = Number(entradaL.value.trim());
+    const c = lerCm(entradaC.value);
+    const l = lerCm(entradaL.value);
     const q = Number(entradaQ.value.trim() || 1);
     const valido = (n, max) => Number.isInteger(n) && n >= 1 && n <= max;
-    if (!valido(c, LIMITES_CORTE.medidaMax) || !valido(l, LIMITES_CORTE.medidaMax)) {
-      aviso('Digite comprimento e largura em milímetros, sem vírgula.', 'erro');
-      (valido(c, LIMITES_CORTE.medidaMax) ? entradaL : entradaC).focus();
+    if (!c || !l) {
+      aviso('Digite comprimento e largura em centímetros (ex.: 72,5).', 'erro');
+      (c ? entradaL : entradaC).focus();
+      return;
+    }
+    if (pareceMilimetro(c) || pareceMilimetro(l) || c > LIMITES_CORTE.medidaMax || l > LIMITES_CORTE.medidaMax) {
+      aviso(`${formatarCm(Math.max(c, l))} cm é maior que a maior chapa${maiorChapa ? ` (${formatarCm(maiorChapa)} cm)` : ''}. As medidas são em centímetros: confira se não digitou em milímetros.`, 'erro');
+      (c >= l ? entradaC : entradaL).focus();
       return;
     }
     if (!valido(q, LIMITES_CORTE.quantidade)) return aviso(`Quantidade de 1 a ${LIMITES_CORTE.quantidade}.`, 'erro');
@@ -277,7 +295,7 @@ export async function paginaPlano(planoId, params) {
       return;
     }
     pecas.push({ ...padrao, descricao: entradaD.value.trim(), comprimento_mm: c, largura_mm: l, quantidade: q });
-    aviso(`#${pecas.length} ${entradaD.value.trim() || 'peça'} · ${c} × ${l} × ${q}`);
+    aviso(`#${pecas.length} ${entradaD.value.trim() || 'peça'} · ${formatarCm(c)} × ${formatarCm(l)} cm × ${q}`);
     entradaC.value = '';
     entradaL.value = '';
     entradaQ.value = '1';
@@ -303,7 +321,7 @@ export async function paginaPlano(planoId, params) {
     const lidas = await abrirModal(
       'Colar lista de peças',
       (fechar) => {
-        const area = h('textarea', { rows: '9', autofocus: true, placeholder: '720 x 550 x 2 Lateral\n600 x 400 Prateleira\nBase\t1000\t500\t3' });
+        const area = h('textarea', { rows: '9', autofocus: true, placeholder: '72 x 55 x 2 Lateral\n60 x 40,5 Prateleira\nBase\t100\t50\t3' });
         return h(
           'form',
           {
@@ -316,7 +334,7 @@ export async function paginaPlano(planoId, params) {
               fechar(novas);
             },
           },
-          campo('Uma peça por linha', area, { dica: 'Comprimento, largura e quantidade, em mm, nesta ordem. O texto vira o nome. Também aceita colunas copiadas de planilha.' }),
+          campo('Uma peça por linha', area, { dica: 'Comprimento, largura e quantidade, nesta ordem, em centímetros (aceita vírgula: 72,5). O texto vira o nome. Também aceita colunas copiadas de planilha.' }),
           h('p', { class: 'dica' }, 'As peças entram com o móvel, a chapa e a fita de "Próximas peças".'),
           h('div', { class: 'acoes-modal' }, h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Adicionar peças')),
         );
@@ -329,6 +347,10 @@ export async function paginaPlano(planoId, params) {
       return aviso('Há medidas ou quantidades fora do limite. Confira a lista.', 'erro');
     }
     if (pecas.length + lidas.length > LIMITES_CORTE.linhas) return aviso(`Use no máximo ${LIMITES_CORTE.linhas} linhas por plano.`, 'erro');
+    const grandes = lidas.filter((p) => pareceMilimetro(p.comprimento_mm) || pareceMilimetro(p.largura_mm));
+    if (grandes.length) {
+      return aviso(`${plural(grandes.length, 'linha passa', 'linhas passam')} do tamanho da maior chapa (${formatarCm(maiorChapa)} cm). As medidas são em centímetros: confira se a lista não está em milímetros.`, 'erro');
+    }
     pecas.push(...lidas.map((p) => ({ ...padrao, ...p })));
     aviso(`${plural(lidas.length, 'peça adicionada', 'peças adicionadas')}.`);
     alterou();
@@ -360,7 +382,7 @@ export async function paginaPlano(planoId, params) {
             { type: 'button', class: `p-peca${chapa ? '' : ' sem-chapa'}`, onclick: () => !concluido && editarPeca(i), disabled: concluido },
             h('span', { class: 'p-peca-linha' }, `#${i + 1}`),
             h('span', { class: 'p-peca-texto' }, h('strong', {}, p.descricao || 'Peça'), h('small', { class: chapa ? '' : 'erro' }, chapa ? detalhes.join(' · ') : 'Escolha a chapa')),
-            h('span', { class: 'p-peca-medida' }, `${p.comprimento_mm} × ${p.largura_mm}`, h('small', {}, `× ${p.quantidade}`)),
+            h('span', { class: 'p-peca-medida' }, `${formatarCm(p.comprimento_mm)} × ${formatarCm(p.largura_mm)}`, h('small', {}, `cm · ×${p.quantidade}`)),
           );
           linha.style.setProperty('--cor', cores.get(grupo));
           return linha;
@@ -384,7 +406,7 @@ export async function paginaPlano(planoId, params) {
           botaoPadrao,
           h('div', { class: 'p-medidas' }, entradaC, h('span', {}, '×'), entradaL, h('span', {}, '×'), entradaQ),
           h('div', { class: 'p-entrada-nome' }, entradaD, h('button', { type: 'button', class: 'botao botao-primario', onclick: adicionar, 'aria-label': 'Adicionar peça' }, icone('mais'))),
-          h('div', { class: 'p-titulo-cartao' }, h('small', { class: 'dica' }, 'Medidas em mm. Comprimento é o lado do veio.'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: colarLista }, icone('copiar', 'icone icone-mini'), 'Colar lista')),
+          h('div', { class: 'p-titulo-cartao' }, h('small', { class: 'dica' }, 'Medidas em cm (ex.: 72,5). Comprimento é o lado do veio.'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: colarLista }, icone('copiar', 'icone icone-mini'), 'Colar lista')),
         ),
     listaEl,
   );
@@ -497,13 +519,13 @@ export async function paginaPlano(planoId, params) {
             'div',
             {},
             h('h3', {}, titulo, ' · ', nomeChapa(d.chapa)),
-            h('p', {}, `${formatarMm(d.medidas.comprimento_mm)} × ${formatarMm(d.medidas.largura_mm)} mm · ${plural(d.colocadas.length, 'peça', 'peças')} · ${String(d.aproveitamento).replace('.', ',')}% aproveitado${d.chapa.veio ? ' · veio →' : ''}`),
+            h('p', {}, `${formatarCm(d.medidas.comprimento_mm)} × ${formatarCm(d.medidas.largura_mm)} cm · ${plural(d.colocadas.length, 'peça', 'peças')} · ${String(d.aproveitamento).replace('.', ',')}% aproveitado${d.chapa.veio ? ' · veio →' : ''}`),
             d.retalho ? h('p', {}, `Guardado em: ${d.retalho.local || 'local não informado'}`) : null,
           ),
           d.retalho_id ? h('span', { class: 'p-selo retalho' }, 'retalho') : d.iguais > 1 ? h('span', { class: 'p-selo' }, `×${d.iguais} iguais`) : null,
         ),
         h('button', { type: 'button', class: 'p-desenho-botao', onclick: abrir, 'aria-label': `Ampliar ${titulo}` }, desenho),
-        h('p', { class: 'p-legenda-toque' }, 'Toque no desenho para ampliar. A medida à esquerda é a largura de cada faixa.'),
+        h('p', { class: 'p-legenda-toque' }, 'Toque no desenho para ampliar. Medidas em cm; à esquerda, a largura de cada faixa.'),
       );
     });
 
@@ -569,7 +591,7 @@ export async function paginaPlano(planoId, params) {
       'Ajustes deste plano',
       (fechar) => {
         const serra = h('input', { type: 'text', inputmode: 'decimal', value: formatarMm(ajustes.serra_decimos_mm / 10) });
-        const refilo = h('input', { type: 'text', inputmode: 'numeric', value: String(ajustes.refilo_mm) });
+        const refilo = h('input', { type: 'text', inputmode: 'decimal', value: formatarCm(ajustes.refilo_mm) });
         const margem = h('input', { type: 'text', inputmode: 'numeric', value: String(ajustes.margem_fita_pct) });
         const retalhos = h('input', { type: 'checkbox', checked: usarRetalhos });
         let modo = ajustes.modo;
@@ -580,15 +602,15 @@ export async function paginaPlano(planoId, params) {
             onsubmit: (e) => {
               e.preventDefault();
               const decimos = Math.round(Number(serra.value.replace(',', '.')) * 10);
-              const novos = { serra_decimos_mm: decimos, refilo_mm: Number(refilo.value), margem_fita_pct: Number(margem.value), modo };
+              const novos = { serra_decimos_mm: decimos, refilo_mm: refilo.value.trim() === '0' ? 0 : lerCm(refilo.value), margem_fita_pct: Number(margem.value), modo };
               const ok = (n, max) => Number.isInteger(n) && n >= 0 && n <= max;
               if (!ok(decimos, LIMITES_CORTE.serraDecimosMax) || !ok(novos.refilo_mm, LIMITES_CORTE.refiloMax) || !ok(novos.margem_fita_pct, LIMITES_CORTE.margemFitaMax)) {
-                return aviso('Confira os números: só inteiros (o disco aceita uma casa decimal).', 'erro');
+                return aviso('Confira os números: disco em mm (ex.: 3,2), refilo em cm (ex.: 1) e margem inteira.', 'erro');
               }
               fechar({ ajustes: novos, usarRetalhos: retalhos.checked });
             },
           },
-          h('div', { class: 'grade-2' }, campo('Disco (mm)', serra, { dica: 'Espessura do dente.' }), campo('Refilo (mm)', refilo, { dica: 'Por borda da chapa.' })),
+          h('div', { class: 'grade-2' }, campo('Disco (mm)', serra, { dica: 'Espessura do dente.' }), campo('Refilo (cm)', refilo, { dica: 'Por borda da chapa.' })),
           h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Cortes'), segmentado(Object.entries(MODOS_CORTE).map(([k, m]) => [k, m.nome]), modo, (v) => (modo = v), { rotulo: 'Modo de corte' })),
           h('small', { class: 'dica' }, `${MODOS_CORTE.aproveitamento.nome}: ${MODOS_CORTE.aproveitamento.descricao} ${MODOS_CORTE.faixas.nome}: ${MODOS_CORTE.faixas.descricao}`),
           h('label', { class: 'caixa-marcar' }, retalhos, 'Usar retalhos do estoque quando economizar chapa'),
@@ -596,7 +618,7 @@ export async function paginaPlano(planoId, params) {
           h('div', { class: 'acoes-modal' }, h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Usar estes ajustes')),
         );
       },
-      { contexto: 'Plano de corte', subtitulo: `Começam com os valores da serra da oficina (${formatarMm(sessao.config.serra_decimos_mm / 10)} mm de disco, ${sessao.config.refilo_mm} mm de refilo).` },
+      { contexto: 'Plano de corte', subtitulo: `Começam com os valores da serra da oficina (${formatarMm(sessao.config.serra_decimos_mm / 10)} mm de disco, ${formatarCm(sessao.config.refilo_mm)} cm de refilo).` },
     );
     if (!r) return;
     ajustes = { ...ajustes, ...r.ajustes };
@@ -615,11 +637,11 @@ export async function paginaPlano(planoId, params) {
 
   const exportarCsv = () => {
     const campoCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const linhas = [['#', 'Móvel', 'Peça', 'Comprimento (mm)', 'Largura (mm)', 'Quantidade', 'Chapa', 'Espessura (mm)', 'Segue o veio', 'Fita', 'C1', 'C2', 'L1', 'L2']];
+    const linhas = [['#', 'Móvel', 'Peça', 'Comprimento (cm)', 'Largura (cm)', 'Quantidade', 'Chapa', 'Espessura (mm)', 'Segue o veio', 'Fita', 'C1', 'C2', 'L1', 'L2']];
     pecas.forEach((p, i) => {
       const chapa = chapasPorId.get(p.chapa_id);
       const fita = fitasPorId.get(p.fita_id);
-      linhas.push([i + 1, p.grupo, p.descricao, p.comprimento_mm, p.largura_mm, p.quantidade, chapa?.nome || '', chapa?.espessura_mm || '', p.veio ? 'sim' : 'não', fita?.nome || '', ...LADOS_FITA.map(([k]) => (fita && p[k] ? 'sim' : ''))]);
+      linhas.push([i + 1, p.grupo, p.descricao, formatarCm(p.comprimento_mm), formatarCm(p.largura_mm), p.quantidade, chapa?.nome || '', chapa?.espessura_mm || '', p.veio ? 'sim' : 'não', fita?.nome || '', ...LADOS_FITA.map(([k]) => (fita && p[k] ? 'sim' : ''))]);
     });
     baixarArquivo(new Blob([`﻿${linhas.map((l) => l.map(campoCsv).join(';')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' }), `pecas-plano-${planoId}.csv`);
   };
@@ -691,6 +713,17 @@ export async function paginaPlano(planoId, params) {
       : null,
   ];
 
+  // Projeto anexado: medir com o desenho em cima e a entrada de peças embaixo.
+  const projeto = secaoProjeto(plano, {
+    somenteLeitura: concluido,
+    aoMedir: (lista, anexo) => {
+      aba = 'pecas';
+      desenhar();
+      abrirMedir(lista, anexo);
+      requestAnimationFrame(() => (concluido ? listaEl : abaPecasEl.querySelector('.p-entrada'))?.scrollIntoView({ block: 'start' }));
+    },
+  });
+
   const area = h('div', {});
   const acao = h('div', { class: 'p-acao-fixa' });
   const abas = segmentado(
@@ -736,5 +769,5 @@ export async function paginaPlano(planoId, params) {
   }
   desenhar();
 
-  return h('div', {}, topo, escritorio, h('div', { class: 'p-abas-plano' }, abas), area, acao);
+  return h('div', {}, topo, escritorio, projeto.elemento, h('div', { class: 'p-abas-plano' }, abas), area, acao);
 }
