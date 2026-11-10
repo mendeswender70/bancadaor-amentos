@@ -589,6 +589,27 @@ export function gerarPdf(v, logo, aprovacao = null) {
     return fatias;
   };
 
+  // Pagamento: condição combinada e opções do cartão.
+  const Y_PAGAMENTO = 72 + 12 + 8 + 38 * 0.98 + 12;
+  const Y_FATOS = LIMITE - 54;
+  const paresPagamento = [
+    ...(descricaoPagamento ? [['Condição', descricaoPagamento]] : []),
+    ...linhasPagamento.map((l) => { const [rot, ...restoLinha] = l.split(':'); return restoLinha.length ? [rot.trim(), restoLinha.join(':').trim()] : ['', l]; }),
+    ['Total', formatarDinheiro(v.total_cents)],
+  ];
+  const alturaPar = ([rot, valor]) => Math.max(15, altura(valor, { f: 'sansMedia', t: 10.6, w: rot ? UTIL - 28 - 90 : UTIL - 28, alinhar: rot ? 'right' : 'left' }) + 4);
+  const opcoesCartao = cartao ? [...(cartao.debito ? [cartao.debito] : []), ...credito] : [];
+  const porColunaCartao = Math.ceil(opcoesCartao.length / 2);
+  const notaCartao = `No cartão, o valor já inclui a taxa; o pagamento é combinado direto com ${empresa}.`;
+  const ESTILO_NOTA = { t: 9.6, w: UTIL, lh: 1.5 };
+  /** Altura ocupada até o fim da nota do cartão, com as linhas da tabela no passo dado. */
+  const fimDoPagamento = (passo) => {
+    let y = Y_PAGAMENTO + 46 + paresPagamento.reduce((soma, par) => soma + alturaPar(par), 0) + 10;
+    if (cartao) y += 46 + 14 + porColunaCartao * passo + 10 + altura(notaCartao, ESTILO_NOTA) + 8;
+    return y;
+  };
+  /** Passo das linhas do cartão que cabe na página. */
+  const passoCartao = () => (porColunaCartao ? Math.max(8, Math.min(16, (Y_FATOS - 12 - fimDoPagamento(0)) / porColunaCartao)) : 16);
   const pgPagamento = (n) => {
     const fechar = folha(n);
     let y = abertura('Pagamento', 'Formas de pagamento', [T('Como '), E('pagar')], 38, 12);
@@ -601,54 +622,46 @@ export function gerarPdf(v, logo, aprovacao = null) {
       desenharConteudo(y + 14 + 20);
       y += h + 10;
     };
-    const pares = [
-      ...(descricaoPagamento ? [['Condição', descricaoPagamento]] : []),
-      ...linhasPagamento.map((l) => { const [rot, ...restoLinha] = l.split(':'); return restoLinha.length ? [rot.trim(), restoLinha.join(':').trim()] : ['', l]; }),
-      ['Total', formatarDinheiro(v.total_cents)],
-    ];
-    const alturaPar = ([rot, valor]) => Math.max(15, altura(valor, { f: 'sansMedia', t: 10.6, w: rot ? UTIL - 28 - 90 : UTIL - 28, alinhar: rot ? 'right' : 'left' }) + 4);
     caixa('Condição combinada', (topo) => {
       let py = topo;
-      for (const par of pares) {
+      for (const par of paresPagamento) {
         const [rot, valor] = par;
         if (rot) escrever(rot, ESQ + 14, py, { t: 10.6, cor: COR.tinta2 });
         escrever(valor, rot ? ESQ + 14 + 90 : ESQ + 14, py, { f: 'sansMedia', t: 10.6, w: rot ? UTIL - 28 - 90 : UTIL - 28, alinhar: rot ? 'right' : 'left' });
         py += alturaPar(par);
       }
-    }, pares.reduce((soma, par) => soma + alturaPar(par), 0));
+    }, paresPagamento.reduce((soma, par) => soma + alturaPar(par), 0));
     if (cartao) {
       // Opções do cartão em duas colunas: parcelas à esquerda, total com a taxa à direita.
-      const opcoes = [...(cartao.debito ? [cartao.debito] : []), ...credito];
-      const porColuna = Math.ceil(opcoes.length / 2);
-      const passo = Math.min(16, (LIMITE - 54 - 44 - y - 46 - 14) / porColuna);
+      const passo = passoCartao();
       const t = Math.min(9, passo * 0.6);
       const vao = 18;
       const largCol = (UTIL - 28 - vao) / 2;
       caixa(`Cartão${cartao.nome ? ` · ${cartao.nome}` : ''}`, (topo) => {
         for (const coluna of [0, 1]) {
           const x = ESQ + 14 + coluna * (largCol + vao);
-          if (coluna && opcoes.length < 2) break;
+          if (coluna && opcoesCartao.length < 2) break;
           rotulo('Parcelas', x, topo, { t: 7.2, tracking: 0.12 });
           rotulo('Total', x + largCol - larguraRotulo('Total', { t: 7.2, tracking: 0.12 }), topo, { t: 7.2, tracking: 0.12 });
         }
-        opcoes.forEach((o, i) => {
-          const x = ESQ + 14 + Math.floor(i / porColuna) * (largCol + vao);
-          const py = topo + 14 + (i % porColuna) * passo;
+        opcoesCartao.forEach((o, i) => {
+          const x = ESQ + 14 + Math.floor(i / porColunaCartao) * (largCol + vao);
+          const py = topo + 14 + (i % porColunaCartao) * passo;
           fio(x, py - 1, x + largCol, py - 1);
           const vezes = o.valores_parcelas_cents?.length || 1;
           const yTexto = py + (passo - t * 1.25) / 2;
           escrever(vezes > 1 ? `${vezes}x de ${formatarDinheiro(parcelaDe(o))}` : o.tipo, x, yTexto, { t, cor: COR.tinta2 });
           aDireita(formatarDinheiro(o.total_cents), x + largCol, yTexto, { f: 'sansForte', t });
         });
-      }, 14 + porColuna * passo);
-      escrever(`No cartão, o valor já inclui a taxa; o pagamento é combinado direto com ${empresa}.`, ESQ, y, { t: 9.6, cor: COR.tinta3, w: UTIL, lh: 1.5 });
+      }, 14 + porColunaCartao * passo);
+      escrever(notaCartao, ESQ, y, { ...ESTILO_NOTA, cor: COR.tinta3 });
+      y += altura(notaCartao, ESTILO_NOTA) + 8;
     }
-    const yFatos = LIMITE - 54;
-    fio(ESQ, yFatos, DIR, yFatos);
+    fio(ESQ, Y_FATOS, DIR, Y_FATOS);
     [['Entrega', v.prazo_entrega || 'A combinar'], ['Válida até', validade]].forEach(([dt, dd], i) => {
       const x = ESQ + i * (UTIL / 2 + 8);
-      rotulo(dt, x, yFatos + 11, { t: 8, tracking: 0.18 });
-      escrever(dd, x, yFatos + 22, { f: 'sansMedia', t: 12.2, w: UTIL / 2 - 12, lh: 1.25, maxLinhas: 2 });
+      rotulo(dt, x, Y_FATOS + 11, { t: 8, tracking: 0.18 });
+      escrever(dd, x, Y_FATOS + 22, { f: 'sansMedia', t: 12.2, w: UTIL / 2 - 12, lh: 1.25, maxLinhas: 2 });
     });
     fechar();
   };
@@ -677,8 +690,9 @@ export function gerarPdf(v, logo, aprovacao = null) {
     return fatias;
   };
 
-  const selo = (cx, cy) => {
+  const selo = (cx, cy, escala = 1) => {
     doc.save();
+    doc.translate(u(cx), u(cy)).scale(escala).translate(-u(cx), -u(cy));
     doc.circle(u(cx), u(cy), u(75)).lineWidth(u(1.3)).strokeColor(COR.acentoForte).stroke();
     doc.circle(u(cx), u(cy), u(48)).lineWidth(u(1.3)).strokeColor(COR.acentoForte).stroke();
     const ouro = doc.linearGradient(u(cx - 40), u(cy - 40), u(cx + 40), u(cy + 40));
@@ -698,32 +712,51 @@ export function gerarPdf(v, logo, aprovacao = null) {
     });
     doc.restore();
   };
+  // Observações curtas ficam na página de aprovação, logo acima da assinatura (ou abaixo do selo),
+  // em vez de ocupar uma página só para elas.
+  const ESTILO_OBS = { t: 10, w: UTIL, lh: 1.45 };
+  const alturaObsJunto = 20 + observacoes.reduce((soma, texto) => soma + altura(texto, ESTILO_OBS) + 5, 0);
+  const obsJunto = observacoes.length > 0 && alturaObsJunto <= (aprovacao ? 118 : 108);
+  const observacoesJunto = (y) => {
+    fio(ESQ, y, DIR, y);
+    rotulo('Observações', ESQ, y + 9, { t: 8.4, tracking: 0.24, cor: COR.acentoForte });
+    let yTexto = y + 22;
+    for (const texto of observacoes) {
+      escrever(texto, ESQ, yTexto, { ...ESTILO_OBS, cor: COR.tinta2 });
+      yTexto += altura(texto, ESTILO_OBS) + 5;
+    }
+  };
   const pgAprovacao = (n) => {
     const fechar = folha(n);
     cabecalho('Aprovação');
     const sobre = (texto, y) => rotulo(texto, MEIO - larguraRotulo(texto, { t: 8.4, tracking: 0.24 }) / 2, y, { t: 8.4, tracking: 0.24, cor: COR.acentoForte });
     if (aprovacao) {
-      const y = 108;
+      // Com as observações na página, o conjunto sobe e o selo fica um pouco menor.
+      const y = obsJunto ? 80 : 108;
+      const escala = obsJunto ? 0.8 : 1;
       sobre('Aprovação registrada', y);
       const h = titulo([T('Proposta '), E('aprovada')], ESQ, y + 20, { t: 38, lh: 1, centro: true });
-      selo(MEIO, y + 20 + h + 100);
+      const ySelo = y + 20 + h + 25 * escala;
+      selo(MEIO, ySelo + 75 * escala, escala);
       const em = aprovacao.aprovado_em ? new Date(aprovacao.aprovado_em) : null;
       const quando = em && !Number.isNaN(em.getTime())
         ? `em ${em.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${em.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`
         : '';
-      let yInfo = y + 20 + h + 196;
+      let yInfo = ySelo + 150 * escala + 21 * escala;
       for (const [texto, forte] of [[aprovacao.aprovado_por ? `Aprovada por ${aprovacao.aprovado_por}` : '', true], [quando, false], [`Total aprovado: ${formatarDinheiro(v.total_cents)}`, true]]) {
         if (!texto) continue;
         centrado(texto, yInfo, { f: forte ? 'sansMedia' : 'sans', t: 12, cor: forte ? COR.tinta : COR.tinta2 });
         yInfo += 20;
       }
+      if (obsJunto) observacoesJunto(LIMITE - alturaObsJunto - 2);
     } else {
-      const y = 132;
+      const y = obsJunto ? 92 : 132;
       sobre(`Válida até ${validade}`, y);
       const h = titulo([T('Para '), E('aprovar')], ESQ, y + 20, { t: 38, lh: 1, centro: true });
       const texto = `Abra o link da proposta no celular para simular o pagamento e aprovar em poucos segundos. Se preferir, assine abaixo e envie uma foto para ${empresa}.`;
-      escrever(texto, ESQ + 30, y + 20 + h + 18, { t: 12, cor: COR.tinta2, w: UTIL - 60, lh: 1.6, alinhar: 'center' });
-      const yResumo = y + 20 + h + 110;
+      const estiloTexto = { t: 12, w: UTIL - 60, lh: 1.6, alinhar: 'center' };
+      escrever(texto, ESQ + 30, y + 20 + h + 18, { ...estiloTexto, cor: COR.tinta2 });
+      const yResumo = y + 20 + h + 18 + altura(texto, estiloTexto) + (obsJunto ? 12 : 34);
       const total = formatarDinheiro(v.total_cents);
       const larg = Math.max(largura(total, { f: 'sansMedia', t: 11.4 }), larguraRotulo('Total', { t: 7.8 })) + 24;
       doc.save();
@@ -732,6 +765,8 @@ export function gerarPdf(v, logo, aprovacao = null) {
       rotulo('Total', MEIO - larg / 2 + 12, yResumo + 8, { t: 7.8, tracking: 0.16 });
       escrever(total, MEIO - larg / 2 + 12, yResumo + 19, { f: 'sansMedia', t: 11.4 });
       const yAss = LIMITE - 70;
+      // As observações ficam logo acima da assinatura: quem assina, assina embaixo delas.
+      if (obsJunto) observacoesJunto(Math.max(yResumo + 38 + 14, yAss - 30 - alturaObsJunto));
       const meioCol = ESQ + UTIL * 0.62;
       fio(ESQ, yAss, meioCol - 7, yAss, { opacidade: 1 });
       fio(meioCol + 7, yAss, DIR, yAss, { opacidade: 1 });
@@ -789,8 +824,10 @@ export function gerarPdf(v, logo, aprovacao = null) {
   fatiasInvestimento().forEach(([x, y, e], k, todas) =>
     roteiro.push({ chave: k ? '' : 'investimento', fazer: (n) => pgInvestimento(n, linhasInvestimento.slice(x, y), k > 0, k === todas.length - 1, e) }));
   roteiro.push({ chave: 'pagamento', fazer: (n) => pgPagamento(n) });
-  fatiasObservacoes().forEach(([x, y], k) =>
-    roteiro.push({ chave: k ? '' : 'observacoes', fazer: (n) => pgObservacoes(n, observacoes.slice(x, y), k > 0) }));
+  if (!obsJunto) {
+    fatiasObservacoes().forEach(([x, y], k) =>
+      roteiro.push({ chave: k ? '' : 'observacoes', fazer: (n) => pgObservacoes(n, observacoes.slice(x, y), k > 0) }));
+  }
   roteiro.push({ chave: 'aprovacao', fazer: (n) => pgAprovacao(n) }, { chave: 'contra', fazer: () => pgContra() });
 
   const onde = (chave) => roteiro.findIndex((p) => p.chave === chave);
