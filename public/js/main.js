@@ -119,6 +119,11 @@ window.addEventListener('beforeunload', (e) => {
   }
 });
 
+/** Desenha de novo a tela atual (depois de duplicar ou excluir um orçamento, por exemplo). */
+export function recarregarRota() {
+  return rotear();
+}
+
 export function irPara(hash) {
   location.hash = hash;
 }
@@ -391,7 +396,7 @@ async function abrirNovidades({ somenteNaoLidas = false } = {}) {
           ? h('p', { class: 'novidades-mais' }, `Mais ${ocultas} ${ocultas === 1 ? 'novidade anterior está' : 'novidades anteriores estão'} em `,
               h('a', { href: '#/avisos', onclick: () => fechar(true) }, 'Avisos → Novidades'), '.')
           : null,
-        h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', autofocus: true, onclick: () => fechar(true) }, 'Entendi')),
+        h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', onclick: () => fechar(true) }, 'Entendi')),
       ),
     { contexto: `Novidade · ${destaque.data}`, classe: 'modal-novidades' },
   );

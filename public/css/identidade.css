@@ -364,3 +364,196 @@ html:root .estrutura .pagina-editor > .editor { margin-top: 20px; }
   html:root .estrutura .pagina-editor .editor #secao-cliente .editor-validade-input { width: 100%; }
 }
 html:root .estrutura .pagina-editor .secao-ambientes.com-calculos .item-calculo { font-size: 11.5px; }
+
+/* ---------- Clientes: lista em livro-caixa ----------
+   Mesma linha da lista de orçamentos: nome e histórico, contato, o que aguarda resposta e o aprovado. */
+.pagina-clientes { --ll-colunas: minmax(0, 1.5fr) minmax(0, 1fr) 170px 160px; --ll-acoes: 44px; }
+.pagina-clientes > .lc-cabecalho { grid-column: 1 / -1; margin-top: 0; }
+.lc-contato { overflow: hidden; color: var(--pc-suave); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.estrutura .lc-valor { text-align: right; white-space: nowrap; font-variant-numeric: lining-nums tabular-nums; }
+.estrutura .lc-aguardando { color: var(--pc-suave); font: 400 16px/1 var(--fonte-titulo); letter-spacing: -0.02em; }
+.estrutura .lc-valor.lc-zero { color: var(--pc-suave); opacity: .5; }
+html:root .estrutura .pagina-clientes .contador-clientes { margin: 0; color: var(--pc-suave); font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+@media (max-width: 899px) {
+  .pagina-clientes { --ll-acoes: 40px; }
+  .estrutura .lc-link { grid-template-areas: 'cliente total' 'cliente aguardando'; }
+  .lc-link .ll-cliente { grid-area: cliente; }
+  .lc-contato { display: none; }
+  .estrutura .lc-link .lc-aprovado { grid-area: total; }
+  .estrutura .lc-link .lc-aguardando { grid-area: aguardando; font-size: 13px; }
+  .estrutura .lc-link .lc-aguardando:not(.lc-zero)::before { content: 'aguarda '; font: 500 11px 'Inter', sans-serif; }
+  .estrutura .lc-link .lc-aguardando.lc-zero { visibility: hidden; }
+  html:root .estrutura .pagina-clientes .contador-clientes { padding-bottom: 10px; border-bottom: 1.5px solid var(--pc-texto); }
+}
+
+/* ---------- Ficha do cliente ----------
+   O contato numa coluna estreita; à direita, o resumo em régua e os orçamentos em livro-caixa. */
+.pagina-cliente { --ll-colunas: minmax(0, 1fr) minmax(0, 1.3fr) 124px 136px; --ll-acoes: 40px; }
+/* Na ficha o cliente já é conhecido: o número vai junto da data e o WhatsApp fica só no contato */
+.pagina-cliente .ll-numero { display: none; }
+.pagina-cliente .ll-numero-curto { display: inline; }
+html:root .estrutura .pagina-cliente .ll-acoes .botao-icone-whatsapp { display: none; }
+@media (min-width: 1024px) {
+  html:root .estrutura .pagina-cliente .cliente-colunas { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); gap: 40px; align-items: start; }
+}
+html:root .estrutura .pagina-cliente .cf-contato { display: flex; flex-direction: column; gap: 14px; padding: 13px 0 0; border: 0; border-top: 1.5px solid var(--pc-texto); border-radius: 0; background: none; box-shadow: none; }
+.cf-titulo { margin: 0; color: var(--pc-texto); font: 400 19px/1.25 var(--fonte-titulo); letter-spacing: -0.015em; }
+.cf-dados { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.cf-dados dt { color: var(--pc-suave); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.cf-dados dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--pc-texto); font-size: 15px; font-variant-numeric: tabular-nums; }
+html:root .estrutura .pagina-cliente .ficha-whatsapp { justify-content: center; }
+html:root .estrutura .pagina-cliente .cf-historico { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.cf-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 30px; padding-top: 7px;
+  background: linear-gradient(var(--pc-texto), var(--pc-texto)) 0 0 / 100% 1.5px no-repeat, linear-gradient(90deg, var(--pc-suave) 0 1px, transparent 1px) 0 0 / 2.5% 7px repeat-x; }
+.cf-numero { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 12px 16px 0 0; }
+.cf-numero + .cf-numero { padding-left: 16px; border-left: 1px solid var(--pc-borda); }
+.cf-numero > span { color: var(--pc-suave); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.cf-numero strong { color: var(--pc-texto); font: 400 clamp(22px, 2.2vw, 28px)/1.05 var(--fonte-titulo); letter-spacing: -0.035em; white-space: nowrap; font-variant-numeric: lining-nums tabular-nums; }
+.cf-numero:first-child strong { color: var(--pc-acento); }
+.cf-numero.cf-zero strong { color: var(--pc-suave); }
+.cf-numero small { color: var(--pc-suave); font-size: 11.5px; }
+html:root .estrutura .pagina-cliente .cliente-historico-titulo { margin-bottom: 8px; padding-bottom: 10px; border-bottom: 1.5px solid var(--pc-texto); }
+html:root .estrutura .pagina-cliente .cliente-historico-titulo > span { color: var(--pc-suave); font-size: 12px; }
+@media (max-width: 899px) {
+  .pagina-cliente { --ll-acoes: 40px; }
+}
+@media (max-width: 767px) {
+  .cf-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cf-numero:nth-child(3) { grid-column: 1 / -1; padding-left: 0; border-left: 0; border-top: 1px solid var(--pc-borda); flex-direction: row; align-items: baseline; gap: 8px; padding-top: 10px; margin-top: 10px; }
+  .cf-numero:nth-child(3) strong { font-size: 18px; }
+  html:root .estrutura .pagina-cliente .cf-contato { padding-top: 13px; }
+  .cf-contato .cf-titulo, .cf-dados > div:first-child { display: none; }
+}
+html:root .estrutura .pagina-clientes > div:last-child { width: 100%; margin-top: 0; }
+html:root .estrutura .pagina-clientes .lc-lista { gap: 0; }
+@media (max-width: 767px) {
+  html:root .estrutura .pagina-cliente .cf-contato { padding-top: 0; border-top: 0; }
+  .cf-dados:not(:has(> div:nth-child(2))) { display: none; }
+}
+
+/* ---------- Abas em texto: ajustes e avisos (as mesmas do editor) ---------- */
+html:root .estrutura .pagina-config nav.abas,
+html:root .estrutura .pagina-avisos .central-avisos-abas { display: flex; gap: 4px 24px; flex-wrap: nowrap; overflow-x: auto; width: auto; height: auto; margin: 0 0 18px; padding: 0 0 0; border: 0; border-bottom: 1px solid var(--pc-borda); border-radius: 0; background: none; box-shadow: none; scrollbar-width: none; }
+html:root .estrutura .pagina-config nav.abas > a,
+html:root .estrutura .pagina-avisos .central-avisos-abas > button { flex: none; width: auto; min-height: 38px; height: auto; padding: 8px 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--pc-suave); font: 500 14px/1.2 'Inter', sans-serif; text-decoration: none; }
+html:root .estrutura .pagina-config nav.abas > a:hover,
+html:root .estrutura .pagina-avisos .central-avisos-abas > button:hover { color: var(--pc-texto); }
+html:root .estrutura .pagina-config nav.abas > a.ativo,
+html:root .estrutura .pagina-avisos .central-avisos-abas > button.ativo { color: var(--pc-texto); box-shadow: inset 0 -2px var(--pc-acento); }
+html:root .estrutura .pagina-config nav.abas > a .icone { display: none; }
+
+/* ---------- Relatórios: a mesma régua e as mesmas seções do painel ---------- */
+html:root .estrutura .pagina-relatorios .rpt-metricas { gap: 0; margin-bottom: 34px; padding-top: 7px;
+  background: linear-gradient(var(--pc-texto), var(--pc-texto)) 0 0 / 100% 1.5px no-repeat, linear-gradient(90deg, var(--pc-suave) 0 1px, transparent 1px) 0 0 / 2.5% 7px repeat-x; }
+html:root .estrutura .pagina-relatorios .rpt-metrica { padding: 14px 18px 4px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .pagina-relatorios .rpt-metrica + .rpt-metrica { padding-left: 18px; border-left: 1px solid var(--pc-borda); }
+html:root .estrutura .pagina-relatorios .rpt-metrica .rpt-icone { display: none; }
+html:root .estrutura .pagina-relatorios .rpt-metrica-topo { color: var(--pc-suave); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+html:root .estrutura .pagina-relatorios .rpt-metrica > strong { margin: 8px 0 6px; font: 400 clamp(24px, 2.3vw, 31px)/1.05 var(--fonte-titulo); letter-spacing: -0.035em; font-variant-numeric: lining-nums tabular-nums; }
+html:root .estrutura .pagina-relatorios .rpt-metrica.rpt-destaque > strong { color: var(--pc-acento); }
+/* Painéis viram seções com filete, como no painel */
+html:root .estrutura .pagina-relatorios .rpt-painel { padding: 13px 0 0; border: 0; border-top: 1.5px solid var(--pc-texto); border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .pagina-relatorios .rpt-visao { gap: 34px 30px; margin-bottom: 34px; }
+html:root .estrutura .pagina-relatorios .rpt-titulo h2 { font: 400 19px/1.25 var(--fonte-titulo); letter-spacing: -0.015em; }
+html:root .estrutura .pagina-relatorios .rpt-titulo h2 .icone { display: none; }
+/* Leituras: uma faixa com divisórias, sem caixas */
+html:root .estrutura .pagina-relatorios .rpt-leituras { gap: 0; margin-bottom: 34px; border-top: 1px solid var(--pc-borda); border-bottom: 1px solid var(--pc-borda); }
+html:root .estrutura .pagina-relatorios .rpt-leitura { padding: 16px 18px 16px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .pagina-relatorios .rpt-leitura + .rpt-leitura { padding-left: 18px; border-left: 1px solid var(--pc-borda); }
+html:root .estrutura .pagina-relatorios .rpt-leitura .rpt-icone { display: none; }
+html:root .estrutura .pagina-relatorios .rpt-leitura strong { font: 400 22px/1.1 var(--fonte-titulo); letter-spacing: -0.03em; }
+@media (max-width: 1023px) {
+  html:root .estrutura .pagina-relatorios .rpt-metrica:nth-child(odd) { padding-left: 0; border-left: 0; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica:nth-child(n + 3) { border-top: 1px solid var(--pc-borda); }
+}
+@media (max-width: 767px) {
+  html:root .estrutura .pagina-relatorios .rpt-metrica { padding: 12px 10px 8px 0; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica + .rpt-metrica { padding-left: 10px; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica:nth-child(odd) { padding-left: 0; }
+  html:root .estrutura .pagina-relatorios .rpt-metrica > strong { font-size: 21px; white-space: nowrap; }
+  html:root .estrutura .pagina-relatorios .rpt-leituras { grid-template-columns: 1fr; }
+  html:root .estrutura .pagina-relatorios .rpt-leitura + .rpt-leitura { padding-left: 0; border-left: 0; border-top: 1px solid var(--pc-borda); }
+}
+
+/* ---------- Ajustes ---------- */
+/* Preços do catálogo na letra do livro */
+html:root .estrutura .pagina-config .lista-moveis :is(.preco-com-unidade input, .preco-valor, .movel-preco) { font-family: var(--fonte-titulo); font-size: 18px; letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
+
+/* ---------- Tema claro: o que ainda usava as cores do escuro ---------- */
+html[data-tema='claro'] .estrutura .pagina-editar-cliente .formulario-cliente { border-color: var(--borda); background: var(--superficie, #fffdf8); box-shadow: 0 2px 4px #5540250a; }
+html[data-tema='claro'] .estrutura .pagina-editar-cliente .formulario-cliente :is(.cliente-copiar-whats, .cliente-campos-adicionais > summary) { border-color: var(--borda); background: #f8f3eb; color: var(--texto); }
+html[data-tema='claro'] .estrutura .pagina-avisos .avisos-voltar { border-color: var(--borda); background: var(--superficie, #fffdf8); color: var(--texto); }
+html:root .estrutura .config-salvar-precos .config-precos-alterados { color: var(--pc-suave); font-size: 12.5px; }
+@media (max-width: 767px) { .acesso-chamada h2 + p { margin-top: 12px; } }
+
+/* ---------- Painel reorganizado em cinco faixas ----------
+   1 abertura (frase + régua da meta) · 2 números · 3 para acompanhar + atividades ·
+   4 orçamentos recentes · 5 panorama. Todas as seções abrem com o mesmo filete. */
+.painel-comercial { --ll-colunas: 64px minmax(0, 1.2fr) minmax(0, 1.4fr) 124px 136px; --ll-acoes: 84px; }
+html:root .estrutura .painel-comercial .pc-abertura { display: block; margin: 4px 8px 26px; }
+.pc-abertura-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; margin-bottom: 12px; }
+html:root .estrutura .painel-comercial .pc-abertura-topo .pc-sobre { margin: 0; }
+html:root .estrutura .painel-comercial .pc-abertura h1.pc-frase { max-width: 30em; margin: 0 0 22px; }
+/* Meta dentro da abertura: só a régua e uma linha de rodapé, sem cartão */
+html:root .estrutura .painel-comercial .pc-abertura .pc-meta { display: block; max-width: none; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+html:root .estrutura .painel-comercial .pc-abertura .pc-regua { padding-top: 10px; }
+.pc-meta-rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 18px; margin-top: 10px; }
+html:root .estrutura .painel-comercial .pc-meta-rodape .pc-regua-nota { margin: 0; }
+html:root .estrutura .painel-comercial .pc-meta-rodape .pc-meta-ajustar { margin: 0; }
+html:root .estrutura .painel-comercial .pc-abertura .pc-meta-vazia { display: block; }
+
+/* Faixa de números: mais ar antes das seções */
+html:root .estrutura .painel-comercial .pc-apoio { margin: 0 8px 40px; }
+
+/* Seções */
+.pc-faixa { display: grid; gap: 40px 36px; margin: 0 8px 44px; }
+.pc-faixa-acao { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.pc-faixa-panorama { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+html:root .estrutura .painel-comercial .pc-faixa > .pc-painel,
+html:root .estrutura .painel-comercial > .pc-recentes { height: auto; min-height: 0; padding: 13px 0 0; border: 0; border-top: 1.5px solid var(--pc-texto); border-radius: 0; background: none; box-shadow: none; }
+html:root .estrutura .painel-comercial > .pc-recentes { margin: 0 8px 44px; }
+html:root .estrutura .painel-comercial .pc-titulo { margin-bottom: 16px; }
+
+/* Para acompanhar: quatro números grandes; os zerados ficam apagados */
+.pc-contadores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--pc-borda); }
+html:root .estrutura .painel-comercial .pc-contador { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 4px 14px 16px 0; color: var(--pc-texto); }
+html:root .estrutura .painel-comercial .pc-contador + .pc-contador { padding-left: 14px; border-left: 1px solid var(--pc-borda); }
+.pc-contador strong { font: 400 34px/1 var(--fonte-titulo); letter-spacing: -0.03em; font-variant-numeric: lining-nums tabular-nums; }
+.pc-contador strong.pc-aviso { color: var(--pc-acento); }
+.pc-contador strong.pc-perigo { color: var(--pc-perigo); }
+.pc-contador strong.pc-sucesso { color: var(--pc-sucesso); }
+.pc-contador span { font-size: 12px; line-height: 1.35; }
+html:root .estrutura .painel-comercial .pc-contador[data-zero] { color: var(--pc-suave); }
+html:root .estrutura .painel-comercial .pc-contador[data-zero] strong { opacity: .5; }
+html:root .estrutura .painel-comercial .pc-contador:hover span { color: var(--pc-acento); }
+.estrutura .painel-comercial .pc-subtitulo { margin: 18px 0 2px; color: var(--pc-suave); font: 600 10px/1.4 'Inter', sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+html:root .estrutura .painel-comercial .pc-acompanhar .pc-vencimento { padding: 12px 0; }
+html:root .estrutura .painel-comercial .pc-acompanhar .pc-vazio { margin: 10px 0 0; font-size: 12px; }
+
+/* Orçamentos recentes usam a linha da lista de orçamentos */
+html:root .estrutura .painel-comercial .pc-recentes .lista-livro { margin-top: -6px; }
+
+/* Panorama: os dois gráficos lado a lado, com a mesma altura de leitura */
+html:root .estrutura .painel-comercial .pc-faixa-panorama .pc-distribuicao-conteudo { justify-content: flex-start; gap: 36px; }
+html:root .estrutura .painel-comercial .pc-faixa-panorama .pc-legenda { max-width: 260px; }
+html:root .estrutura .painel-comercial .pc-nota a { color: var(--pc-acento); text-decoration: underline; text-underline-offset: 2px; }
+
+@media (max-width: 1199px) {
+  .painel-comercial { --ll-colunas: 56px minmax(0, 1.1fr) minmax(0, 1.2fr) 116px 124px; }
+  .pc-faixa-acao { grid-template-columns: 1fr; }
+}
+@media (max-width: 899px) {
+  .painel-comercial { --ll-acoes: 40px; }
+  .pc-contadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html:root .estrutura .painel-comercial .pc-contador:nth-child(odd) { padding-left: 0; border-left: 0; }
+  html:root .estrutura .painel-comercial .pc-contador:nth-child(n + 3) { padding-top: 14px; border-top: 1px solid var(--pc-borda); }
+}
+@media (max-width: 767px) {
+  html:root .estrutura .painel-comercial .pc-abertura { margin: 0 0 24px; }
+  html:root .estrutura .painel-comercial .pc-abertura h1.pc-frase { margin-bottom: 18px; font-size: 25px; }
+  html:root .estrutura .painel-comercial .pc-apoio { margin: 0 0 34px; }
+  .pc-faixa, html:root .estrutura .painel-comercial > .pc-recentes { margin: 0 0 36px; }
+  .pc-faixa-panorama { grid-template-columns: 1fr; }
+  .pc-abertura-topo { flex-direction: column; align-items: flex-start; }
+  .pc-contador strong { font-size: 28px; }
+}

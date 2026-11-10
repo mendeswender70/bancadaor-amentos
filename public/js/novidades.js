@@ -6,6 +6,30 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
+    id: '2026-11-relatorios-ajustes-livro',
+    data: '10 de novembro de 2026',
+    titulo: 'Painel organizado, relatórios e ajustes com a cara do livro',
+    resumo: 'As últimas telas do app ganharam o mesmo visual do painel e da proposta.',
+    itens: [
+      { icone: 'grafico', titulo: 'Relatórios em régua', texto: 'Os quatro números principais ficam numa faixa só, e cada análise abre como um capítulo, sem caixas.' },
+      { icone: 'config', titulo: 'Ajustes mais leves', texto: 'Empresa, Móveis, Pagamento e Conta viraram abas de texto, e os preços do catálogo usam a letra da proposta.' },
+      { icone: 'inicio', titulo: 'Painel em ordem', texto: 'O painel segue a ordem do dia: como vai o mês, os números, o que acompanhar, os orçamentos recentes e o panorama. A meta virou parte da frase de abertura.' },
+      { icone: 'check', titulo: 'Tema claro corrigido', texto: 'A edição de cliente e o botão de voltar dos avisos não ficam mais escuros no tema claro.' },
+    ],
+  },
+  {
+    id: '2026-11-clientes-livro-caixa',
+    data: '10 de novembro de 2026',
+    titulo: 'Clientes com o que cada um aprovou',
+    resumo: 'A lista e a ficha de clientes mostram quanto cada um já aprovou e quanto está esperando resposta.',
+    itens: [
+      { icone: 'clientes', titulo: 'Lista em colunas', texto: 'Contato, valor aguardando resposta e valor aprovado lado a lado, para você ver quem merece um retorno.' },
+      { icone: 'grafico', titulo: 'Resumo na ficha', texto: 'Aprovado, aguardando resposta e número de propostas no topo da ficha de cada cliente.' },
+      { icone: 'orcamentos', titulo: 'Orçamentos completos', texto: 'Na ficha, cada orçamento mostra ambientes, andamento e o menu com enviar, PDF e duplicar.' },
+    ],
+    acao: { rotulo: 'Ver meus clientes', href: '#/clientes' },
+  },
+  {
     id: '2026-11-producao',
     data: '10 de novembro de 2026',
     titulo: 'A produção ganhou uma área própria',
@@ -37,7 +61,7 @@ export const novidades = [
   {
     id: '2026-11-lista-livro-caixa',
     data: '10 de novembro de 2026',
-    titulo: 'A lista de orçamentos virou um livro-caixa',
+    titulo: 'A lista de orçamentos virou um livro‑caixa',
     resumo: 'Mais orçamentos por tela e o valor somado de cada filtro.',
     itens: [
       { icone: 'dinheiro', titulo: 'Soma de cada filtro', texto: 'Ao lado da contagem aparece o valor somado do que o filtro encontrou. Em Aprovados, por exemplo, é quanto você já vendeu.' },

@@ -177,7 +177,7 @@ function andamento(o) {
 }
 
 // Livro-caixa: uma linha por orçamento, sem caixa, com o total alinhado à direita.
-function linhaLivro(o, aoMudar) {
+function linhaLivro(o, aoMudar, { mostrarCliente = true } = {}) {
   const ambientes = o.ambiente_nome
     ? o.ambientes > 1 ? `${o.ambiente_nome} e mais ${o.ambientes - 1}` : o.ambiente_nome
     : 'Sem ambiente';
@@ -185,7 +185,9 @@ function linhaLivro(o, aoMudar) {
   return h('div', { class: 'll-linha', 'data-status': o.status },
     h('a', { href: `#/orcamentos/${o.id}`, class: 'll-link' },
       h('span', { class: 'll-numero' }, formatarNumero(o.numero)),
-      h('span', { class: 'll-cliente' }, h('strong', {}, o.cliente_nome), h('small', {}, h('span', { class: 'll-numero-curto' }, `Nº ${formatarNumero(o.numero)} · `), ambientes)),
+      mostrarCliente
+        ? h('span', { class: 'll-cliente' }, h('strong', {}, o.cliente_nome), h('small', {}, h('span', { class: 'll-numero-curto' }, `Nº ${formatarNumero(o.numero)} · `), ambientes))
+        : h('span', { class: 'll-cliente' }, h('strong', {}, ambientes), h('small', {}, h('span', { class: 'll-numero-curto' }, `Nº ${formatarNumero(o.numero)} · `), diaMesCompacto(o.data))),
       h('span', { class: `ll-andamento${o.visualizacoes && ['enviado', 'negociacao'].includes(o.status) ? ' ll-abriu' : ''}` }, h('span', {}, andamento(o)), h('small', {}, `Emitido em ${diaMesCompacto(o.data)}${validade}`)),
       h('span', { class: 'll-situacao' }, selo(o.status)),
       h('strong', { class: 'll-total' }, formatarDinheiro(o.total_cents))),
@@ -201,7 +203,7 @@ function linhaLivro(o, aoMudar) {
 }
 
 export function listaOrcamentos(orcamentos, { mostrarCliente = true, aoMudar, variante = 'compacta' } = {}) {
-  if (variante === 'tabela' && mostrarCliente) return h('div', { class: 'lista-livro' }, orcamentos.map((o) => linhaLivro(o, aoMudar)));
+  if (variante === 'tabela') return h('div', { class: `lista-livro${mostrarCliente ? '' : ' lista-livro-cliente'}` }, orcamentos.map((o) => linhaLivro(o, aoMudar, { mostrarCliente })));
   return h(
     'div',
     { class: 'lista' },

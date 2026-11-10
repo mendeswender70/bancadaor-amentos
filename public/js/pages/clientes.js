@@ -1,8 +1,10 @@
 import { formatarData, formatarDinheiro } from '/shared/calc.js';
+
+const dataCurta = (iso) => iso ? new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${String(iso).slice(0, 10)}T12:00:00Z`)).replace('.', '').replace(' de ', ' ') : '';
 import { api } from '../api.js';
 import { h, icone, debounce, substituir, carregando, vazio, vazioIlustrado, confirmar, aviso, avisoErro } from '../ui.js';
-import { avatar, cabecalhoPagina, cabecalhoInterno, formularioCliente, listaOrcamentos, modalNovoCliente, numeroWhatsApp } from '../comum.js';
-import { irPara } from '../main.js';
+import { cabecalhoPagina, cabecalhoInterno, formularioCliente, listaOrcamentos, modalNovoCliente, numeroWhatsApp } from '../comum.js';
+import { irPara, recarregarRota } from '../main.js';
 
 export async function paginaClientes(query = new URLSearchParams()) {
   const lista = h('div', {});
@@ -20,44 +22,30 @@ export async function paginaClientes(query = new URLSearchParams()) {
   });
   const contador = h('p', { class: 'contador-clientes' });
 
+  // Livro-caixa de clientes: nome e histórico, contato, o que aguarda resposta e o que já foi aprovado.
   const linhaCliente = (c) => {
     const whats = numeroWhatsApp(c.whatsapp || c.telefone);
     const primeiro = c.nome.trim().split(/\s+/)[0];
-    const resumo = c.aprovado_cents
-      ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(c.aprovado_cents / 100)} aprovados`
-      : c.ultimo_orcamento
-        ? `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`} · último em ${formatarData(c.ultimo_orcamento).slice(0, 5)}`
-        : `${c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`}`;
-    return h(
-      'div',
-      { class: 'linha-orcamento linha-com-acoes linha-cliente-ui' },
-      h(
-        'a',
-        { href: `#/clientes/${c.id}`, class: 'linha-link cliente-link' },
-        avatar(c.nome, 'avatar-linha cliente-avatar'),
-        h('div', { class: 'linha-principal' }, h('strong', {}, c.nome), h('span', { class: 'suave' }, resumo)),
-        h('span', { class: 'gestao-cliente-telefone' }, c.whatsapp || c.telefone || 'Contato não informado'),
-        icone('seta', 'icone linha-seta'),
-      ),
-      h(
-        'div',
-        { class: 'linha-acoes' },
+    const qtd = c.orcamentos === 1 ? '1 orçamento' : `${c.orcamentos} orçamentos`;
+    const resumo = c.orcamentos ? `${qtd} · último em ${dataCurta(c.ultimo_orcamento)}` : 'Nenhum orçamento ainda';
+    const valor = (cents, classe) => h('span', { class: `lc-valor ${classe}${cents ? '' : ' lc-zero'}` }, cents ? formatarDinheiro(cents) : '—');
+    return h('div', { class: 'll-linha lc-linha' },
+      h('a', { href: `#/clientes/${c.id}`, class: 'll-link lc-link', 'aria-label': `${c.nome}: ${resumo}` },
+        h('span', { class: 'll-cliente' }, h('strong', {}, c.nome), h('small', {}, resumo)),
+        h('span', { class: 'lc-contato' }, c.whatsapp || c.telefone || 'Sem telefone'),
+        valor(c.aguardando_cents, 'lc-aguardando'),
+        valor(c.aprovado_cents, 'll-total lc-aprovado')),
+      h('div', { class: 'll-acoes' },
         whats
-          ? h(
-              'a',
-              {
-                class: 'botao-icone botao-icone-whatsapp so-computador',
-                href: `https://wa.me/${whats}?text=${encodeURIComponent(`Olá, ${primeiro}!`)}`,
-                target: '_blank',
-                rel: 'noopener',
-                title: 'Conversar no WhatsApp',
-                'aria-label': `Conversar com ${c.nome} no WhatsApp`,
-              },
-              icone('whatsapp'),
-            )
-          : null,
-      ),
-    );
+          ? h('a', {
+              class: 'botao-icone botao-icone-whatsapp',
+              href: `https://wa.me/${whats}?text=${encodeURIComponent(`Olá, ${primeiro}!`)}`,
+              target: '_blank',
+              rel: 'noopener',
+              title: 'Conversar no WhatsApp',
+              'aria-label': `Conversar com ${c.nome} no WhatsApp`,
+            }, icone('whatsapp'))
+          : null));
   };
 
   const carregar = async (acrescentar = false) => {
@@ -97,9 +85,9 @@ export async function paginaClientes(query = new URLSearchParams()) {
         );
         return;
       }
-      let listaClientes = lista.querySelector('.lista-clientes');
+      let listaClientes = lista.querySelector('.lc-lista');
       if (!acrescentar || !listaClientes) {
-        listaClientes = h('div', { class: 'lista lista-clientes' });
+        listaClientes = h('div', { class: 'lista-livro lc-lista' });
         substituir(lista, listaClientes);
       }
       listaClientes.append(...clientes.map(linhaCliente));
@@ -144,6 +132,8 @@ export async function paginaClientes(query = new URLSearchParams()) {
     }),
     h('div', { class: 'clientes-filtros' }, h('div', { class: 'barra-busca' }, icone('busca', 'icone icone-busca'), busca), botaoNovo),
     contador,
+    h('div', { class: 'll-cabecalho lc-cabecalho', 'aria-hidden': 'true' },
+      h('span', {}, 'Cliente'), h('span', {}, 'Contato'), h('span', { class: 'num' }, 'Aguardando resposta'), h('span', { class: 'num' }, 'Aprovado')),
     lista,
   );
 }
@@ -169,30 +159,42 @@ export async function paginaCliente(id) {
     }
   };
 
+  // Resumo do cliente a partir dos orçamentos dele (o servidor manda até 200).
+  const soma = (filtro) => orcamentos.filter(filtro).reduce((n, o) => n + o.total_cents, 0);
+  const aprovado = soma((o) => o.status === 'aprovado');
+  const aguardando = soma((o) => ['enviado', 'negociacao'].includes(o.status));
+  const nAprovados = orcamentos.filter((o) => o.status === 'aprovado').length;
+  const numero = (rotulo, valor, detalhe, zero = false) => h('div', { class: `cf-numero${zero ? ' cf-zero' : ''}` }, h('span', {}, rotulo), h('strong', {}, valor), detalhe ? h('small', {}, detalhe) : null);
+  const resumo = orcamentos.length
+    ? h('div', { class: 'cf-resumo' },
+        numero('Aprovado', formatarDinheiro(aprovado), nAprovados ? `${nAprovados} ${nAprovados === 1 ? 'proposta' : 'propostas'}` : 'Nenhuma ainda', !aprovado),
+        numero('Aguardando resposta', formatarDinheiro(aguardando), aguardando ? 'enviadas ou em negociação' : 'Nada pendente', !aguardando),
+        numero('Propostas', String(orcamentos.length), `a primeira em ${formatarData(orcamentos.reduce((m, o) => (o.data < m ? o.data : m), orcamentos[0].data))}`))
+    : null;
+  const recarregar = () => recarregarRota();
+
   return h(
     'div',
     { class: 'pagina pagina-interna pagina-cliente' },
     cabecalhoInterno(cliente.nome, {
       voltar: '#/clientes', retorno: 'Clientes', contexto: 'FICHA DO CLIENTE', contextoDesktop: 'CLIENTES',
-      subtitulo: 'Cadastro e histórico de propostas.', acoes: [editar, novo],
+      subtitulo: [telefone, cidade].filter(Boolean).join(' · ') || 'Sem telefone cadastrado', acoes: [editar, novo],
     }),
     h('div', { class: 'cliente-colunas' },
-      h('section', { class: 'cliente-contato' },
-        h('div', { class: 'ficha-contato' },
-          avatar(cliente.nome, 'ficha-avatar'),
-          h('div', { class: 'ficha-identidade' }, h('strong', {}, cliente.nome), h('small', {}, 'DADOS DO CLIENTE')),
-          contato('TELEFONE / WHATSAPP', telefone || 'Sem telefone', 'ficha-telefone'),
-          contato('E-MAIL', cliente.email), contato('CIDADE', cidade),
-        ),
-        whats ? h('a', { class: 'botao ficha-whatsapp', href: `https://wa.me/${whats}`, target: '_blank', rel: 'noopener' }, 'Conversar no WhatsApp') : null,
-        h('a', { href: `#/clientes/${id}/editar`, class: 'botao ficha-editar' }, 'Editar dados'),
+      h('section', { class: 'cliente-contato cf-contato', 'aria-label': 'Contato' },
+        h('h2', { class: 'cf-titulo' }, 'Contato'),
+        h('dl', { class: 'cf-dados' },
+          h('div', {}, h('dt', {}, 'Telefone / WhatsApp'), h('dd', {}, telefone || 'Sem telefone')),
+          cliente.email ? h('div', {}, h('dt', {}, 'E-mail'), h('dd', {}, cliente.email)) : null,
+          cidade ? h('div', {}, h('dt', {}, 'Cidade'), h('dd', {}, cidade)) : null),
+        whats ? h('a', { class: 'botao botao-whatsapp ficha-whatsapp', href: `https://wa.me/${whats}`, target: '_blank', rel: 'noopener' }, icone('whatsapp'), 'Conversar no WhatsApp') : null,
         !orcamentos.length ? h('button', { type: 'button', class: 'botao botao-perigo-texto ficha-excluir', onclick: excluir }, 'Excluir cliente') : null,
       ),
-      h('section', { class: 'cliente-historico' },
+      h('section', { class: 'cliente-historico cf-historico' },
+        resumo,
         h('div', { class: 'cliente-historico-titulo' }, h('h2', {}, 'Orçamentos'), h('span', {}, orcamentos.length)),
-        h('p', { class: 'cliente-historico-descricao' }, `${orcamentos.length} ${orcamentos.length === 1 ? 'proposta' : 'propostas'} neste cadastro`),
         orcamentos.length
-          ? listaOrcamentos(orcamentos, { mostrarCliente: false })
+          ? listaOrcamentos(orcamentos, { mostrarCliente: false, variante: 'tabela', aoMudar: recarregar })
           : vazioIlustrado('orcamentos', 'Nenhum orçamento ainda', 'Crie a primeira proposta para este cliente.'),
       ),
     ),
