@@ -35,6 +35,22 @@ export const ETAPAS = ['rascunho', 'enviado', 'negociacao', 'aprovado'];
 
 export const TIPOS_AJUSTE = ['nenhum', 'valor', 'percentual'];
 
+// "Já está incluso": o que a marcenaria entrega sem custo extra. A empresa mantém a própria
+// lista e marca, em cada orçamento, o que vale para aquela proposta.
+export const ICONES_INCLUSO = ['check', 'regua', 'projeto', 'dobradica', 'montagem', 'caminhao', 'escudo', 'limpeza', 'chave', 'ambiente'];
+export const LIMITES_INCLUSO = { por_orcamento: 12, na_lista: 30, titulo: 60, descricao: 160 };
+// Ponto de partida da lista. Nada vem marcado: cada marcenaria escolhe o que promete.
+export const INCLUSOS_SUGERIDOS = [
+  { titulo: 'Medição técnica no local', descricao: 'Conferimos todas as medidas antes de produzir.', icone: 'regua' },
+  { titulo: 'Projeto para sua conferência', descricao: 'Você aprova o projeto final antes da produção.', icone: 'projeto' },
+  { titulo: 'Ferragens com amortecimento', descricao: 'Dobradiças e corrediças com fechamento suave.', icone: 'dobradica' },
+  { titulo: 'Montagem pela nossa equipe', descricao: 'Do primeiro ao último móvel.', icone: 'montagem' },
+  { titulo: 'Frete até a obra', descricao: 'Levamos os móveis até o endereço da obra.', icone: 'caminhao' },
+  { titulo: 'Garantia', descricao: 'Contra defeitos de fabricação e de montagem.', icone: 'escudo' },
+  { titulo: 'Limpeza ao final', descricao: 'Entregamos o ambiente pronto para usar.', icone: 'limpeza' },
+  { titulo: 'Ajustes após a entrega', descricao: 'Voltamos para regular portas e gavetas se precisar.', icone: 'chave' },
+].map((item) => ({ ...item, padrao: false }));
+
 // Sugestões rápidas ao criar um ambiente.
 export const AMBIENTES_SUGERIDOS = [
   'Quarto do casal',

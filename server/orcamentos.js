@@ -1,5 +1,7 @@
 import {
+  ICONES_INCLUSO,
   LIMITES,
+  LIMITES_INCLUSO,
   METODOS,
   STATUS,
   STATUS_ABERTOS,
@@ -16,7 +18,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import { semAcento } from './db.js';
 import { ErroHttp, dataIso, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
-import { visaoCliente } from './visaoCliente.js';
+import { lerInclusos, visaoCliente } from './visaoCliente.js';
 import { periodoComercial, dadosComerciais, filtroAtencao } from './painel.js';
 
 const MAX_ITENS = 200;
@@ -50,6 +52,7 @@ const COLUNAS = [
   'prazo_entrega',
   'observacoes',
   'observacoes_internas',
+  'inclusos',
 ];
 
 const COLUNAS_ITEM = [
@@ -87,6 +90,7 @@ export async function carregarOrcamento(db, id) {
   // Lista plana só para uso interno (cálculos e histórico); não vai no JSON.
   Object.defineProperty(orc, 'itens', { value: ambientes.flatMap((a) => a.itens), enumerable: false, writable: true });
   orc.servicos = await db.all('SELECT * FROM orcamento_servicos WHERE orcamento_id = ? ORDER BY ordem, id', id);
+  orc.inclusos = lerInclusos(orc.inclusos);
   orc.duplicado_de_numero = orc.duplicado_de_id
     ? ((await db.get('SELECT numero FROM orcamentos WHERE id = ?', orc.duplicado_de_id))?.numero ?? null)
     : null;
@@ -144,6 +148,33 @@ function normalizarServico(servico, i) {
   return s;
 }
 
+/**
+ * Valida uma lista de itens "já está incluso". Títulos repetidos são ignorados.
+ * `comPadrao` é usado na lista da empresa, onde cada item diz se já entra marcado
+ * nos novos orçamentos.
+ */
+export function normalizarInclusos(lista, { max = LIMITES_INCLUSO.por_orcamento, comPadrao = false } = {}) {
+  if (lista === undefined || lista === null) return [];
+  if (!Array.isArray(lista)) throw invalido('Envie a lista de itens inclusos.');
+  if (lista.length > max) throw invalido(`Use no máximo ${max} itens inclusos.`);
+  const vistos = new Set();
+  const itens = [];
+  for (const bruto of lista) {
+    const titulo = texto(bruto?.titulo, { max: LIMITES_INCLUSO.titulo, obrigatorio: true, campo: 'Título do item incluso' });
+    const chave = semAcento(titulo);
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    const item = {
+      titulo,
+      descricao: texto(bruto?.descricao, { max: LIMITES_INCLUSO.descricao, campo: 'Explicação do item incluso' }),
+      icone: umDe(bruto?.icone ?? 'check', ICONES_INCLUSO, 'Ícone do item incluso'),
+    };
+    if (comPadrao) item.padrao = bruto?.padrao === true;
+    itens.push(item);
+  }
+  return itens;
+}
+
 export async function normalizarOrcamento(db, body, { cartaoAnterior = null } = {}) {
   const clienteId = inteiro(body?.cliente_id, { min: 1, campo: 'Cliente' });
   if (!(await db.get('SELECT 1 AS ok FROM clientes WHERE id = ?', clienteId))) throw invalido('Selecione um cliente.');
@@ -193,6 +224,7 @@ export async function normalizarOrcamento(db, body, { cartaoAnterior = null } = 
     prazo_entrega: texto(body.prazo_entrega, { max: 200, campo: 'Prazo de entrega' }),
     observacoes: texto(body.observacoes, { max: 5000, campo: 'Observações' }),
     observacoes_internas: texto(body.observacoes_internas, { max: 5000, campo: 'Observações internas' }),
+    inclusos: JSON.stringify(normalizarInclusos(body.inclusos)),
     ambientes: [],
     servicos: servicosBrutos.map(normalizarServico),
   };
@@ -333,6 +365,7 @@ export function descreverAlteracoes(anterior, novo) {
     'observacoes_internas',
   ];
   if (outros.some((c) => anterior[c] !== novo[c])) partes.push('Condições e observações alteradas');
+  if (JSON.stringify(lerInclusos(anterior.inclusos)) !== JSON.stringify(lerInclusos(novo.inclusos))) partes.push('Itens inclusos alterados');
   return partes.join('; ');
 }
 
@@ -882,7 +915,11 @@ export function podeAprovar(orc, dataHoje) {
   return ['rascunho', 'enviado', 'negociacao'].includes(orc.status) && orc.data_validade >= dataHoje;
 }
 
-export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
+/**
+ * `preferencia` é a forma de pagamento que o cliente escolheu no simulador da proposta,
+ * já descrita pelo servidor (nunca texto livre do cliente). Fica só no histórico.
+ */
+export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta, { preferencia = '' } = {}) {
   return db.transacao(async (t) => {
     await bloquearOrcamento(t, id);
     const orc = await t.get('SELECT status, data_validade, versao_proposta FROM orcamentos WHERE id = ?', id);
@@ -900,7 +937,7 @@ export function aprovarPeloLink(db, id, nome, dataHoje, versaoProposta) {
     }
     await t.run(`UPDATE orcamentos SET status = 'aprovado', versao = versao + 1, atualizado_em = now() WHERE id = ?`, id);
     await marcarDatasStatus(t, id, orc.status, 'aprovado', { peloLink: true, nome });
-    await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})`, null);
+    await registrarHistorico(t, id, `Aprovado pelo cliente pelo link (${nome})${preferencia ? ` · Prefere pagar: ${preferencia}` : ''}`, null);
     return true;
   });
 }

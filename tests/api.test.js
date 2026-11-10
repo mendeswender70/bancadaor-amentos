@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import webpush from 'web-push';
-import { somarDias } from '../public/shared/calc.js';
+import { formatarDinheiro, somarDias } from '../public/shared/calc.js';
 import { criarApp } from '../server/app.js';
 import { visaoCliente } from '../server/visaoCliente.js';
 import { carregarOrcamento } from '../server/orcamentos.js';
@@ -432,6 +432,84 @@ test('sugestões de ambiente começam com as padrão e ficam salvas', async () =
   assert.equal(r.status, 400);
 });
 
+test('itens "já está incluso": lista da empresa, cópia fixada no orçamento e visão do cliente', async () => {
+  let r = await chamar('GET', '/empresa');
+  assert.ok(r.dados.inclusos.length >= 6, 'a lista começa com sugestões');
+  assert.ok(r.dados.inclusos.every((i) => i.padrao === false), 'nenhum item vem marcado por padrão');
+  assert.deepEqual((await chamar('GET', '/orcamentos/modelo')).dados.inclusos, []);
+
+  r = await chamar('PUT', '/empresa/inclusos', {
+    inclusos: [
+      { titulo: ' Garantia de 3 anos ', descricao: 'Contra defeitos de fabricação.', icone: 'escudo', padrao: true },
+      { titulo: 'garantia de 3 anos', descricao: 'repetido' },
+      { titulo: 'Limpeza ao final', icone: 'limpeza' },
+    ],
+  });
+  assert.equal(r.status, 200);
+  const garantia = { titulo: 'Garantia de 3 anos', descricao: 'Contra defeitos de fabricação.', icone: 'escudo' };
+  assert.deepEqual(r.dados.inclusos, [
+    { ...garantia, padrao: true },
+    { titulo: 'Limpeza ao final', descricao: '', icone: 'limpeza', padrao: false },
+  ]);
+  assert.deepEqual((await chamar('GET', '/orcamentos/modelo')).dados.inclusos, [garantia], 'os marcados como padrão entram nos novos orçamentos');
+
+  // Salvar os dados da empresa não apaga a lista.
+  const { tem_logo, ambientes_sugeridos, inclusos, id: _id, ...dados } = r.dados;
+  await chamar('PUT', '/empresa', dados);
+  assert.equal((await chamar('GET', '/empresa')).dados.inclusos.length, 2);
+
+  for (const invalida of [
+    'Garantia',
+    [{ titulo: '' }],
+    [{ titulo: 'x'.repeat(61) }],
+    [{ titulo: 'Ok', descricao: 'x'.repeat(161) }],
+    [{ titulo: 'Ok', icone: 'foguete' }],
+    Array.from({ length: 31 }, (_, i) => ({ titulo: `Item ${i}` })),
+  ]) {
+    assert.equal((await chamar('PUT', '/empresa/inclusos', { inclusos: invalida })).status, 400);
+  }
+
+  // No orçamento fica uma cópia, só com o que o cliente vê.
+  let orc = (await chamar('GET', `/orcamentos/${orcamentoId}`)).dados;
+  assert.deepEqual(orc.inclusos, []);
+  const versaoProposta = orc.versao_proposta;
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, { ...orc, inclusos: [{ ...garantia, padrao: true, interno: 'x' }] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.dados.inclusos, [garantia]);
+  assert.equal(r.dados.versao_proposta, versaoProposta + 1, 'mudar os inclusos muda a proposta do cliente');
+  const historico = (await chamar('GET', `/orcamentos/${orcamentoId}/historico`)).dados;
+  assert.ok(historico.at(-1).evento.includes('Itens inclusos alterados'));
+
+  // Editar a lista da empresa depois não muda o que já está no orçamento.
+  await chamar('PUT', '/empresa/inclusos', { inclusos: [{ titulo: 'Garantia de 1 ano', icone: 'escudo' }] });
+  orc = (await chamar('GET', `/orcamentos/${orcamentoId}`)).dados;
+  assert.deepEqual(orc.inclusos, [garantia]);
+
+  const db = await app.locals.obterDb();
+  const empresa = await db.get('SELECT * FROM empresa WHERE id = 1');
+  assert.deepEqual(visaoCliente(await carregarOrcamento(db, orcamentoId), empresa).inclusos, [garantia]);
+
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, { ...orc, inclusos: Array.from({ length: 13 }, (_, i) => ({ titulo: `Item ${i}` })) });
+  assert.equal(r.status, 400);
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, { ...orc, inclusos: 'tudo' });
+  assert.equal(r.status, 400);
+
+  // O PDF aguenta a lista cheia, com títulos e explicações no tamanho máximo.
+  const cheios = Array.from({ length: 12 }, (_, i) => ({
+    titulo: `${i + 1} ${'título comprido '.repeat(5)}`.slice(0, 60).trim(),
+    descricao: 'Explicação comprida do item incluso. '.repeat(6).slice(0, 160).trim(),
+    icone: 'check',
+  }));
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, { ...orc, inclusos: cheios });
+  assert.equal(r.status, 200);
+  assert.equal(r.dados.inclusos.length, 12);
+  const pdf = await chamar('GET', `/orcamentos/${orcamentoId}/pdf`);
+  assert.equal(pdf.status, 200);
+  assert.equal(pdf.dados.subarray(0, 5).toString(), '%PDF-');
+  r = await chamar('PUT', `/orcamentos/${orcamentoId}`, { ...r.dados, inclusos: [garantia] });
+  assert.deepEqual(r.dados.inclusos, [garantia]);
+});
+
 let duplicadoId;
 test('duplica o orçamento com novo número e mesmos preços', async () => {
   const r = await chamar('POST', `/orcamentos/${orcamentoId}/duplicar`);
@@ -442,6 +520,7 @@ test('duplica o orçamento com novo número e mesmos preços', async () => {
   assert.equal(r.dados.duplicado_de_numero, 1);
   assert.equal(r.dados.total_cents, 1552000); // 5.280 + 2.250 + 7.680 + 900 − 590
   assert.equal(r.dados.ambientes[0].itens[0].preco_unitario_interno_cents, 165000);
+  assert.deepEqual(r.dados.inclusos.map((i) => i.titulo), ['Garantia de 3 anos'], 'a cópia leva os itens inclusos');
 
   // Altera a medida na cópia: 3,50 m × R$ 1.650
   const copia = r.dados;
@@ -992,6 +1071,40 @@ async function novaProposta({ abrir = true } = {}) {
 }
 
 const aceite = (proposta) => ({ nome: 'João da Silva', aceite: true, versao_proposta: proposta.versao_proposta });
+
+test('a aprovação pelo link registra a forma de pagamento escolhida no simulador', async () => {
+  const aprovarCom = async (preferencia) => {
+    const { orc } = await novaProposta({ abrir: false });
+    orc.pagamento_cartao_metodo = 'link_pagamento';
+    orc.pagamento_cartao_parcelas = 6;
+    assert.equal((await chamar('PUT', `/orcamentos/${orc.id}`, orc)).status, 200);
+    assert.equal((await mudarStatus(orc.id, 'enviado')).status, 200);
+    const { token } = (await chamar('POST', `/orcamentos/${orc.id}/link`)).dados;
+    const proposta = (await semLogin('GET', `/publico/propostas/${token}`)).dados;
+    const r = await semLogin('POST', `/publico/propostas/${token}/aprovar`, { ...aceite(proposta), preferencia_pagamento: preferencia });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const hist = (await chamar('GET', `/orcamentos/${orc.id}/historico`)).dados;
+    return { proposta, evento: hist.find((h) => h.evento.startsWith('Aprovado pelo cliente')).evento };
+  };
+
+  // O cliente manda só a opção; o texto e os valores saem da própria proposta.
+  let { proposta, evento } = await aprovarCom({ forma: 'cartao', parcelas: 3, texto: 'desconto de 50% combinado' });
+  const opcao = proposta.pagamento.cartao.credito[2];
+  assert.equal(
+    evento,
+    `Aprovado pelo cliente pelo link (João da Silva) · Prefere pagar: cartão em 3x de ${formatarDinheiro(Math.max(...opcao.valores_parcelas_cents))} (total ${formatarDinheiro(opcao.total_cents)})`,
+  );
+  assert.ok(!evento.includes('desconto'));
+
+  ({ proposta, evento } = await aprovarCom({ forma: 'combinado' }));
+  assert.equal(evento, `Aprovado pelo cliente pelo link (João da Silva) · Prefere pagar: ${proposta.pagamento.descricao}`);
+
+  // Opção que a proposta não oferece, ou qualquer outra coisa, é ignorada sem impedir a aprovação.
+  for (const invalida of [{ forma: 'cartao', parcelas: 12 }, { forma: 'pix' }, 'cartão em 2x', null]) {
+    ({ evento } = await aprovarCom(invalida));
+    assert.equal(evento, 'Aprovado pelo cliente pelo link (João da Silva)');
+  }
+});
 
 test('o orçamento guarda e publica as taxas do canal de cartão escolhido', async () => {
   for (const [metodo, parcelas, nome, debito, primeiraTaxa] of [

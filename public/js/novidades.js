@@ -1,6 +1,34 @@
 // Inclua uma entrada aqui em cada publicação com mudanças que valem avisar.
 // O id deve ser único e mudar quando a entrada for publicada.
+//
+// Cada entrada tem: id, data, titulo, itens e, se quiser, resumo (uma frase que abre a novidade)
+// e acao ({ rotulo, href }) para levar a pessoa direto ao que mudou.
+// Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
+  {
+    id: '2026-11-proposta-em-livro',
+    data: '10 de novembro de 2026',
+    titulo: 'A proposta do cliente virou um livro',
+    resumo: 'O link que o cliente recebe agora abre como um livro, com o nome dele na capa.',
+    itens: [
+      { icone: 'projeto', titulo: 'Páginas que viram', texto: 'O cliente arrasta ou usa as setas, no celular e no computador. Cada ambiente tem a sua página, com o valor de cada móvel.' },
+      { icone: 'pagamento', titulo: 'Simulador de cartão', texto: 'Ele escolhe o número de parcelas e vê o valor na hora. A forma escolhida aparece no histórico do orçamento.' },
+      { icone: 'aprovado', titulo: 'Aprovação segurando o botão', texto: 'Dois segundos com o dedo no botão e você recebe o aviso na hora.' },
+      { icone: 'pdf', titulo: 'PDF com a cara do livro', texto: 'As mesmas páginas em A4, com selo de aprovação quando a proposta já foi aceita.' },
+    ],
+    acao: { rotulo: 'Ver meus orçamentos', href: '#/orcamentos' },
+  },
+  {
+    id: '2026-11-ja-esta-incluso',
+    data: '9 de novembro de 2026',
+    titulo: 'Mostre o que já está incluso',
+    resumo: 'Uma nova etapa do orçamento para mostrar o que você entrega sem custo extra.',
+    itens: [
+      { icone: 'check', titulo: 'Marque o que vale para cada proposta', texto: 'Medição, montagem, garantia e o que mais fizer parte do seu serviço.' },
+      { icone: 'editar', titulo: 'A lista é sua', texto: 'Edite os textos, crie itens e escolha quais já entram marcados nos próximos orçamentos.' },
+      { icone: 'alerta', titulo: 'Aviso de cobrança em dobro', texto: 'Se um item marcado também estiver cobrado como serviço, o esquadro avisa. Os itens aparecem na proposta e no PDF.' },
+    ],
+  },
   {
     id: '2026-11-indicadores-consistentes',
     data: '9 de novembro de 2026',

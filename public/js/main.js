@@ -1,6 +1,7 @@
 import { api, cache, quandoPerderSessao } from './api.js';
 import { h, anexar, icone, substituir, avisoErro, campo, aviso, iniciais, marcaEsquadro, abrirModal } from './ui.js';
 import { novidades } from './novidades.js';
+import { dataCurtaNovidade, pontosNovidade } from './novidades-ui.js';
 import { botaoTema } from './tema.js';
 import { paginaRelatorios } from './pages/relatorios.js';
 import { paginaDashboard } from './pages/dashboard.js';
@@ -132,7 +133,8 @@ export function substituirEndereco(hash) {
 
 const MENU = [
   ['#/', 'Início', 'inicio', /^\/?$/],
-  ['#/orcamentos', 'Orçamentos', 'orcamentos', /^\/orcamentos(?!\/novo)/],
+  // A lista filtrada "propostas" (aberta pelos indicadores do painel) faz parte de Orçamentos.
+  ['#/orcamentos', 'Orçamentos', 'orcamentos', /^\/(orcamentos(?!\/novo)|propostas)/],
   ['#/clientes', 'Clientes', 'clientes', /^\/clientes/],
   ['#/config', 'Ajustes', 'config', /^\/config/],
 ];
@@ -141,7 +143,6 @@ const MENU_LATERAL = [
   ['#/', 'Painel', 'inicio', /^\/?$/],
   MENU[1], MENU[2],
   ['#/config/moveis', 'Móveis e preços', 'caixa', /^\/config\/(moveis|tipos|precos)/],
-  ['#/propostas', 'Propostas', 'enviar', /^\/propostas/],
   ['#/relatorios', 'Relatórios', 'grafico', /^\/relatorios/],
   ['#/config', 'Ajustes', 'config', /^\/config(?:$|\/(?!moveis|tipos|precos))/],
 ];
@@ -168,7 +169,7 @@ export function monograma() {
 function montarLayout() {
   const link = ([href, texto, ic, padrao], rotuloCurto) =>
     h('a', { href, class: 'menu-link', 'data-padrao': padrao.source }, icone(ic), h('span', {}, rotuloCurto || texto));
-  const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'), h('option', { value: 'propostas' }, 'Propostas'), h('option', { value: 'config/moveis' }, 'Móveis'));
+  const escopo = h('select', { 'aria-label': 'Onde buscar' }, h('option', { value: 'orcamentos' }, 'Orçamentos'), h('option', { value: 'clientes' }, 'Clientes'), h('option', { value: 'config/moveis' }, 'Móveis'));
   const busca = h('input', { type: 'search', placeholder: 'Buscar por cliente, orçamento, proposta ou móvel…', 'aria-label': 'Buscar no Esquadro', 'aria-keyshortcuts': ATALHO_BUSCA.aria });
   const alternarBusca = (aberta, devolverFoco = false) => {
     buscaGlobal.classList.toggle('gestao-busca-aberta', aberta);
@@ -362,25 +363,40 @@ async function abrirNovidades({ somenteNaoLidas = false } = {}) {
   const visiveis = entradas.slice(0, MAX_NOVIDADES_NO_MODAL);
   const ocultas = entradas.length - visiveis.length;
 
-  await abrirModal('Novidades do esquadro', (fechar) =>
-    h(
-      'div',
-      { class: 'lista-novidades' },
-      visiveis.map((n) =>
-        h(
-          'article',
-          { class: 'novidade' },
-          h('time', { class: 'novidade-data' }, n.data),
-          h('h3', {}, n.titulo),
-          h('ul', {}, n.itens.map((item) => h('li', {}, item))),
-        ),
+  // A mais recente abre a janela, em destaque; as outras ficam recolhidas logo abaixo.
+  const [destaque, ...anteriores] = visiveis;
+  await abrirModal(
+    destaque.titulo,
+    (fechar) =>
+      h(
+        'div',
+        { class: 'nov' },
+        destaque.resumo ? h('p', { class: 'nov-resumo' }, destaque.resumo) : null,
+        pontosNovidade(destaque),
+        destaque.acao ? h('a', { class: 'nov-acao', href: destaque.acao.href, onclick: () => fechar(true) }, destaque.acao.rotulo, icone('seta')) : null,
+        anteriores.length
+          ? h(
+              'section',
+              { class: 'nov-anteriores' },
+              h('h3', {}, somenteNaoLidas ? 'Também chegou' : 'Antes disso'),
+              anteriores.map((n) =>
+                h(
+                  'details',
+                  { class: 'nov-anterior' },
+                  h('summary', {}, h('strong', {}, n.titulo), h('time', {}, dataCurtaNovidade(n.data)), icone('baixo')),
+                  n.resumo ? h('p', { class: 'nov-resumo' }, n.resumo) : null,
+                  pontosNovidade(n),
+                ),
+              ),
+            )
+          : null,
+        ocultas
+          ? h('p', { class: 'novidades-mais' }, `Mais ${ocultas} ${ocultas === 1 ? 'novidade anterior está' : 'novidades anteriores estão'} em `,
+              h('a', { href: '#/avisos', onclick: () => fechar(true) }, 'Avisos → Novidades'), '.')
+          : null,
+        h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', autofocus: true, onclick: () => fechar(true) }, 'Entendi')),
       ),
-      ocultas
-        ? h('p', { class: 'novidades-mais' }, `Mais ${ocultas} ${ocultas === 1 ? 'novidade anterior está' : 'novidades anteriores estão'} em `,
-            h('a', { href: '#/avisos', onclick: () => fechar(true) }, 'Avisos → Novidades'), '.')
-        : null,
-      h('div', { class: 'acoes-modal' }, h('button', { type: 'button', class: 'botao botao-primario', autofocus: true, onclick: () => fechar(true) }, 'Entendi')),
-    ),
+    { contexto: `Novidade · ${destaque.data}`, classe: 'modal-novidades' },
   );
 
   try {

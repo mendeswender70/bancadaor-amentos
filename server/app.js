@@ -2,7 +2,7 @@ import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import webpush from 'web-push';
-import { AMBIENTES_SUGERIDOS, METODOS, TIPOS_AJUSTE, LIMITES, formatarNumero } from '../public/shared/calc.js';
+import { AMBIENTES_SUGERIDOS, INCLUSOS_SUGERIDOS, LIMITES_INCLUSO, METODOS, TIPOS_AJUSTE, LIMITES, formatarDinheiro, formatarNumero } from '../public/shared/calc.js';
 import { novidades } from '../public/js/novidades.js';
 import {
   conferirSenha,
@@ -31,6 +31,7 @@ import {
   listarLembretesAutomaticos,
   listarHistorico,
   listarOrcamentos,
+  normalizarInclusos,
   podeAprovar,
   registrarVisualizacao,
   resumoDashboard,
@@ -38,7 +39,7 @@ import {
 import { relatorioComercial, listarAprovacoesRelatorio, exportarRelatorio, periodoRelatorio } from './relatorios.js';
 import { gerarPdf } from './pdf.js';
 import { ErroHttp, hoje, id, inteiro, invalido, naoEncontrado, texto, umDe } from './validacao.js';
-import { propostaPublica, visaoCliente } from './visaoCliente.js';
+import { lerInclusos, propostaPublica, visaoCliente } from './visaoCliente.js';
 
 const pasta = (relativo) => fileURLToPath(new URL(relativo, import.meta.url));
 const padraoLike = (s) => `%${String(s).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -123,6 +124,40 @@ function lerSugestoesAmbiente(json) {
     // Valor ausente ou inválido: usa as sugestões padrão.
   }
   return AMBIENTES_SUGERIDOS;
+}
+
+/** A página de aprovação do PDF mostra o selo quando a proposta já foi aprovada. */
+const aprovacaoParaPdf = (orc) => (orc.status === 'aprovado' ? { aprovado_por: orc.aprovado_por, aprovado_em: orc.aprovado_em } : null);
+
+/**
+ * Forma de pagamento escolhida pelo cliente no simulador da proposta. O cliente manda só a
+ * opção ({ forma: 'cartao', parcelas } ou { forma: 'combinado' }); o texto é montado aqui,
+ * com os valores da própria proposta. Opção inválida é ignorada: não impede a aprovação.
+ */
+function descreverPreferencia(escolha, pagamento) {
+  if (!escolha || typeof escolha !== 'object') return '';
+  if (escolha.forma === 'combinado') return pagamento.descricao || 'condição combinada';
+  if (escolha.forma !== 'cartao') return '';
+  const opcao = (pagamento.cartao?.credito || []).find((o) => o.parcelas === escolha.parcelas);
+  if (!opcao) return '';
+  const parcela = Math.max(...opcao.valores_parcelas_cents);
+  return opcao.parcelas === 1
+    ? `cartão de crédito à vista (${formatarDinheiro(opcao.total_cents)})`
+    : `cartão em ${opcao.parcelas}x de ${formatarDinheiro(parcela)} (total ${formatarDinheiro(opcao.total_cents)})`;
+}
+
+/** Lista "já está incluso" da empresa ou, se nunca foi alterada, as sugestões padrão. */
+function lerListaInclusos(json) {
+  if (json === null || json === undefined) return INCLUSOS_SUGERIDOS;
+  let bruta = [];
+  try {
+    bruta = JSON.parse(json);
+  } catch {
+    return INCLUSOS_SUGERIDOS;
+  }
+  if (!Array.isArray(bruta)) return INCLUSOS_SUGERIDOS;
+  const validos = bruta.filter((item) => item && typeof item.titulo === 'string' && item.titulo.trim());
+  return lerInclusos(validos).map((item, i) => ({ ...item, padrao: validos[i].padrao === true }));
 }
 
 /**
@@ -296,7 +331,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.get('/publico/propostas/:token/pdf', async (req, res) => {
     const { orc, empresa } = await montarProposta(await idPorToken(db, req.params.token));
     const logo = await lerLogo();
-    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null);
+    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null, aprovacaoParaPdf(orc));
     res.type('application/pdf').setHeader('Content-Disposition', `attachment; filename="${nomeArquivoPdf(orc)}"`).send(pdf);
   });
 
@@ -306,12 +341,13 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (nome.length < 3) throw invalido('Digite seu nome completo para aprovar.');
     if (req.body.aceite !== true) throw invalido('Confirme que leu e concorda com a proposta.');
     await expirarVencidos(db, dataHoje());
-    const aprovadaAgora = await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta);
+    const preferencia = descreverPreferencia(req.body.preferencia_pagamento, (await montarProposta(orcId)).publica.pagamento);
+    const aprovadaAgora = await aprovarPeloLink(db, orcId, nome, dataHoje(), req.body.versao_proposta, { preferencia });
     const proposta = await montarProposta(orcId);
     if (aprovadaAgora) {
       await tentarNotificar(db, {
         titulo: 'Proposta aprovada',
-        texto: `O cliente aprovou o orçamento nº ${proposta.publica.numero}.`,
+        texto: `O cliente aprovou o orçamento nº ${proposta.publica.numero}.${preferencia ? ` Prefere pagar: ${preferencia}.` : ''}`,
         caminho: `/#/orcamentos/${orcId}`,
         tag: `esquadro-proposta-${orcId}-aprovada`,
       });
@@ -749,8 +785,8 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
 
   // ----------------------------------------------------------------- Empresa
   const lerEmpresa = async () => {
-    const { logo, ambientes_sugeridos, ...e } = await db.get('SELECT * FROM empresa WHERE id = 1');
-    return { ...e, tem_logo: Boolean(logo), ambientes_sugeridos: lerSugestoesAmbiente(ambientes_sugeridos) };
+    const { logo, ambientes_sugeridos, inclusos, ...e } = await db.get('SELECT * FROM empresa WHERE id = 1');
+    return { ...e, tem_logo: Boolean(logo), ambientes_sugeridos: lerSugestoesAmbiente(ambientes_sugeridos), inclusos: lerListaInclusos(inclusos) };
   };
 
   api.get('/empresa', async (_req, res) => res.json(await lerEmpresa()));
@@ -793,6 +829,13 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       nomes.push(nome);
     }
     await db.run('UPDATE empresa SET ambientes_sugeridos = ? WHERE id = 1', JSON.stringify(nomes));
+    res.json(await lerEmpresa());
+  });
+
+  // Lista inteira dos itens "já está incluso" que a empresa oferece.
+  api.put('/empresa/inclusos', async (req, res) => {
+    const itens = normalizarInclusos(req.body.inclusos ?? [], { max: LIMITES_INCLUSO.na_lista, comPadrao: true });
+    await db.run('UPDATE empresa SET inclusos = ? WHERE id = 1', JSON.stringify(itens));
     res.json(await lerEmpresa());
   });
 
@@ -875,6 +918,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
       prazo_entrega: e.prazo_padrao,
       observacoes: e.texto_padrao,
       observacoes_internas: '',
+      inclusos: lerListaInclusos(e.inclusos).filter((item) => item.padrao).map(({ titulo, descricao, icone }) => ({ titulo, descricao, icone })),
     });
   });
 
@@ -922,7 +966,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (!orc) throw naoEncontrado('Orçamento não encontrado.');
     const empresa = await db.get('SELECT * FROM empresa WHERE id = 1');
     const logo = await lerLogo();
-    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null);
+    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null, aprovacaoParaPdf(orc));
     res
       .type('application/pdf')
       .setHeader('Content-Disposition', `${req.query.baixar ? 'attachment' : 'inline'}; filename="${nomeArquivoPdf(orc)}"`)

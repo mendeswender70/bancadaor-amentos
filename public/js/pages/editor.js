@@ -1,6 +1,8 @@
 import {
   AMBIENTES_SUGERIDOS,
   ETAPAS,
+  ICONES_INCLUSO,
+  LIMITES_INCLUSO,
   METODOS,
   STATUS,
   calcularItem,
@@ -83,6 +85,7 @@ function montarPayload(orc) {
     prazo_entrega: orc.prazo_entrega,
     observacoes: orc.observacoes,
     observacoes_internas: orc.observacoes_internas,
+    inclusos: (orc.inclusos || []).map(({ titulo, descricao, icone: nomeIcone }) => ({ titulo, descricao: descricao || '', icone: nomeIcone || 'check' })),
   };
 }
 
@@ -139,6 +142,7 @@ export async function paginaEditor({ id, clienteId }) {
     orc = { ...modelo, ambientes: [], cliente_id: cliente.id, cliente };
   }
   orc.ambientes ??= [];
+  orc.inclusos ??= [];
 
   // ------------------------------------------------------ Salvamento automático
   // `salvo` guarda o que o servidor já tem; qualquer diferença é salva sozinha
@@ -621,6 +625,10 @@ export async function paginaEditor({ id, clienteId }) {
     ].filter(Boolean);
     resumoSecao.extras.textContent = extras.join(' · ') || 'Nenhum serviço, desconto ou acréscimo';
     resumoSecao.condicoes.textContent = [orc.pagamento_descricao, orc.prazo_entrega].filter(Boolean).join(' · ') || 'Pagamento e prazo não informados';
+    if (resumoSecao.inclusos) {
+      resumoSecao.inclusos.textContent = orc.inclusos.length ? `${plural(orc.inclusos.length, 'item', 'itens')} na proposta` : 'Nada marcado · não aparece na proposta';
+      avisarInclusosCobrados();
+    }
   }
 
   // --------------------------------------------------------------- Ambientes
@@ -1380,8 +1388,210 @@ export async function paginaEditor({ id, clienteId }) {
     { aberta: !fechadaNoCelular && (!id || Boolean(orc.servicos.length || orc.desconto_tipo !== 'nenhum' || orc.acrescimo_tipo !== 'nenhum')) },
   );
 
-  const secaoCondicoes = secao(
+  // ------------------------------------------------------ Já está incluso
+  // A lista é da empresa; o orçamento guarda uma cópia do que foi marcado.
+  const listaInclusos = h('div', { class: 'inclusos-lista' });
+  const avisosInclusos = h('div', { class: 'inclusos-avisos' });
+  const rodapeInclusos = h('div', { class: 'inclusos-rodape' });
+  const soIncluso = ({ titulo, descricao, icone: nomeIcone }) => ({ titulo, descricao: descricao || '', icone: nomeIcone || 'check' });
+  const posicaoIncluso = (titulo) => orc.inclusos.findIndex((i) => chaveAmbiente(i.titulo) === chaveAmbiente(titulo));
+  /** Lista da empresa mais o que está no orçamento e saiu da lista depois. */
+  function opcoesInclusos() {
+    const opcoes = (cache.empresa?.inclusos ?? []).map((item) => ({ ...soIncluso(item), padrao: item.padrao === true }));
+    for (const item of orc.inclusos) {
+      if (!opcoes.some((o) => chaveAmbiente(o.titulo) === chaveAmbiente(item.titulo))) opcoes.push({ ...soIncluso(item), padrao: false });
+    }
+    return opcoes;
+  }
+  let filaInclusos = Promise.resolve();
+  function salvarListaInclusos(lista) {
+    filaInclusos = filaInclusos.catch(() => {}).then(async () => {
+      cache.empresa = await api.put('/empresa/inclusos', { inclusos: lista });
+    });
+    return filaInclusos;
+  }
+  function ordenarInclusos() {
+    const ordem = opcoesInclusos().map((o) => chaveAmbiente(o.titulo));
+    orc.inclusos.sort((a, b) => ordem.indexOf(chaveAmbiente(a.titulo)) - ordem.indexOf(chaveAmbiente(b.titulo)));
+  }
+  function alternarIncluso(opcao) {
+    const i = posicaoIncluso(opcao.titulo);
+    if (i >= 0) orc.inclusos.splice(i, 1);
+    else if (orc.inclusos.length >= LIMITES_INCLUSO.por_orcamento) {
+      aviso(`Marque no máximo ${LIMITES_INCLUSO.por_orcamento} itens.`, 'erro');
+      return;
+    } else orc.inclusos.push(soIncluso(opcao));
+    ordenarInclusos();
+    desenharInclusos();
+    atualizarValores();
+  }
+  /** Avisa quando o mesmo serviço está cobrado e marcado como incluso. */
+  function avisarInclusosCobrados() {
+    const cobrados = orc.inclusos.filter((item) =>
+      orc.servicos.some((s) => s.valor_cents > 0 && chaveAmbiente(s.descricao).length >= 4 && chaveAmbiente(item.titulo).includes(chaveAmbiente(s.descricao))),
+    );
+    substituir(
+      avisosInclusos,
+      cobrados.map((item) =>
+        h(
+          'p',
+          { class: 'incluso-aviso', role: 'status' },
+          icone('alerta'),
+          h('span', {}, h('strong', {}, item.titulo), ' está marcado como incluso, mas há um serviço cobrado com esse nome. O cliente veria as duas coisas.'),
+          h('button', { type: 'button', class: 'link-botao', onclick: () => alternarIncluso(item) }, 'Desmarcar'),
+        ),
+      ),
+    );
+  }
+  function desenharInclusos() {
+    const opcoes = opcoesInclusos();
+    substituir(
+      listaInclusos,
+      opcoes.length
+        ? opcoes.map((opcao) => {
+            const i = posicaoIncluso(opcao.titulo);
+            const item = i >= 0 ? orc.inclusos[i] : opcao;
+            return h(
+              'div',
+              { class: `incluso${i >= 0 ? ' marcado' : ''}` },
+              h(
+                'button',
+                { type: 'button', class: 'incluso-marcar', role: 'checkbox', 'aria-checked': String(i >= 0), onclick: () => alternarIncluso(opcao) },
+                h('span', { class: 'incluso-caixa' }, icone('check')),
+                h('span', { class: 'incluso-icone' }, icone(item.icone)),
+                h('span', { class: 'incluso-texto' }, h('strong', {}, item.titulo), item.descricao ? h('small', {}, item.descricao) : null),
+              ),
+              h('button', { type: 'button', class: 'botao-icone', 'aria-label': `Editar ${item.titulo}`, onclick: () => formularioIncluso(opcao) }, icone('editar')),
+            );
+          })
+        : h('p', { class: 'suave' }, 'Nenhum item na lista. Crie o primeiro.'),
+    );
+    const padraoAtual = opcoes.every((o) => o.padrao === posicaoIncluso(o.titulo) >= 0);
+    substituir(
+      rodapeInclusos,
+      h('button', { type: 'button', class: 'chip', onclick: () => formularioIncluso(null) }, '+ Novo item'),
+      padraoAtual
+        ? h('span', { class: 'suave pequeno' }, orc.inclusos.length ? 'Esta é a seleção dos novos orçamentos' : '')
+        : h(
+            'button',
+            {
+              type: 'button',
+              class: 'link-botao',
+              onclick: async () => {
+                try {
+                  await salvarListaInclusos(opcoesInclusos().map((o) => ({ ...soIncluso(o), padrao: posicaoIncluso(o.titulo) >= 0 })));
+                  desenharInclusos();
+                  aviso('Os próximos orçamentos já começam com estes itens.');
+                } catch (erro) {
+                  avisoErro(erro);
+                }
+              },
+            },
+            'Usar esta seleção nos próximos orçamentos',
+          ),
+    );
+    avisarInclusosCobrados();
+  }
+  function formularioIncluso(opcao) {
+    return abrirModal(opcao ? 'Editar item incluso' : 'Novo item incluso', (fechar) => {
+      const marcadoAntes = opcao ? posicaoIncluso(opcao.titulo) : -1;
+      const base = marcadoAntes >= 0 ? orc.inclusos[marcadoAntes] : opcao;
+      const titulo = h('input', { type: 'text', required: true, maxlength: String(LIMITES_INCLUSO.titulo), value: base?.titulo || '', placeholder: 'Ex.: Garantia de 3 anos', autocomplete: 'off', autofocus: true });
+      const descricao = h('input', { type: 'text', maxlength: String(LIMITES_INCLUSO.descricao), value: base?.descricao || '', placeholder: 'Ex.: Contra defeitos de fabricação.', autocomplete: 'off' });
+      let nomeIcone = base?.icone || 'check';
+      const icones = h('div', { class: 'inclusos-icones', role: 'radiogroup', 'aria-label': 'Ícone' });
+      const desenharIcones = () =>
+        substituir(
+          icones,
+          ICONES_INCLUSO.map((nome) =>
+            h('button', { type: 'button', role: 'radio', 'aria-checked': String(nome === nomeIcone), 'aria-label': `Ícone ${nome}`, onclick: () => { nomeIcone = nome; desenharIcones(); } }, icone(nome)),
+          ),
+        );
+      desenharIcones();
+      const erro = h('p', { class: 'aviso-caixa aviso-atencao', role: 'alert', hidden: true });
+      const falhar = (mensagem) => { erro.textContent = mensagem; erro.hidden = false; };
+      const gravar = async (lista, depois) => {
+        try {
+          await salvarListaInclusos(lista);
+          depois();
+          ordenarInclusos();
+          fechar(true);
+          desenharInclusos();
+          atualizarValores();
+        } catch (falha) {
+          falhar(falha.message || 'Não foi possível salvar.');
+        }
+      };
+      return h(
+        'form',
+        {
+          class: 'formulario',
+          onsubmit: (e) => {
+            e.preventDefault();
+            erro.hidden = true;
+            const novo = { titulo: titulo.value.trim(), descricao: descricao.value.trim(), icone: nomeIcone };
+            if (!novo.titulo) return falhar('Escreva um título curto.');
+            const opcoes = opcoesInclusos();
+            const repetido = opcoes.some((o) => chaveAmbiente(o.titulo) === chaveAmbiente(novo.titulo) && (!opcao || chaveAmbiente(o.titulo) !== chaveAmbiente(opcao.titulo)));
+            if (repetido) return falhar('Já existe um item com este título.');
+            if (!opcao && opcoes.length >= LIMITES_INCLUSO.na_lista) return falhar(`A lista aceita no máximo ${LIMITES_INCLUSO.na_lista} itens.`);
+            const lista = opcao
+              ? opcoes.map((o) => (chaveAmbiente(o.titulo) === chaveAmbiente(opcao.titulo) ? { ...novo, padrao: o.padrao } : o))
+              : [...opcoes, { ...novo, padrao: false }];
+            return gravar(lista, () => {
+              if (marcadoAntes >= 0) orc.inclusos[marcadoAntes] = novo;
+              else if (!opcao && orc.inclusos.length < LIMITES_INCLUSO.por_orcamento) orc.inclusos.push(novo);
+            });
+          },
+        },
+        campo('Título', titulo),
+        campo('Explicação para o cliente', descricao, { dica: 'Uma frase curta. Aparece abaixo do título na proposta.' }),
+        h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Ícone'), icones),
+        erro,
+        h('p', { class: 'suave pequeno' }, opcao ? 'A mudança vale para este orçamento e para os próximos. Propostas já salvas em outros orçamentos não mudam.' : 'O item entra marcado neste orçamento e fica na sua lista para os próximos.'),
+        opcao
+          ? h(
+              'button',
+              {
+                type: 'button',
+                class: 'link-botao incluso-remover',
+                onclick: async () => {
+                  if (!(await confirmar(`Tirar "${opcao.titulo}" da sua lista? Ele também sai deste orçamento.`, { titulo: 'Remover item', sim: 'Remover', perigo: true }))) return;
+                  gravar(opcoesInclusos().filter((o) => chaveAmbiente(o.titulo) !== chaveAmbiente(opcao.titulo)), () => {
+                    if (marcadoAntes >= 0) orc.inclusos.splice(marcadoAntes, 1);
+                  });
+                },
+              },
+              'Remover da lista',
+            )
+          : null,
+        h(
+          'div',
+          { class: 'acoes-modal' },
+          h('button', { type: 'button', class: 'botao', onclick: () => fechar(undefined) }, 'Cancelar'),
+          h('button', { type: 'submit', class: 'botao botao-primario' }, opcao ? 'Salvar' : 'Adicionar'),
+        ),
+      );
+    });
+  }
+  desenharInclusos();
+
+  const secaoInclusos = secao(
     4,
+    'inclusos',
+    'check',
+    'Já está incluso',
+    [
+      h('p', { class: 'suave pequeno inclusos-ajuda' }, 'Marque o que vai sem custo extra neste orçamento. Aparece na proposta do cliente, antes dos valores.'),
+      avisosInclusos,
+      listaInclusos,
+      rodapeInclusos,
+    ],
+    { aberta: !fechadaNoCelular && (!id || orc.inclusos.length > 0) },
+  );
+
+  const secaoCondicoes = secao(
+    5,
     'condicoes',
     'pagamento',
     'Pagamento, prazo e observações',
@@ -1408,7 +1618,8 @@ export async function paginaEditor({ id, clienteId }) {
       [secaoCliente, '1', 'Cliente'],
       [secaoAmbientes, '2', 'Ambientes'],
       [secaoExtras, '3', 'Extras'],
-      [secaoCondicoes, '4', 'Condições'],
+      [secaoInclusos, '4', 'Incluso'],
+      [secaoCondicoes, '5', 'Condições'],
     ].map(([el, n, rotulo]) =>
       h(
         'button',
@@ -1437,7 +1648,7 @@ export async function paginaEditor({ id, clienteId }) {
   );
 
   // Abas: o orçamento e o histórico
-  const painelOrcamento = h('div', { class: 'editor-principal' }, secaoCliente, secaoAmbientes, secaoExtras, secaoCondicoes);
+  const painelOrcamento = h('div', { class: 'editor-principal' }, secaoCliente, secaoAmbientes, secaoExtras, secaoInclusos, secaoCondicoes);
   const painelHistorico = h(
     'div',
     { class: 'editor-principal editor-painel-historico', hidden: true },

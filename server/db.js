@@ -318,6 +318,12 @@ export const MIGRACOES = [
       CHECK (pagamento_cartao_parcelas BETWEEN 0 AND 12)`,
     `ALTER TABLE orcamentos ADD COLUMN pagamento_cartao_taxas text NOT NULL DEFAULT ''`,
   ],
+  // v10: "Já está incluso" — lista da empresa (nula = sugestões padrão) e a cópia
+  // dos itens escolhidos em cada orçamento, que não muda quando a lista é editada.
+  [
+    `ALTER TABLE empresa ADD COLUMN inclusos text`,
+    `ALTER TABLE orcamentos ADD COLUMN inclusos text NOT NULL DEFAULT '[]'`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------

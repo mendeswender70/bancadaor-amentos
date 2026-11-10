@@ -1,4 +1,27 @@
-import { calcularOpcoesCartao, descreverPagamento, formatarNumero, TAXAS_CARTAO } from '../public/shared/calc.js';
+import { calcularOpcoesCartao, descreverPagamento, formatarNumero, ICONES_INCLUSO, TAXAS_CARTAO } from '../public/shared/calc.js';
+
+/**
+ * Itens "já está incluso" guardados como JSON (ou já lidos). Tolerante a valor
+ * ausente ou inválido: a proposta nunca deixa de abrir por causa desta lista.
+ */
+export function lerInclusos(valor) {
+  let lista = valor;
+  if (typeof valor === 'string') {
+    try {
+      lista = JSON.parse(valor);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(lista)) return [];
+  return lista
+    .filter((item) => item && typeof item.titulo === 'string' && item.titulo.trim())
+    .map((item) => ({
+      titulo: item.titulo,
+      descricao: typeof item.descricao === 'string' ? item.descricao : '',
+      icone: ICONES_INCLUSO.includes(item.icone) ? item.icone : 'check',
+    }));
+}
 
 function taxasCartaoSalvas(orc, metodo) {
   try {
@@ -67,6 +90,7 @@ export function visaoCliente(orc, empresa) {
       quantidade: s.quantidade,
       valor_cents: s.total_cents,
     })),
+    inclusos: lerInclusos(orc.inclusos),
     subtotal_cents: orc.subtotal_cents,
     acrescimo: orc.acrescimo_cents
       ? { descricao: orc.acrescimo_descricao || 'Acréscimo', valor_cents: orc.acrescimo_cents }
