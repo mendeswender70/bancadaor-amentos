@@ -95,7 +95,11 @@ export async function lerConfig(db) {
 
 export async function salvarConfig(db, body = {}) {
   const atual = await lerConfig(db);
-  const n = (chave, min, max, nome) => inteiro(body[chave] ?? atual[chave], { min, max, campo: nome });
+  // Só o campo que não veio fica como está; null é erro (não volta ao valor antigo sem avisar).
+  const n = (chave, min, max, nome) => {
+    if (body[chave] === null || body[chave] === '') throw invalido(`${nome}: preencha o valor.`);
+    return inteiro(body[chave] === undefined ? atual[chave] : body[chave], { min, max, campo: nome });
+  };
   const config = {
     serra_decimos_mm: n('serra_decimos_mm', 0, LIMITES_CORTE.serraDecimosMax, 'Espessura do disco'),
     refilo_mm: n('refilo_mm', 0, LIMITES_CORTE.refiloMax, 'Refilo'),
@@ -178,7 +182,7 @@ function normalizarAjustes(b, atual) {
   };
 }
 
-function normalizarPeca(b, i, chapasIds, fitasIds) {
+function normalizarPeca(b, i, chapasIds, fitasIds, anexosIds) {
   if (!b || typeof b !== 'object') throw invalido(`Linha ${i + 1} da lista de peças inválida.`);
   const linha = `(linha ${i + 1})`;
   const referencia = (valor, ids, nome) => {
@@ -201,16 +205,31 @@ function normalizarPeca(b, i, chapasIds, fitasIds) {
     fita_c2: marcado(b.fita_c2),
     fita_l1: marcado(b.fita_l1),
     fita_l2: marcado(b.fita_l2),
+    ...origemDaPeca(b, anexosIds),
   };
 }
 
-const CAMPOS_PECA = ['grupo', 'descricao', 'chapa_id', 'comprimento_mm', 'largura_mm', 'quantidade', 'veio', 'fita_id', 'fita_c1', 'fita_c2', 'fita_l1', 'fita_l2'];
+/** Anexo e página de onde a medida foi tirada. Anexo que o plano não vê (ou que foi excluído) é ignorado. */
+function origemDaPeca(b, anexosIds) {
+  const anexo = Number(b.origem_anexo_id);
+  if (!Number.isInteger(anexo) || !anexosIds.has(anexo)) return { origem_anexo_id: null, origem_pagina: null };
+  const pagina = Number(b.origem_pagina);
+  return { origem_anexo_id: anexo, origem_pagina: Number.isInteger(pagina) && pagina >= 1 && pagina <= 9999 ? pagina : null };
+}
 
-async function normalizarPecas(db, lista) {
+const CAMPOS_PECA = ['grupo', 'descricao', 'chapa_id', 'comprimento_mm', 'largura_mm', 'quantidade', 'veio', 'fita_id', 'fita_c1', 'fita_c2', 'fita_l1', 'fita_l2', 'origem_anexo_id', 'origem_pagina'];
+
+/** Ids dos anexos que o plano mostra: os dele e os do orçamento de onde veio. */
+async function anexosDoPlanoIds(db, planoId, orcamentoId) {
+  const linhas = await db.all('SELECT id FROM anexos WHERE completo = 1 AND (plano_id = ? OR orcamento_id = ?)', planoId ?? 0, orcamentoId ?? 0);
+  return new Set(linhas.map((a) => a.id));
+}
+
+async function normalizarPecas(db, lista, anexosIds = new Set()) {
   if (!Array.isArray(lista)) throw invalido('Lista de peças inválida.');
   if (lista.length > LIMITES_CORTE.linhas) throw invalido(`Use no máximo ${LIMITES_CORTE.linhas} linhas de peças por plano.`);
   const [chapas, fitas] = await Promise.all([db.all('SELECT id FROM chapas'), db.all('SELECT id FROM fitas')]);
-  const pecas = lista.map((p, i) => normalizarPeca(p, i, new Set(chapas.map((c) => c.id)), new Set(fitas.map((f) => f.id))));
+  const pecas = lista.map((p, i) => normalizarPeca(p, i, new Set(chapas.map((c) => c.id)), new Set(fitas.map((f) => f.id)), anexosIds));
   if (pecas.reduce((s, p) => s + p.quantidade, 0) > LIMITES_CORTE.instancias) {
     throw invalido(`Use no máximo ${LIMITES_CORTE.instancias} peças por plano (somando as quantidades).`);
   }
@@ -433,7 +452,8 @@ export async function criarPlano(db, usuario, body = {}) {
     const dados = await db.get('SELECT nome, orcamento_id FROM planos_corte WHERE id = ?', origem.id);
     orcamentoId = dados.orcamento_id;
     nome ||= `Recorte · ${dados.nome}`.slice(0, 150);
-    pecas = await normalizarPecas(db, body.pecas || []);
+    // O recorte é do mesmo orçamento: a origem que aponta para o projeto do orçamento continua valendo.
+    pecas = await normalizarPecas(db, body.pecas || [], await anexosDoPlanoIds(db, null, orcamentoId));
   }
   return db.transacao((t) => inserirPlano(t, { usuarioId: usuario.id, criadoPor: usuario.id, orcamentoId, nome: nome || 'Plano de corte', pecas }));
 }
@@ -493,7 +513,7 @@ async function reservarRetalhos(t, planoId, ids) {
 export async function salvarPlano(db, planoId, usuario, body = {}) {
   await planoPermitido(db, planoId, usuario, { paraAlterar: true });
   const atual = await db.get('SELECT * FROM planos_corte WHERE id = ?', planoId);
-  const pecas = await normalizarPecas(db, body.pecas);
+  const pecas = await normalizarPecas(db, body.pecas, await anexosDoPlanoIds(db, planoId, atual.orcamento_id));
   const chapas = await db.all('SELECT * FROM chapas');
   const nome = texto(body.nome ?? atual.nome, { max: 150, campo: 'Nome' }) || 'Plano de corte';
   const ajustes = normalizarAjustes(body, ajustesDo(atual));
@@ -639,6 +659,20 @@ function normalizarRetalho(b) {
   };
 }
 
+/**
+ * O retalho tem de caber na chapa de onde veio (girado, se ela não tem veio).
+ * Pega quem digitou em milímetros no campo em cm ("550" vira 550 cm).
+ */
+async function conferirRetalhoNaChapa(db, r) {
+  const chapa = await db.get('SELECT comprimento_mm, largura_mm, veio FROM chapas WHERE id = ?', r.chapa_id);
+  if (!chapa) throw invalido('Chapa do retalho não encontrada.');
+  const cabe = (c, l) => c <= chapa.comprimento_mm && l <= chapa.largura_mm;
+  if (cabe(r.comprimento_mm, r.largura_mm) || (!chapa.veio && cabe(r.largura_mm, r.comprimento_mm))) return;
+  throw invalido(
+    `O retalho de ${formatarCm(r.comprimento_mm)} × ${formatarCm(r.largura_mm)} cm é maior que a chapa (${formatarCm(chapa.comprimento_mm)} × ${formatarCm(chapa.largura_mm)} cm). As medidas são em centímetros: confira se não digitou em milímetros.`,
+  );
+}
+
 /** Guarda um ou vários retalhos (ex.: as sobras do fim de uma chapa). */
 export async function criarRetalhos(db, usuario, body = {}) {
   const lista = Array.isArray(body.retalhos) ? body.retalhos : [body];
@@ -646,9 +680,7 @@ export async function criarRetalhos(db, usuario, body = {}) {
   const retalhos = lista.map(normalizarRetalho);
   let origem = null;
   if (body.origem_plano_id) origem = (await planoPermitido(db, inteiro(body.origem_plano_id, { min: 1, campo: 'Plano' }), usuario)).id;
-  for (const r of retalhos) {
-    if (!(await db.get('SELECT 1 AS ok FROM chapas WHERE id = ?', r.chapa_id))) throw invalido('Chapa do retalho não encontrada.');
-  }
+  for (const r of retalhos) await conferirRetalhoNaChapa(db, r);
   const ids = [];
   await db.transacao(async (t) => {
     for (const r of retalhos) {
@@ -674,6 +706,8 @@ export async function atualizarRetalho(db, retalhoId, body = {}) {
   if (atual.situacao === 'reservado') throw invalido('Este retalho está reservado para um plano. Libere o plano antes de mexer nele.');
   const dados = normalizarRetalho({ ...atual, ...body });
   const situacao = umDe(body.situacao ?? atual.situacao, ['disponivel', 'usado', 'descartado'], 'Situação');
+  // Descartar sempre pode (inclusive um retalho antigo gravado com medida errada).
+  if (situacao !== 'descartado') await conferirRetalhoNaChapa(db, dados);
   await db.run(
     `UPDATE retalhos SET chapa_id = ?, comprimento_mm = ?, largura_mm = ?, local = ?, situacao = ?, plano_id = CASE WHEN ? = 'disponivel' THEN NULL ELSE plano_id END, atualizado_em = now() WHERE id = ?`,
     dados.chapa_id,

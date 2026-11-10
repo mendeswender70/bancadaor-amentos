@@ -374,7 +374,9 @@ async function paginaAjustes() {
   const recarregar = () => irPara(`#/ajustes?t=${Date.now()}`);
   const podeEditar = ehEscritorio();
   // Tudo em cm, menos o disco (mm, como vem do fabricante).
+  const rotulos = {};
   const campoNumero = (chave, rotulo, dica) => {
+    rotulos[chave] = rotulo;
     const valor = chave === 'serra_decimos_mm' ? formatarMm(config[chave] / 10) : formatarCm(config[chave]);
     return campo(rotulo, h('input', { type: 'text', inputmode: 'decimal', name: chave, value: valor, disabled: !podeEditar }), { dica });
   };
@@ -387,7 +389,12 @@ async function paginaAjustes() {
         const dados = Object.fromEntries(new FormData(formSerra));
         const corpo = {};
         for (const [k, v] of Object.entries(dados)) {
-          corpo[k] = k === 'serra_decimos_mm' ? Math.round(Number(String(v).replace(',', '.')) * 10) : String(v).trim() === '0' ? 0 : lerCm(v);
+          const texto = String(v).trim();
+          // Refilo vazio ou zero = sem refilo. Os outros campos não podem ficar vazios.
+          if (k === 'refilo_mm' && /^(0+([.,]0*)?)?$/.test(texto)) corpo[k] = 0;
+          else if (k === 'serra_decimos_mm') corpo[k] = /^\d+([.,]\d+)?$/.test(texto) ? Math.round(Number(texto.replace(',', '.')) * 10) : null;
+          else corpo[k] = lerCm(texto);
+          if (corpo[k] === null) return aviso(`${rotulos[k]}: digite um número${k === 'serra_decimos_mm' ? ' em mm (ex.: 4 ou 3,2)' : ' em cm (ex.: 90 ou 1,5)'}.`, 'erro');
         }
         try {
           sessao.config = await api.put('/producao/config', corpo);
@@ -476,10 +483,11 @@ window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change',
 
 function formularioMaterial(tipo, fechar) {
   const nome = h('input', { type: 'text', required: true, maxlength: '100', placeholder: tipo === 'chapa' ? 'Ex.: MDF Branco TX' : 'Ex.: Fita branca TX' });
-  const n = (valor, ph) => h('input', { type: 'text', inputmode: 'numeric', value: valor, placeholder: ph });
+  // Espessura e fita em mm inteiros; comprimento e largura da chapa em cm (com vírgula).
+  const n = (valor, ph, modo = 'numeric') => h('input', { type: 'text', inputmode: modo, value: valor, placeholder: ph });
   const espessura = n('18', 'mm');
-  const comprimento = n('', 'Ex.: 275');
-  const largura = n(tipo === 'chapa' ? '' : '22', tipo === 'chapa' ? 'Ex.: 184' : 'mm');
+  const comprimento = n('', 'Ex.: 275', 'decimal');
+  const largura = tipo === 'chapa' ? n('', 'Ex.: 184', 'decimal') : n('22', 'mm');
   const veio = h('input', { type: 'checkbox' });
   return h(
     'form',

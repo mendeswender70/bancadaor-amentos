@@ -233,7 +233,9 @@ export function gerarPdfCorte(plano, nomeEmpresa = '') {
     texto('Roteiro de cortes', colunaX, ry, { f: 'forte', s: 11 });
     ry += 15;
     texto(
-      r0 ? `Medidas em cm. Refile ${formatarCm(r0)} cm de um lado comprido e de um lado curto. Meça cada parte a partir da borda que acabou de cortar.` : 'Retalho: as bordas já vêm cortadas. Meça cada parte a partir da borda reta.',
+      r0
+        ? `Medidas em cm, já finais (a fita não é descontada). Refile ${formatarCm(r0)} cm de um lado comprido no carro, gire e refile um lado curto. Meça cada parte a partir da borda que acabou de cortar.`
+        : 'Medidas em cm, já finais (a fita não é descontada). Retalho: as bordas já vêm cortadas. Meça cada parte a partir da borda reta.',
       colunaX,
       ry,
       { s: 7.5, cor: COR.suave, width: colunaW, lineBreak: true },

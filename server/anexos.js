@@ -10,6 +10,26 @@ export const ANEXO_MAX_BYTES = 25 * 1024 * 1024;
 const MAX_POR_DESTINO = 30;
 export const TIPOS_ANEXO = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
+const EXTENSOES = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
+
+/**
+ * Nome seguro para mostrar e baixar: sem barras, sem caracteres de controle ou
+ * de direção do texto (que disfarçam a extensão) e sempre com a extensão do
+ * tipo conferido. Assim um ".html" não chega ao escritório como "projeto".
+ */
+export function nomeDoAnexo(nome, tipo) {
+  const ext = EXTENSOES[tipo];
+  let base = String(nome ?? '')
+    .replace(/[\\/\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\.[a-z0-9]{1,5}$/i, '')
+    .trim();
+  if (base.toLowerCase().endsWith(ext)) base = base.slice(0, -ext.length).trim();
+  if (!base) base = tipo === 'application/pdf' ? 'projeto' : 'foto';
+  return texto(base.slice(0, 150 - ext.length) + ext, { max: 150, campo: 'Nome do arquivo' });
+}
+
 const proibido = () => new ErroHttp(403, 'Você não tem acesso a este anexo.');
 
 /** Funcionário vê o orçamento só se tiver um trabalho dele. */
@@ -70,7 +90,7 @@ export async function anexosDoOrcamento(db, usuario, orcamentoId) {
 export async function criarAnexo(db, usuario, body = {}) {
   const tipo = umDe(body.tipo, TIPOS_ANEXO, 'Tipo de arquivo (use PDF, JPEG, PNG ou WebP)');
   const tamanho = inteiro(body.tamanho, { min: 1, max: ANEXO_MAX_BYTES, campo: `Tamanho do arquivo (máximo ${ANEXO_MAX_BYTES / 1024 / 1024} MB)` });
-  const nome = texto(String(body.nome ?? '').replace(/[\\/\u0000-\u001f]/g, ' '), { max: 150, campo: 'Nome do arquivo' }) || (tipo === 'application/pdf' ? 'projeto.pdf' : 'foto.jpg');
+  const nome = nomeDoAnexo(body.nome, tipo);
   let orcamentoId = null;
   let planoId = null;
   if (body.plano_id) {
@@ -81,10 +101,14 @@ export async function criarAnexo(db, usuario, body = {}) {
     if (!ehAdmin(usuario)) throw proibido();
     if (!(await db.get('SELECT 1 AS ok FROM orcamentos WHERE id = ?', orcamentoId))) throw naoEncontrado('Orçamento não encontrado.');
   } else throw invalido('Diga onde anexar: plano ou orçamento.');
-  // Envios abandonados há mais de um dia somem.
-  await db.run(`DELETE FROM anexos WHERE completo = 0 AND criado_em < now() - interval '1 day'`);
+  // Envios que não terminaram em 6 horas foram abandonados (a internet caiu, a
+  // aba fechou): somem e deixam de contar no limite.
+  await db.run(`DELETE FROM anexos WHERE completo = 0 AND criado_em < now() - interval '6 hours'`);
   const coluna = planoId ? 'plano_id' : 'orcamento_id';
-  const { total } = await db.get(`SELECT COUNT(*) AS total FROM anexos WHERE ${coluna} = ?`, planoId || orcamentoId);
+  const { total } = await db.get(
+    `SELECT COUNT(*) AS total FROM anexos WHERE ${coluna} = ? AND (completo = 1 OR criado_em > now() - interval '1 hour')`,
+    planoId || orcamentoId,
+  );
   if (Number(total) >= MAX_POR_DESTINO) throw invalido(`Use no máximo ${MAX_POR_DESTINO} anexos por ${planoId ? 'plano' : 'orçamento'}.`);
   const partes = Math.ceil(tamanho / PARTE_BYTES);
   const r = await db.run(

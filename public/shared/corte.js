@@ -73,11 +73,28 @@ export function formatarCm(mm) {
   return (Math.round(Number(mm) || 0) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 }
 
-/** "72,5", "72.5" ou "72" (cm) → 725 (mm). Devolve null se não for um número positivo. */
+/**
+ * Número escrito por gente: "72,5", "72.5", "72" e também "1.200" ou
+ * "1.200,5" (ponto de milhar, 3 dígitos por grupo). Devolve null se não for
+ * um número.
+ */
+function lerNumero(texto) {
+  let s = String(texto ?? '').trim();
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '');
+  s = s.replace(',', '.');
+  return /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
+}
+
+/**
+ * Medida em cm → mm inteiros. "72,5", "72.5" ou "72" → 725. Aceita a unidade
+ * escrita: "72,5 cm" → 725 e "725 mm" → 725 (quem vem do milímetro pode
+ * digitar assim). Devolve null se não for uma medida positiva.
+ */
 export function lerCm(texto) {
-  const s = String(texto ?? '').trim().replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(s)) return null;
-  const mm = Math.round(Number(s) * 10);
+  const m = /^(.*?)\s*(cm|mm)?$/i.exec(String(texto ?? '').trim());
+  const n = lerNumero(m[1]);
+  if (n === null) return null;
+  const mm = Math.round(m[2]?.toLowerCase() === 'mm' ? n : n * 10);
   return mm > 0 ? mm : null;
 }
 
@@ -172,23 +189,30 @@ export function lerLinhasPecas(texto) {
     .forEach((linha, i) => {
       const limpa = linha.trim();
       if (!limpa) return;
-      const numeros = [];
+      const medidas = [];
+      let quantidade = null;
       const palavras = [];
-      for (const parte of limpa.split(/[\t;]|\s+|(?<=\d)\s*[x×*]\s*(?=\d)/i)) {
-        const token = (parte || '').trim();
-        if (!token || /^[x×*]$/i.test(token)) continue;
-        if (/^\d+([.,]\d+)?$/.test(token) && numeros.length < 3) numeros.push(Number(token.replace(',', '.')));
+      const tokens = limpa
+        .split(/[\t;]|\s+|(?<=\d)\s*[x×*]\s*(?=\d)/i)
+        .map((t) => (t || '').trim())
+        .filter((t) => t && !/^[x×*]$/i.test(t));
+      for (let t = 0; t < tokens.length; t++) {
+        let token = tokens[t];
+        // "45 mm" separado: junta a unidade ao número.
+        if (/^(cm|mm)$/i.test(tokens[t + 1] || '') && lerNumero(token) !== null) token += tokens[++t];
+        if (medidas.length < 2 && lerCm(token) !== null && /^[\d.,]+\s*(cm|mm)?$/i.test(token)) medidas.push(lerCm(token));
+        else if (medidas.length === 2 && quantidade === null && /^\d+$/.test(token)) quantidade = Number(token);
         else palavras.push(token);
       }
-      if (numeros.length < 2) {
+      if (medidas.length < 2) {
         erros.push({ linha: i + 1, texto: limpa });
         return;
       }
       pecas.push({
         descricao: palavras.join(' ').slice(0, 120),
-        comprimento_mm: Math.round(numeros[0] * 10),
-        largura_mm: Math.round(numeros[1] * 10),
-        quantidade: numeros[2] ? Math.max(1, Math.round(numeros[2])) : 1,
+        comprimento_mm: medidas[0],
+        largura_mm: medidas[1],
+        quantidade: quantidade ? Math.max(1, quantidade) : 1,
       });
     });
   return { pecas, erros };

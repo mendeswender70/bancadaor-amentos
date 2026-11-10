@@ -23,7 +23,7 @@ import { api, baixarBlob } from '/js/api.js';
 import { h, icone, substituir, aviso, avisoErro, abrirModal, campo, confirmar, segmentado, menuSuspenso, haQuanto } from '/js/ui.js';
 import { sessao, ehEscritorio, seloSituacao, plural, contagem, nomeChapa, irPara, aoSairDaPagina, baixarArquivo, pedirNome } from './nucleo.js';
 import { abrirVisualizador, coresDosMoveis, corDaPeca, desenharFolha } from './desenho.js';
-import { abrirMedir, fecharMedir, secaoProjeto } from './projeto.js';
+import { abrirAnexoEmTelaCheia, abrirMedir, fecharMedir, origemDaMedida, secaoProjeto, textoDaOrigem } from './projeto.js';
 
 // ------------------------------------------------------------------ Cálculo
 
@@ -58,7 +58,7 @@ export function calcularNoWorker(dados) {
 
 // -------------------------------------------------------------- Uma peça
 
-function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = false }, fechar) {
+function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = false, origem = null }, fechar) {
   const dados = { ...peca };
   const numero = (valor, rotulo, extra = {}) => h('input', { type: 'text', inputmode: 'numeric', value: valor ? String(valor) : '', 'aria-label': rotulo, ...extra });
   const medidaCm = (mm, rotulo, extra = {}) => h('input', { type: 'text', inputmode: 'decimal', value: mm ? formatarCm(mm) : '', 'aria-label': rotulo, ...extra });
@@ -96,6 +96,13 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
   const lerMedida = (el, nome) => {
     const mm = lerCm(el.value);
     if (!mm || mm > LIMITES_CORTE.medidaMax) throw new Error(`${nome}: use centímetros, de 0,1 a ${formatarCm(LIMITES_CORTE.medidaMax)} (ex.: 72,5).`);
+    // Maior que a chapa escolhida (ou a maior cadastrada) = quase sempre digitado em mm.
+    const escolhida = chapas.find((c) => c.id === Number(chapa.value));
+    const limite = Math.max(0, ...(escolhida ? [escolhida] : chapas).map((c) => Math.max(c.comprimento_mm, c.largura_mm)));
+    if (limite && mm > limite) {
+      el.focus();
+      throw new Error(`${nome}: ${formatarCm(mm)} cm é maior que a chapa (${formatarCm(limite)} cm). As medidas são em centímetros: confira se não digitou em milímetros.`);
+    }
     return mm;
   };
   return h(
@@ -124,6 +131,15 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
     h('datalist', { id: listaId }, grupos.map((g) => h('option', { value: g }))),
     soPadrao ? campo('Móvel', grupo) : h('div', { class: 'grade-2' }, campo('Móvel', grupo), campo('Peça', descricao)),
     soPadrao ? null : h('div', { class: 'grade-3' }, campo('Comp. (cm)', comprimento, { dica: 'No veio' }), campo('Larg. (cm)', largura), campo('Qtd.', quantidade)),
+    origem
+      ? h(
+          'p',
+          { class: 'p-alerta info p-origem' },
+          icone('regua'),
+          h('span', {}, 'Medida tirada de ', h('strong', {}, origem.texto)),
+          h('button', { type: 'button', class: 'botao botao-pequeno', onclick: () => (fechar(null), origem.abrir()) }, 'Ver no projeto'),
+        )
+      : null,
     campo('Chapa', chapa),
     h('label', { class: 'caixa-marcar' }, veio, 'Seguir o veio (não girar a peça)'),
     campo('Fita de borda', fita),
@@ -235,8 +251,16 @@ export async function paginaPlano(planoId, params) {
   aoSairDaPagina(verificarSaida);
 
   // ---------------------------------------------------------- Peças
+  /** Anexo e página de onde veio a medida, com o botão para abrir o projeto ali. */
+  const origemDe = (peca) => {
+    const anexos = projeto.anexos();
+    const texto = textoDaOrigem(peca, anexos);
+    if (!texto) return null;
+    const anexo = anexos.find((a) => a.id === peca.origem_anexo_id);
+    return { texto, abrir: () => abrirAnexoEmTelaCheia(anexo, peca.origem_pagina || 1) };
+  };
   const editarPeca = async (indice) => {
-    const resposta = await abrirModal(`Linha #${indice + 1}`, (fechar) => formularioPeca(pecas[indice], { chapas, fitas, grupos: grupos() }, fechar), { contexto: 'Peça' });
+    const resposta = await abrirModal(`Linha #${indice + 1}`, (fechar) => formularioPeca(pecas[indice], { chapas, fitas, grupos: grupos(), origem: origemDe(pecas[indice]) }, fechar), { contexto: 'Peça' });
     if (!resposta) return;
     if (resposta.acao === 'excluir') pecas.splice(indice, 1);
     else if (resposta.acao === 'duplicar') pecas.splice(indice + 1, 0, { ...pecas[indice] });
@@ -294,7 +318,8 @@ export async function paginaPlano(planoId, params) {
       editarPadrao();
       return;
     }
-    pecas.push({ ...padrao, descricao: entradaD.value.trim(), comprimento_mm: c, largura_mm: l, quantidade: q });
+    // Com o projeto aberto em "Medir", a peça guarda o anexo e a página de onde veio a medida.
+    pecas.push({ ...padrao, descricao: entradaD.value.trim(), comprimento_mm: c, largura_mm: l, quantidade: q, ...origemDaMedida() });
     aviso(`#${pecas.length} ${entradaD.value.trim() || 'peça'} · ${formatarCm(c)} × ${formatarCm(l)} cm × ${q}`);
     entradaC.value = '';
     entradaL.value = '';
@@ -351,7 +376,7 @@ export async function paginaPlano(planoId, params) {
     if (grandes.length) {
       return aviso(`${plural(grandes.length, 'linha passa', 'linhas passam')} do tamanho da maior chapa (${formatarCm(maiorChapa)} cm). As medidas são em centímetros: confira se a lista não está em milímetros.`, 'erro');
     }
-    pecas.push(...lidas.map((p) => ({ ...padrao, ...p })));
+    pecas.push(...lidas.map((p) => ({ ...padrao, ...p, ...origemDaMedida() })));
     aviso(`${plural(lidas.length, 'peça adicionada', 'peças adicionadas')}.`);
     alterou();
   };
@@ -376,7 +401,8 @@ export async function paginaPlano(planoId, params) {
           const p = pecas[i];
           const chapa = chapasPorId.get(p.chapa_id);
           const lados = ladosComFita(p);
-          const detalhes = [chapa ? nomeChapa(chapa) : null, lados ? `fita ${lados}` : null, p.veio && chapa?.veio ? 'segue o veio' : null].filter(Boolean);
+          const origem = textoDaOrigem(p, projeto.anexos());
+          const detalhes = [chapa ? nomeChapa(chapa) : null, lados ? `fita ${lados}` : null, p.veio && chapa?.veio ? 'segue o veio' : null, origem ? `medida: ${origem}` : null].filter(Boolean);
           const linha = h(
             'button',
             { type: 'button', class: `p-peca${chapa ? '' : ' sem-chapa'}`, onclick: () => !concluido && editarPeca(i), disabled: concluido },
@@ -406,7 +432,7 @@ export async function paginaPlano(planoId, params) {
           botaoPadrao,
           h('div', { class: 'p-medidas' }, entradaC, h('span', {}, '×'), entradaL, h('span', {}, '×'), entradaQ),
           h('div', { class: 'p-entrada-nome' }, entradaD, h('button', { type: 'button', class: 'botao botao-primario', onclick: adicionar, 'aria-label': 'Adicionar peça' }, icone('mais'))),
-          h('div', { class: 'p-titulo-cartao' }, h('small', { class: 'dica' }, 'Medidas em cm (ex.: 72,5). Comprimento é o lado do veio.'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: colarLista }, icone('copiar', 'icone icone-mini'), 'Colar lista')),
+          h('div', { class: 'p-titulo-cartao' }, h('small', { class: 'dica' }, 'Medidas finais em cm (ex.: 72,5), sem descontar fita. Comprimento é o lado do veio.'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: colarLista }, icone('copiar', 'icone icone-mini'), 'Colar lista')),
         ),
     listaEl,
   );
@@ -635,6 +661,28 @@ export async function paginaPlano(planoId, params) {
     }
   };
 
+  // No celular, manda o PDF direto para o WhatsApp (ou outro app); sem isso, baixa.
+  const enviarPdf = async () => {
+    if (!(await salvarAgora())) return;
+    try {
+      const nomeArquivo = `plano-de-corte-${planoId}.pdf`;
+      const blob = await baixarBlob(`/producao/planos/${planoId}/pdf`);
+      const arquivo = new File([blob], nomeArquivo, { type: 'application/pdf' });
+      if (navigator.canShare?.({ files: [arquivo] })) {
+        try {
+          await navigator.share({ files: [arquivo], title: nome });
+          return;
+        } catch (erro) {
+          if (erro.name === 'AbortError') return;
+        }
+      }
+      baixarArquivo(blob, nomeArquivo);
+      aviso('PDF baixado. Anexe na conversa.');
+    } catch (erro) {
+      avisoErro(erro);
+    }
+  };
+
   const exportarCsv = () => {
     const campoCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const linhas = [['#', 'Móvel', 'Peça', 'Comprimento (cm)', 'Largura (cm)', 'Quantidade', 'Chapa', 'Espessura (mm)', 'Segue o veio', 'Fita', 'C1', 'C2', 'L1', 'L2']];
@@ -683,6 +731,7 @@ export async function paginaPlano(planoId, params) {
         concluido ? null : ['editar', 'Renomear', renomear],
         concluido ? null : ['regua', 'Ajustes deste plano', ajustesDoCorte],
         ['pdf', 'PDF para a serra', baixarPdf],
+        navigator.share ? ['whatsapp', 'Enviar PDF (WhatsApp…)', enviarPdf] : null,
         ['baixar', 'Exportar peças (CSV)', exportarCsv],
         plano.pode_excluir ? '-' : null,
         plano.pode_excluir ? ['lixeira', 'Excluir plano', excluir, { perigo: true }] : null,
@@ -716,11 +765,13 @@ export async function paginaPlano(planoId, params) {
   // Projeto anexado: medir com o desenho em cima e a entrada de peças embaixo.
   const projeto = secaoProjeto(plano, {
     somenteLeitura: concluido,
+    // A lista mostra de onde veio cada medida: redesenha quando os anexos chegam.
+    aoCarregar: () => aba === 'pecas' && pecas.some((p) => p.origem_anexo_id) && substituir(listaEl, listaDePecas()),
     aoMedir: (lista, anexo) => {
       aba = 'pecas';
       desenhar();
       abrirMedir(lista, anexo);
-      requestAnimationFrame(() => (concluido ? listaEl : abaPecasEl.querySelector('.p-entrada'))?.scrollIntoView({ block: 'start' }));
+      requestAnimationFrame(() => (concluido ? listaEl.querySelector('.p-grupo') : abaPecasEl.querySelector('.p-entrada'))?.scrollIntoView({ block: 'start' }));
     },
   });
 

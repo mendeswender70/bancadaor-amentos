@@ -37,27 +37,37 @@ export async function mandarParaProducao(orcamentoId, aoMandar) {
           class: 'formulario',
           onsubmit: async (e) => {
             e.preventDefault();
+            const botao = e.submitter;
+            const original = botao ? [...botao.childNodes] : [];
+            if (botao) botao.disabled = true;
+            // Se não mandou, o botão volta ao normal para tentar de novo.
+            const destravar = () => {
+              if (!botao) return;
+              botao.disabled = false;
+              botao.replaceChildren(...original);
+            };
+            let plano;
             try {
-              const botao = e.submitter;
-              if (botao) botao.disabled = true;
-              const plano = await api.post(`/orcamentos/${orcamentoId}/producao`, { funcionario_id: Number(funcionario.value), instrucoes: instrucoes.value, nome: nome.value });
-              // O projeto vai no orçamento: todos os trabalhos dele veem.
-              let falhas = 0;
-              for (const arquivo of arquivos.files) {
-                try {
-                  await enviarAnexo(arquivo, { orcamento_id: orcamentoId }, (f) => {
-                    if (botao) botao.textContent = `Enviando ${arquivo.name} ${Math.round(f * 100)}%`;
-                  });
-                } catch (erro) {
-                  falhas++;
-                  avisoErro(erro);
-                }
-              }
-              aviso(`Mandado para ${plano.funcionario_nome}. Aparece agora nos trabalhos dele.${falhas ? ' Algum anexo não foi enviado: tente de novo no cartão Produção.' : ''}`);
-              fechar(plano);
+              plano = await api.post(`/orcamentos/${orcamentoId}/producao`, { funcionario_id: Number(funcionario.value), instrucoes: instrucoes.value, nome: nome.value });
             } catch (erro) {
+              destravar();
               avisoErro(erro);
+              return;
             }
+            // O trabalho já foi criado. O projeto vai no orçamento: todos os trabalhos dele veem.
+            let falhas = 0;
+            for (const arquivo of arquivos.files) {
+              try {
+                await enviarAnexo(arquivo, { orcamento_id: orcamentoId }, (f) => {
+                  if (botao) botao.textContent = `Enviando ${arquivo.name} ${Math.round(f * 100)}%`;
+                });
+              } catch (erro) {
+                falhas++;
+                avisoErro(erro);
+              }
+            }
+            aviso(`Mandado para ${plano.funcionario_nome}. Aparece agora nos trabalhos dele.${falhas ? ' Algum anexo não foi enviado: tente de novo no cartão Produção.' : ''}`);
+            fechar(plano);
           },
         },
         campo('Quem vai cortar', funcionario),

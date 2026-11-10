@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { criarApp } from '../server/app.js';
 import { visaoCliente } from '../server/visaoCliente.js';
 import { carregarOrcamento } from '../server/orcamentos.js';
@@ -390,10 +391,101 @@ test('envio errado é recusado: tipo, tamanho, parte e conteúdo', async () => {
   assert.ok(lista.every((a) => a.nome !== 'falso.jpg' && a.nome !== 'f.jpg'), 'incompletos e recusados não aparecem');
 });
 
+test('o nome do anexo fica com a extensão do tipo conferido', async () => {
+  // PDF de verdade com nome de página da web: não pode chegar ao escritório como .html.
+  const conteudo = Buffer.from('%PDF-1.7\n<html><script>alert(1)</script></html>');
+  const r = await anexar('joao', { plano_id: trabalho.id }, 'Projeto final.html', 'application/pdf', conteudo);
+  assert.equal(r.status, 200, JSON.stringify(r.dados));
+  const disfarcado = await anexar('joao', { plano_id: trabalho.id }, 'foto\u202egpj.html', 'image/jpeg', JPEG);
+  const lista = (await chamar('joao', 'GET', `/producao/planos/${trabalho.id}/anexos`)).dados;
+  const nomes = new Map(lista.map((a) => [a.id, a.nome]));
+  assert.equal(nomes.get(r.id), 'Projeto final.pdf');
+  assert.equal(nomes.get(disfarcado.id), 'foto gpj.jpg', 'sem caractere que inverte o texto');
+  await chamar('joao', 'DELETE', `/producao/anexos/${r.id}`);
+  await chamar('joao', 'DELETE', `/producao/anexos/${disfarcado.id}`);
+});
+
+test('a parte baixada é conferida a cada vez (sem cache longo no aparelho)', async () => {
+  const caminho = `${base}/producao/anexos/${anexoEscritorio.id}/partes/1`;
+  const r1 = await fetch(caminho, { headers: { cookie: cookies.joao } });
+  assert.equal(r1.status, 200);
+  assert.equal(r1.headers.get('cache-control'), 'private, no-cache');
+  const etag = r1.headers.get('etag');
+  assert.ok(etag, 'tem ETag para o navegador revalidar');
+  // Revalidação como o cache do navegador faz (o fetch acrescentaria "Cache-Control: no-cache").
+  const revalidar = (quem) =>
+    new Promise((resolve, reject) => {
+      http.get(caminho, { headers: { cookie: cookies[quem], 'If-None-Match': etag } }, (res) => {
+        res.resume();
+        resolve(res.statusCode);
+      }).on('error', reject);
+    });
+  assert.equal(await revalidar('joao'), 304, 'sem mudança, não manda de novo');
+  assert.equal(await revalidar('pedro'), 404, 'a permissão é conferida antes do 304');
+});
+
+test('envio abandonado não ocupa vaga para sempre', async () => {
+  const db = await app.locals.obterDb();
+  const inserir = (intervalo) =>
+    db.run(
+      `INSERT INTO anexos (plano_id, nome, tipo, tamanho, partes, criado_por, criado_em)
+       SELECT ?, 'abandonado.jpg', 'image/jpeg', 10, 1, ?, now() - interval '${intervalo}' FROM generate_series(1, 30)`,
+      trabalho.id,
+      joao.id,
+    );
+  await inserir('2 hours');
+  const novo = { plano_id: trabalho.id, nome: 'nova.jpg', tipo: 'image/jpeg', tamanho: JPEG.length };
+  let r = await chamar('joao', 'POST', '/producao/anexos', novo);
+  assert.equal(r.status, 201, 'incompletos de mais de 1 hora não contam no limite');
+  await chamar('joao', 'DELETE', `/producao/anexos/${r.dados.id}`);
+  await db.run(`UPDATE anexos SET criado_em = now() - interval '7 hours' WHERE nome = 'abandonado.jpg'`);
+  r = await chamar('joao', 'POST', '/producao/anexos', novo);
+  assert.equal(r.status, 201);
+  assert.equal((await db.get(`SELECT COUNT(*) AS n FROM anexos WHERE nome = 'abandonado.jpg'`)).n, 0, 'depois de 6 horas somem');
+  await chamar('joao', 'DELETE', `/producao/anexos/${r.dados.id}`);
+  await inserir('5 minutes');
+  r = await chamar('joao', 'POST', '/producao/anexos', novo);
+  assert.equal(r.status, 400, 'envios em andamento contam');
+  await db.run(`DELETE FROM anexos WHERE nome = 'abandonado.jpg'`);
+});
+
+test('cada peça guarda de qual anexo e página veio a medida', async () => {
+  const plano = (await chamar('joao', 'GET', `/producao/planos/${trabalho.id}`)).dados;
+  const pecas = plano.pecas.map((p, i) => ({ ...p, origem_anexo_id: [anexoEscritorio.id, 999999][i] ?? null, origem_pagina: [2, 5][i] ?? null }));
+  const r = await chamar('joao', 'PUT', `/producao/planos/${plano.id}`, { versao: plano.versao, pecas });
+  assert.equal(r.status, 200, JSON.stringify(r.dados));
+  assert.deepEqual([r.dados.pecas[0].origem_anexo_id, r.dados.pecas[0].origem_pagina], [anexoEscritorio.id, 2]);
+  assert.deepEqual([r.dados.pecas[1].origem_anexo_id, r.dados.pecas[1].origem_pagina], [null, null], 'anexo que o plano não vê é ignorado');
+  assert.equal(r.dados.situacao, plano.situacao, 'a origem não muda o plano calculado');
+  trabalho = r.dados;
+});
+
 test('excluir o orçamento leva os anexos dele junto', async () => {
   const db = await app.locals.obterDb();
   assert.equal((await db.get('SELECT COUNT(*) AS n FROM anexos WHERE orcamento_id = ?', orcamentoId)).n, 1);
   assert.equal((await chamar('admin', 'DELETE', `/orcamentos/${orcamentoId}`)).status, 200);
   assert.equal((await db.get('SELECT COUNT(*) AS n FROM anexos WHERE orcamento_id = ?', orcamentoId)).n, 0);
   assert.equal((await db.get('SELECT COUNT(*) AS n FROM anexo_partes')).n, 0, 'as partes vão junto');
+});
+
+test('retalho maior que a chapa (digitado em mm) é recusado; o antigo ainda pode ser descartado', async () => {
+  const r = await chamar('joao', 'POST', '/producao/retalhos', { chapa_id: branco.id, comprimento_mm: 5500, largura_mm: 3000, local: 'A' });
+  assert.equal(r.status, 400);
+  assert.match(r.dados.erro, /milímetros/);
+  assert.equal((await chamar('joao', 'POST', '/producao/retalhos', { chapa_id: branco.id, comprimento_mm: 1500, largura_mm: 2000 })).status, 201, 'chapa sem veio: o retalho pode estar girado');
+  assert.equal((await chamar('joao', 'POST', '/producao/retalhos', { chapa_id: carvalho.id, comprimento_mm: 1500, largura_mm: 2000 })).status, 400, 'com veio, não gira');
+  const db = await app.locals.obterDb();
+  const antigo = await db.run(`INSERT INTO retalhos (chapa_id, comprimento_mm, largura_mm, local) VALUES (?, 5500, 3000, 'velho') RETURNING id`, branco.id);
+  assert.equal((await chamar('joao', 'PUT', `/producao/retalhos/${antigo.lastInsertRowid}`, { local: 'outro' })).status, 400);
+  assert.equal((await chamar('joao', 'PUT', `/producao/retalhos/${antigo.lastInsertRowid}`, { situacao: 'descartado' })).status, 200);
+});
+
+test('ajustes da serra: campo vazio é erro, não volta ao valor antigo sem avisar', async () => {
+  let r = await chamar('admin', 'PUT', '/producao/config', { refilo_mm: null });
+  assert.equal(r.status, 400);
+  r = await chamar('admin', 'PUT', '/producao/config', { refilo_mm: 0 });
+  assert.equal(r.status, 200);
+  assert.equal(r.dados.refilo_mm, 0, 'sem refilo');
+  r = await chamar('admin', 'PUT', '/producao/config', { refilo_mm: 10 });
+  assert.equal(r.dados.refilo_mm, 10);
 });

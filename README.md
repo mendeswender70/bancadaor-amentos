@@ -30,7 +30,7 @@ Configuração conferida na Neon em 20/10/2026:
 O banco contém as tabelas de clientes, orçamentos, itens, histórico, usuários,
 sessões e notificações, chapas, fitas, planos de corte, retalhos e a
 configuração da serra e anexos do projeto, além do controle de migrações e da
-marca de configuração inicial. As migrações atuais estão na versão **14**
+marca de configuração inicial. As migrações atuais estão na versão **15**
 (`server/db.js`) e são aplicadas automaticamente ao acessar a API.
 
 1. **Neon Console → projeto esquadro → Connect**: selecione a branch
@@ -233,18 +233,28 @@ retalhos. O andamento é salvo a cada passo e a tela fica acesa enquanto corta.
 sobras, guia, refilo e o passo a passo aparecem e são digitados em cm, com até
 uma casa decimal (72,5). Ficam em mm só a espessura da chapa, a largura da fita
 e a espessura do disco. O sistema guarda milímetros inteiros e converte na
-tela; uma medida maior que a maior chapa gera o aviso "confira se não digitou
-em milímetros".
+tela; uma medida maior que a maior chapa (ou, no retalho, maior que a chapa
+dele) gera o aviso "confira se não digitou em milímetros". Também aceita
+"455 mm" escrito assim e o ponto de milhar ("1.200").
 
 **Projeto anexado.** O escritório anexa o PDF do arquiteto e fotos no
 orçamento (cartão Produção do editor ou ao mandar para a produção); quem tem um
 trabalho daquele orçamento vê. O funcionário também anexa fotos no próprio
 plano. Na produção, **Medir no projeto** prende o desenho na metade de cima da
 tela (com zoom de pinça e páginas do PDF) e deixa a entrada de peças embaixo.
-O PDF abre no próprio site com o pdf.js (`public/js/vendor/pdfjs`, Apache-2.0).
+Cada peça digitada assim guarda de qual anexo e página veio a medida
+(migração 15); na lista aparece "medida: Planta.pdf, pág. 2" e a peça tem o
+botão **Ver no projeto**, que abre o desenho naquela página. Em prancha grande
+(A1/A0), ao parar o zoom o trecho visível é redesenhado na resolução da tela.
+O PDF abre no próprio site com o pdf.js (`public/js/vendor/pdfjs`, Apache-2.0),
+sem WebAssembly (a CSP não permite): imagens JPEG 2000 e JBIG2 de PDF escaneado
+usam os decodificadores em JavaScript da pasta `wasm/`, e o worker passa por
+`public/js/pdf-worker.mjs`, que completa o que falta no Safari antes do 17.4.
 Os arquivos ficam no banco (`anexos` e `anexo_partes`), em partes de 3 MB,
 porque a Vercel limita cada requisição e cada resposta a 4,5 MB; o limite é
-25 MB por arquivo e as fotos são reduzidas no celular antes do envio. Anexos
+25 MB por arquivo e as fotos são reduzidas no celular antes do envio (planta
+em PNG ou WebP de até 12 MB vai como está). O nome do arquivo sempre termina
+com a extensão do tipo conferido, e envio que não termina em 6 horas é apagado. Anexos
 ocupam espaço no Postgres da Neon: se o volume crescer, vale mudar para um
 armazenamento de arquivos (ex.: Vercel Blob).
 

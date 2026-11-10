@@ -7,6 +7,9 @@ import { h, icone, substituir, aviso, avisoErro, abrirModal, confirmar } from '/
 import { aoSairDaPagina, irPara, manterTelaLigada, nomeChapa, plural, progresso as barraProgresso, ultimoLocal, guardarLocal } from './nucleo.js';
 import { abrirVisualizador, coresDosMoveis, corDaPeca, desenharFolha } from './desenho.js';
 
+// Abaixo disto (12 cm) o corte na guia paralela pede empurrador.
+const TIRA_ESTREITA_MM = 120;
+
 export async function abrirSerra(planoId) {
   const plano = await api.get(`/producao/planos/${planoId}`);
   if (!plano.resultado) {
@@ -133,6 +136,23 @@ export async function abrirSerra(planoId) {
     return h('span', {}, h('strong', {}, 'Sobra'), sobraAproveitavel(r.w, r.h, plano.config) ? ' · boa para guardar no fim da chapa' : ' · pode descartar');
   };
 
+  // Lembrete antes do primeiro corte (NR-12 / ISO 19085-5: proteção sobre o
+  // disco, cutelo divisor contra o retrocesso, empurrador para peça estreita).
+  const antesDeLigar = () =>
+    h(
+      'section',
+      { class: 'serra-checklist' },
+      h('strong', {}, icone('alerta', 'icone icone-mini'), 'Antes de ligar a serra'),
+      h(
+        'ul',
+        {},
+        h('li', {}, 'Coifa (proteção sobre o disco) e cutelo divisor no lugar'),
+        h('li', {}, 'Disco de 1 a 1,5 cm acima da chapa'),
+        h('li', {}, 'Riscador alinhado com o disco, se a serra tiver'),
+        h('li', {}, 'Empurrador à mão e nada acumulado embaixo da máquina'),
+      ),
+    );
+
   function telaPasso(passo) {
     const d = detalhes[passo.folha];
     if (passo.tipo === 'chapa') {
@@ -147,7 +167,9 @@ export async function abrirSerra(planoId) {
           d.retalho ? h('p', { class: 'serra-resto' }, `Está em: ${d.retalho.local || 'local não informado'}`) : null,
           d.iguais > 1 ? h('p', { class: 'serra-resto' }, `Chapa ${d.posicaoIgual} de ${d.iguais} iguais: os cortes se repetem.`) : null,
           h('p', { class: 'serra-texto' }, `Nesta chapa: ${plural(d.colocadas.length, 'peça', 'peças')}.`),
+          h('p', { class: 'serra-dica' }, icone('olho', 'icone icone-mini'), 'Face boa para cima: o disco desce cortando por cima.'),
         ),
+        passo.folha === 0 ? antesDeLigar() : null,
         mapa(passo),
       ];
     }
@@ -158,7 +180,13 @@ export async function abrirSerra(planoId) {
           { class: 'serra-instrucao' },
           h('span', { class: 'serra-rotulo' }, 'Esquadrejar a chapa'),
           h('div', { class: 'serra-medida' }, h('strong', {}, formatarCm(passo.refilo)), h('span', {}, 'cm')),
-          h('p', { class: 'serra-texto' }, 'Corte essa medida de um lado comprido e de um lado curto. As próximas medidas partem dessas bordas retas.'),
+          h(
+            'ol',
+            { class: 'serra-ordem' },
+            h('li', {}, 'No carro, refile um lado comprido: a borda de fábrica não serve de referência.'),
+            h('li', {}, 'Gire a chapa, encoste a borda refilada no esquadro do carro e refile um lado curto.'),
+          ),
+          h('p', { class: 'serra-texto' }, 'As próximas medidas partem dessas duas bordas retas. Deixe a chapa parada no carro e empurre o carro, sem forçar a chapa contra o disco.'),
         ),
         mapa(passo),
       ];
@@ -176,8 +204,11 @@ export async function abrirSerra(planoId) {
             ? h('p', { class: 'serra-resto' }, 'Do outro lado fica a ', descreverParte(passo.resto), '.')
             : h('p', { class: 'serra-resto' }, 'Do outro lado fica ', descreverParte(passo.resto), '.')
         : null;
+      // Tira estreita na guia paralela: a mão passa perto do disco.
+      const estreita = passo.guia === 'paralela' && !passo.acerto && passo.medida < TIRA_ESTREITA_MM;
       return [
         passo.girar ? h('div', { class: 'serra-girar' }, icone('historico'), 'Gire a peça 90° antes deste corte') : null,
+        estreita ? h('div', { class: 'serra-girar serra-perigo' }, icone('alerta'), 'Tira estreita: use o empurrador e mantenha a mão longe do disco') : null,
         h(
           'section',
           { class: 'serra-instrucao' },

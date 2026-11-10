@@ -413,6 +413,12 @@ dialog.modal::backdrop { background: rgb(15 10 5 / 55%); }
 .serra-instrucao { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: 22px; background: var(--superficie); border: 1px solid var(--borda); box-shadow: var(--sombra); }
 .serra-girar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--alerta-suave); color: var(--alerta); font-weight: 800; font-size: 17px; }
 .serra-girar .icone { width: 26px; height: 26px; }
+.serra-perigo { background: var(--perigo-suave, var(--alerta-suave)); color: var(--perigo, var(--alerta)); }
+.serra-dica { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--texto); }
+.serra-ordem { margin: 0; padding-left: 22px; display: grid; gap: 6px; font-size: 16px; font-weight: 600; color: var(--texto); }
+.serra-checklist { display: grid; gap: 8px; padding: 14px 16px; border-radius: 18px; border: 1px dashed var(--borda-forte); background: var(--superficie-2); }
+.serra-checklist strong { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.serra-checklist ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 15px; color: var(--texto-2); }
 .serra-rotulo { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; color: var(--primaria); text-transform: uppercase; }
 .serra-medida { display: flex; align-items: baseline; gap: 8px; font-weight: 800; line-height: 0.95; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
 .serra-medida strong { font-size: clamp(64px, 22vw, 112px); }
@@ -474,7 +480,7 @@ body.serra-aberta .p-novo-fixo, body.serra-aberta .p-acao-fixa { display: none; 
 .p-anexo { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 0; border: 0; background: none; color: var(--texto); text-align: left; scroll-snap-align: start; }
 .p-anexo-abrir { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .p-anexo-imagem { position: relative; display: grid; place-items: center; width: 112px; height: 100px; overflow: hidden; border: 1px solid var(--borda); border-radius: 14px; background: var(--superficie-2); color: var(--primaria); }
-.p-anexo-imagem img { width: 100%; height: 100%; object-fit: cover; }
+.p-anexo-imagem img { width: 100%; height: 100%; object-fit: cover; -webkit-touch-callout: none; }
 .p-anexo-imagem[data-paginas]::after { content: attr(data-paginas); position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: var(--superficie); color: var(--texto-2); font-size: 11px; font-weight: 700; }
 .p-anexo-nome { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .p-anexo-info { overflow: hidden; color: var(--suave); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
@@ -484,8 +490,10 @@ body.serra-aberta .p-novo-fixo, body.serra-aberta .p-acao-fixa { display: none; 
 .p-anexo-enviando .p-anexo-imagem { background: var(--superficie-3); }
 
 .p-visor-area { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; background: var(--superficie-3); cursor: grab; }
-.p-visor-conteudo { width: 100%; will-change: transform; }
-.p-visor-imagem { display: block; width: 100%; height: auto; background: #fff; user-select: none; -webkit-user-drag: none; }
+.p-visor-conteudo { position: relative; width: 100%; will-change: transform; }
+.p-visor-imagem { display: block; width: 100%; height: auto; background: #fff; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; }
+/* Pedaço da prancha redesenhado com nitidez por cima da página (zoom grande). */
+.p-visor-nitido { position: absolute; display: block; pointer-events: none; -webkit-touch-callout: none; }
 .p-visor-paginas { display: flex; align-items: center; gap: 2px; }
 .p-visor-pagina { min-width: 96px; text-align: center; font-size: 13px; font-weight: 600; color: var(--texto-2); }
 .p-visor-rodape { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -496,13 +504,18 @@ body.serra-aberta .p-novo-fixo, body.serra-aberta .p-acao-fixa { display: none; 
 }
 .p-medir-topo { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; color: var(--primaria); }
 .p-medir-topo strong { flex: 1; overflow: hidden; color: var(--texto); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.p-medir-topo select { flex: 1; min-height: 40px; padding: 6px 10px; font-size: 15px; }
+.p-medir-topo select { flex: 1; min-height: 40px; padding: 6px 10px; font-size: 16px; } /* menos de 16px: o iPhone amplia a página ao tocar */
 .p-medir-corpo { display: flex; flex: 1; min-height: 0; }
 .p-medir-rodape { display: flex; align-items: center; justify-content: flex-end; gap: 2px; padding: 2px 8px; border-top: 1px solid var(--borda); }
 .p-medir-rodape .p-visor-paginas { margin-right: auto; }
 body.medindo .p-casca { padding-top: 48dvh; }
 body.medindo .p-topo { display: none; }
 body.medindo .p-abas-plano { top: 48dvh; }
-body.medindo .p-entrada { scroll-margin-top: calc(48dvh + 12px); }
-/* Medindo: os avisos não cobrem o projeto. */
-body.medindo .avisos { top: auto; bottom: calc(var(--barra) + env(safe-area-inset-bottom) + 12px); }
+/* A entrada aparece logo abaixo do painel e das abas (62px), sem nada coberto. */
+body.medindo .p-entrada, body.medindo .p-grupo:first-child { scroll-margin-top: calc(48dvh + 74px); }
+/* Medindo: os avisos ficam logo abaixo do painel do projeto, sempre à vista
+   (embaixo da tela eles somem atrás do teclado do iPhone) e sem cobrir o desenho. */
+body.medindo .avisos { top: calc(48dvh + 8px); bottom: auto; }
+/* Só o aviso mais recente e compacto, para não cobrir os campos de medida. */
+body.medindo .avisos .aviso:not(:last-child) { display: none; }
+body.medindo .avisos .aviso { padding-block: 8px; font-size: 14px; }

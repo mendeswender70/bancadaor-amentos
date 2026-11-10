@@ -80,6 +80,27 @@ test('centímetros: mostra até uma casa e lê vírgula ou ponto', () => {
   assert.equal(lerCm('-3'), null);
 });
 
+test('centímetros: aceita a unidade escrita e o ponto de milhar', () => {
+  assert.equal(lerCm('72,5 cm'), 725);
+  assert.equal(lerCm('455 mm'), 455, 'quem vem do milímetro pode escrever mm');
+  assert.equal(lerCm('455mm'), 455);
+  // "1.200" é mil e duzentos (como o próprio sistema mostra), não 1,2 cm.
+  assert.equal(lerCm('1.200'), 12000);
+  assert.equal(lerCm(formatarCm(12000)), 12000, 'o que é mostrado é lido de volta igual');
+  assert.equal(lerCm('2.75'), 28, 'ponto com menos de 3 casas continua decimal');
+  assert.equal(lerCm('0,0'), null);
+  assert.equal(lerCm('90 cm cm'), null);
+  const { pecas, erros } = lerLinhasPecas('Frente 455 mm x 200 mm 4\nLateral 254,5 x 55 2\n0 x 50');
+  assert.deepEqual(
+    pecas.map((p) => [p.descricao, p.comprimento_mm, p.largura_mm, p.quantidade]),
+    [
+      ['Frente', 455, 200, 4],
+      ['Lateral', 2545, 550, 2],
+    ],
+  );
+  assert.deepEqual(erros, [{ linha: 3, texto: '0 x 50' }]);
+});
+
 test('cada solução passa na conferência e tem cada peça uma vez', () => {
   const resultado = calcular(GUARDA_ROUPA);
   const conferido = conferir(resultado, GUARDA_ROUPA);

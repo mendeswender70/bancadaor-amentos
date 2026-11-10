@@ -1,3 +1,9 @@
 pdf.js 6.5.438 (build legacy), Mozilla, licença Apache-2.0.
 Origem: pacote npm pdfjs-dist@6.5.438, arquivos legacy/build/pdf.min.mjs e pdf.worker.min.mjs.
 Usado para mostrar o PDF do projeto do arquiteto dentro da área da produção.
+wasm/openjpeg_nowasm_fallback.js e wasm/jbig2_nowasm_fallback.js: do mesmo pacote
+(pasta wasm/), com as licenças ao lado. Decodificam imagens JPEG 2000 e JBIG2
+(comuns em PDF escaneado) em JavaScript, sem WebAssembly, que a CSP do site
+(script-src 'self') não permite.
+O worker é carregado por /js/pdf-worker.mjs, que instala Promise.withResolvers
+(falta no Safari antes do 17.4) antes de importar pdf.worker.min.mjs.

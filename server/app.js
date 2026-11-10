@@ -1174,7 +1174,9 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   });
   api.get('/producao/anexos/:id/partes/:ordem', async (req, res) => {
     const dados = await lerParte(db, req.usuario, id(req.params.id), Number(req.params.ordem));
-    res.type('application/octet-stream').setHeader('Cache-Control', 'private, max-age=86400').send(dados);
+    // no-cache: o navegador sempre pergunta (a permissão é conferida a cada vez);
+    // o ETag do Express devolve 304 quando a parte não mudou.
+    res.type('application/octet-stream').setHeader('Cache-Control', 'private, no-cache').send(dados);
   });
   api.delete('/producao/anexos/:id', async (req, res) => {
     await excluirAnexo(db, req.usuario, id(req.params.id));

@@ -463,6 +463,13 @@ export const MIGRACOES = [
     `CREATE INDEX anexos_criado_por ON anexos(criado_por)`,
     ...['anexos', 'anexo_partes'].map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`),
   ],
+  // v15: de onde veio a medida de cada peça (anexo e página do projeto), para
+  // quem corta conferir no desenho.
+  [
+    `ALTER TABLE plano_pecas ADD COLUMN origem_anexo_id integer REFERENCES anexos(id) ON DELETE SET NULL`,
+    `ALTER TABLE plano_pecas ADD COLUMN origem_pagina integer CHECK (origem_pagina IS NULL OR origem_pagina BETWEEN 1 AND 9999)`,
+    `CREATE INDEX plano_pecas_origem ON plano_pecas(origem_anexo_id)`,
+  ],
 ];
 
 // ---------------------------------------------------------------------------

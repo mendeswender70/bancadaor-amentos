@@ -1,6 +1,6 @@
 # Plano de corte e área da produção
 
-Pesquisa, decisões e o que foi feito. Atualizado em 10/11/2026.
+Pesquisa, decisões e o que foi feito. Atualizado em 10/11/2026 (segunda rodada: cm, projeto anexado e revisão).
 
 ## Decisões da marcenaria
 
@@ -23,6 +23,11 @@ largo que o real só gasta um pouco mais de chapa; mais estreito erra a última
 peça da faixa). Vale medir o dente do disco e ajustar em Ajustes da produção.
 
 ## O que a indústria faz (pesquisa)
+
+A pesquisa completa de nov/2026 (sites do Brasil e de fora, YouTube, telas de
+programas, apps de celular, técnica na esquadrejadeira e projeto → medidas),
+com links, está em [pesquisa-plano-de-corte.md](pesquisa-plano-de-corte.md).
+Resumo do que entrou na primeira versão:
 
 | Fonte | O que entrou no esquadro |
 | --- | --- |
@@ -83,7 +88,22 @@ permissões (funcionário fora do escritório, sem preço, só os próprios plan
 reserva e uso de retalhos, andamento e conclusão. O fluxo foi usado no
 navegador em tamanho de iPhone, nos temas claro e escuro.
 
+**Medidas em cm e projeto anexado** (segunda rodada): tudo em centímetros na
+produção; o escritório e o funcionário anexam o PDF do arquiteto e fotos; o
+modo **Medir no projeto** deixa o desenho em cima e a digitação embaixo, e
+cada peça guarda de qual anexo e página veio a medida. O passo a passo ganhou
+o lembrete de segurança antes do primeiro corte (NR-12), "face boa para cima",
+a ordem do refilo (lado comprido no carro, girar, lado curto) e o alerta de
+empurrador em tira estreita na guia paralela. Uma revisão do código em quatro
+frentes (segurança, centímetros, envio dos arquivos e iPhone) encontrou e
+corrigiu, entre outros: retalho digitado em mm gravado 10 vezes maior, cache
+que pulava a checagem de permissão, PDF que não abria em iPhone com iOS 16 e
+página do PDF trocada ao virar rápido.
+
 ## Próximos passos sugeridos
+
+A lista completa, com o porquê e a fonte de cada item, está na seção 9 da
+[pesquisa](pesquisa-plano-de-corte.md#9-próximos-passos-recomendados).
 
 1. **Usar em 2 ou 3 trabalhos reais** e comparar o número de chapas com o que a
    oficina faria à mão (ou com o CutList Optimizer).
