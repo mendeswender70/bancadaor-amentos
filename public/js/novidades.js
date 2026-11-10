@@ -18,6 +18,7 @@ export const novidades = [
       { icone: 'caixa', titulo: 'Estoque de retalhos', texto: 'Sobras boas são guardadas no fim de cada chapa, e o cálculo usa retalho antes de abrir chapa nova.' },
       { icone: 'pdf', titulo: 'Projeto anexado', texto: 'Anexe o PDF do arquiteto ou fotos no orçamento. Na produção, "Medir no projeto" mostra o desenho em cima e a lista de peças embaixo, e cada peça guarda a página de onde veio a medida.' },
       { icone: 'alerta', titulo: 'Segurança na serra', texto: 'Antes do primeiro corte, o passo a passo lembra coifa, cutelo divisor e empurrador; em tira estreita na guia paralela, avisa para usar o empurrador.' },
+      { icone: 'regua', titulo: 'Só as medidas', texto: 'O plano de corte pede só nome, medidas e quantidade. Todas as peças vão na chapa padrão da oficina (o tamanho fica em Ajustes da produção), sem escolher MDF nem fita.' },
       { icone: 'regua', titulo: 'Tudo em centímetros', texto: 'Peças, chapas, retalhos e o passo a passo da serra em cm (aceita 72,5). Só espessura da chapa, fita e disco seguem em mm.' },
     ],
     acao: { rotulo: 'Cadastrar a equipe', href: '#/config/equipe' },

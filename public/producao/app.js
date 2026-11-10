@@ -268,7 +268,7 @@ async function paginaRetalhos(params) {
   const recarregar = () => irPara(`#/retalhos?${new URLSearchParams({ ver: situacao === 'reservado' ? 'reservados' : '', t: Date.now() })}`);
   const grupos = new Map();
   for (const r of retalhos) {
-    const chave = `${r.chapa_nome} ${r.espessura_mm} mm`;
+    const chave = r.chapa_nome === 'Chapa' ? 'Chapa padrão' : `${r.chapa_nome} ${r.espessura_mm} mm`;
     if (!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(r);
   }
@@ -331,12 +331,13 @@ function linhaRetalho(r, aoTocar) {
 }
 
 function formularioRetalho(r, chapas, fechar) {
-  const chapa = h('select', {}, chapas.filter((c) => c.ativo || c.id === r?.chapa_id).map((c) => h('option', { value: String(c.id), selected: c.id === r?.chapa_id }, nomeChapa(c))));
+  // Sem escolher MDF: o retalho é da chapa padrão (ou continua na dele, se já existia).
+  const chapaId = r?.chapa_id ?? sessao.config.chapa_padrao_id;
   const comprimento = h('input', { type: 'text', inputmode: 'decimal', value: r ? formatarCm(r.comprimento_mm) : '', placeholder: 'cm' });
   const largura = h('input', { type: 'text', inputmode: 'decimal', value: r ? formatarCm(r.largura_mm) : '', placeholder: 'cm' });
   const local = h('input', { type: 'text', maxlength: '80', value: r?.local || ultimoLocal(), placeholder: 'Ex.: prateleira A' });
   const reservado = r?.situacao === 'reservado';
-  const corpo = () => ({ chapa_id: Number(chapa.value), comprimento_mm: lerCm(comprimento.value), largura_mm: lerCm(largura.value), local: local.value });
+  const corpo = () => ({ chapa_id: chapaId, comprimento_mm: lerCm(comprimento.value), largura_mm: lerCm(largura.value), local: local.value });
   const salvar = async (extra = {}) => {
     try {
       if (r) await api.put(`/producao/retalhos/${r.id}`, { ...corpo(), ...extra });
@@ -352,7 +353,6 @@ function formularioRetalho(r, chapas, fechar) {
     'form',
     { class: 'formulario', onsubmit: (e) => (e.preventDefault(), salvar()) },
     reservado ? h('p', { class: 'p-alerta info' }, icone('cadeado'), h('span', {}, `Reservado para "${r.plano_nome || 'um plano'}". Ele volta para o estoque se o plano for calculado sem ele.`)) : null,
-    campo('Chapa', chapa),
     h('div', { class: 'grade-2' }, campo('Comprimento (cm)', comprimento, { dica: 'No sentido do veio' }), campo('Largura (cm)', largura)),
     campo('Onde está guardado', local),
     reservado
@@ -370,8 +370,10 @@ function formularioRetalho(r, chapas, fechar) {
 // ----------------------------------------------------------------- Ajustes
 
 async function paginaAjustes() {
-  const [config, chapas, fitas] = await Promise.all([api.get('/producao/config'), api.get('/producao/chapas'), api.get('/producao/fitas')]);
-  const recarregar = () => irPara(`#/ajustes?t=${Date.now()}`);
+  const config = await api.get('/producao/config');
+  // O plano usa uma chapa só: aqui fica o tamanho dela (sem tipo de MDF nem fita).
+  config.chapa_comprimento_mm = config.chapa_padrao.comprimento_mm;
+  config.chapa_largura_mm = config.chapa_padrao.largura_mm;
   const podeEditar = ehEscritorio();
   // Tudo em cm, menos o disco (mm, como vem do fabricante).
   const rotulos = {};
@@ -398,42 +400,24 @@ async function paginaAjustes() {
         }
         try {
           sessao.config = await api.put('/producao/config', corpo);
-          aviso('Serra salva. Os próximos planos já usam estes valores.');
+          aviso('Ajustes salvos. Os próximos planos já usam estes valores.');
         } catch (erro) {
           avisoErro(erro);
         }
       },
     },
+    h('div', { class: 'grade-2' }, campoNumero('chapa_comprimento_mm', 'Chapa: comprimento (cm)', 'Ex.: 275'), campoNumero('chapa_largura_mm', 'Chapa: largura (cm)', 'Ex.: 185. Meça com trena.')),
     h('div', { class: 'grade-2' }, campoNumero('serra_decimos_mm', 'Espessura do disco (mm)', 'Na dúvida, deixe um pouco a mais.'), campoNumero('refilo_mm', 'Refilo (cm por borda)', 'Tira as bordas da chapa.')),
     h('div', { class: 'grade-2' }, campoNumero('guia_paralela_mm', 'Largura máx. na guia paralela (cm)', 'Baldan SE-3200/38: 90 cm.'), campoNumero('curso_carro_mm', 'Curso do carro (cm)', 'Baldan SE-3200/38: 320 cm.')),
     h('div', { class: 'grade-2' }, campoNumero('sobra_min_largura_mm', 'Sobra mínima: largura (cm)'), campoNumero('sobra_min_comprimento_mm', 'Sobra mínima: comprimento (cm)')),
-    podeEditar ? h('button', { type: 'submit', class: 'botao botao-primario' }, 'Salvar serra') : h('p', { class: 'dica' }, 'Só o escritório muda estes valores.'),
+    podeEditar ? h('button', { type: 'submit', class: 'botao botao-primario' }, 'Salvar') : h('p', { class: 'dica' }, 'Só o escritório muda estes valores.'),
   );
-  const novaMaterial = async (tipo) => {
-    const salvo = await abrirModal(tipo === 'chapa' ? 'Nova chapa' : 'Nova fita de borda', (fechar) => formularioMaterial(tipo, fechar), { contexto: 'Materiais' });
-    if (salvo) recarregar();
-  };
   const tema = document.documentElement.dataset.temaPreferencia || 'sistema';
   return h(
     'div',
     { class: 'p-pilha' },
     h('header', { class: 'p-cabecalho' }, h('div', {}, h('span', { class: 'p-eyebrow' }, sessao.usuario.nome), h('h1', {}, 'Ajustes'))),
-    h('section', { class: 'p-cartao' }, h('div', { class: 'p-titulo-cartao' }, h('h2', {}, 'A serra')), formSerra),
-    h(
-      'section',
-      { class: 'p-cartao' },
-      h('div', { class: 'p-titulo-cartao' }, h('h2', {}, 'Chapas'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: () => novaMaterial('chapa') }, icone('mais', 'icone icone-mini'), 'Nova')),
-      chapas.length
-        ? h('ul', { class: 'p-lista-simples' }, chapas.map((c) => h('li', {}, h('span', {}, h('strong', {}, nomeChapa(c)), h('small', {}, `${formatarCm(c.comprimento_mm)} × ${formatarCm(c.largura_mm)} cm${c.veio ? ' · com veio' : ''}${c.ativo ? '' : ' · inativa'}`)))))
-        : h('p', { class: 'suave' }, 'Nenhuma chapa cadastrada.'),
-      h('p', { class: 'dica' }, ehEscritorio() ? 'Preços e edição ficam no esquadro, em Ajustes → Chapas e fitas.' : 'O escritório completa os preços no esquadro.'),
-    ),
-    h(
-      'section',
-      { class: 'p-cartao' },
-      h('div', { class: 'p-titulo-cartao' }, h('h2', {}, 'Fitas de borda'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: () => novaMaterial('fita') }, icone('mais', 'icone icone-mini'), 'Nova')),
-      fitas.length ? h('ul', { class: 'p-lista-simples' }, fitas.map((f) => h('li', {}, h('span', {}, h('strong', {}, f.nome), h('small', {}, `${f.largura_mm} mm${f.ativo ? '' : ' · inativa'}`))))) : h('p', { class: 'suave' }, 'Nenhuma fita cadastrada.'),
-    ),
+    h('section', { class: 'p-cartao' }, h('div', { class: 'p-titulo-cartao' }, h('h2', {}, 'Chapa e serra')), formSerra),
     h(
       'section',
       { class: 'p-cartao' },
@@ -481,44 +465,6 @@ window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change',
   if ((document.documentElement.dataset.temaPreferencia || 'sistema') === 'sistema') aplicarTema('sistema');
 });
 
-function formularioMaterial(tipo, fechar) {
-  const nome = h('input', { type: 'text', required: true, maxlength: '100', placeholder: tipo === 'chapa' ? 'Ex.: MDF Branco TX' : 'Ex.: Fita branca TX' });
-  // Espessura e fita em mm inteiros; comprimento e largura da chapa em cm (com vírgula).
-  const n = (valor, ph, modo = 'numeric') => h('input', { type: 'text', inputmode: modo, value: valor, placeholder: ph });
-  const espessura = n('18', 'mm');
-  const comprimento = n('', 'Ex.: 275', 'decimal');
-  const largura = tipo === 'chapa' ? n('', 'Ex.: 184', 'decimal') : n('22', 'mm');
-  const veio = h('input', { type: 'checkbox' });
-  return h(
-    'form',
-    {
-      class: 'formulario',
-      onsubmit: async (e) => {
-        e.preventDefault();
-        try {
-          if (tipo === 'chapa') {
-            await api.post('/producao/chapas', { nome: nome.value, espessura_mm: Number(espessura.value), comprimento_mm: lerCm(comprimento.value), largura_mm: lerCm(largura.value), veio: veio.checked });
-          } else {
-            await api.post('/producao/fitas', { nome: nome.value, largura_mm: Number(largura.value) });
-          }
-          aviso(tipo === 'chapa' ? 'Chapa cadastrada.' : 'Fita cadastrada.');
-          fechar(true);
-        } catch (erro) {
-          avisoErro(erro);
-        }
-      },
-    },
-    campo('Nome', nome),
-    tipo === 'chapa'
-      ? [
-          h('div', { class: 'grade-3' }, campo('Comp. (cm)', comprimento), campo('Larg. (cm)', largura), campo('Esp. (mm)', espessura)),
-          h('small', { class: 'dica' }, 'Comprimento e largura em cm; espessura em mm, como vem na nota. Confira a medida com o fornecedor: ela muda de fabricante para fabricante.'),
-          h('label', { class: 'caixa-marcar' }, veio, 'Tem veio (padrão amadeirado no comprimento)'),
-        ]
-      : campo('Largura (mm)', largura),
-    h('div', { class: 'acoes-modal' }, h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Cadastrar')),
-  );
-}
 
 async function trocarSenha() {
   await abrirModal('Trocar senha', (fechar) => {

@@ -89,12 +89,44 @@ export async function criarMaterial(db, usuario, tabela, body) {
 
 export async function lerConfig(db) {
   const c = await db.get('SELECT * FROM producao_config WHERE id = 1');
-  const { id: _id, ...config } = c || {};
-  return { ...CONFIG_PADRAO, ...config };
+  const { id: _id, chapa_padrao_id: chapaId, ...config } = c || {};
+  const chapa = await garantirChapaPadrao(db, chapaId);
+  return { ...CONFIG_PADRAO, ...config, chapa_padrao_id: chapa.id, chapa_padrao: chapa };
+}
+
+const CAMPOS_CHAPA_PADRAO = 'id, nome, espessura_mm, comprimento_mm, largura_mm, veio';
+
+/**
+ * A chapa em que todas as peças são cortadas. A produção só digita medidas:
+ * não escolhe MDF nem fita. Sem chapa definida, usa a primeira chapa ativa
+ * sem veio (ou a primeira ativa) e, se não houver nenhuma, cria uma de
+ * 275 × 185 cm, o formato mais vendido no Brasil.
+ */
+async function garantirChapaPadrao(db, chapaId) {
+  let chapa = chapaId ? await db.get(`SELECT ${CAMPOS_CHAPA_PADRAO} FROM chapas WHERE id = ? AND ativo = 1`, chapaId) : null;
+  chapa ??= await db.get(`SELECT ${CAMPOS_CHAPA_PADRAO} FROM chapas WHERE ativo = 1 ORDER BY veio, id LIMIT 1`);
+  if (!chapa) {
+    const r = await db.run(`INSERT INTO chapas (nome, espessura_mm, comprimento_mm, largura_mm) VALUES ('Chapa', 18, 2750, 1850) RETURNING id`);
+    chapa = await db.get(`SELECT ${CAMPOS_CHAPA_PADRAO} FROM chapas WHERE id = ?`, r.lastInsertRowid);
+  }
+  if (chapa.id !== chapaId) await db.run('UPDATE producao_config SET chapa_padrao_id = ? WHERE id = 1', chapa.id);
+  return chapa;
+}
+
+/** Troca o tamanho da chapa padrão. Os planos já calculados continuam com a chapa antiga. */
+async function trocarTamanhoDaChapa(db, atual, comprimento, largura) {
+  if (atual.comprimento_mm === comprimento && atual.largura_mm === largura) return;
+  let chapa = await db.get('SELECT id FROM chapas WHERE ativo = 1 AND veio = 0 AND comprimento_mm = ? AND largura_mm = ? ORDER BY id LIMIT 1', comprimento, largura);
+  if (!chapa) {
+    const r = await db.run(`INSERT INTO chapas (nome, espessura_mm, comprimento_mm, largura_mm) VALUES ('Chapa', ?, ?, ?) RETURNING id`, atual.espessura_mm || 18, comprimento, largura);
+    chapa = { id: r.lastInsertRowid };
+  }
+  await db.run('UPDATE producao_config SET chapa_padrao_id = ? WHERE id = 1', chapa.id);
 }
 
 export async function salvarConfig(db, body = {}) {
-  const atual = await lerConfig(db);
+  const lida = await lerConfig(db);
+  const atual = { ...lida, chapa_comprimento_mm: lida.chapa_padrao.comprimento_mm, chapa_largura_mm: lida.chapa_padrao.largura_mm };
   // Só o campo que não veio fica como está; null é erro (não volta ao valor antigo sem avisar).
   const n = (chave, min, max, nome) => {
     if (body[chave] === null || body[chave] === '') throw invalido(`${nome}: preencha o valor.`);
@@ -108,8 +140,12 @@ export async function salvarConfig(db, body = {}) {
     sobra_min_largura_mm: n('sobra_min_largura_mm', 10, 3000, 'Largura mínima da sobra'),
     sobra_min_comprimento_mm: n('sobra_min_comprimento_mm', 10, 6000, 'Comprimento mínimo da sobra'),
   };
+  const chapa = atual.chapa_padrao;
+  const comprimento = n('chapa_comprimento_mm', 500, LIMITES_CORTE.chapaMax, 'Comprimento da chapa');
+  const largura = n('chapa_largura_mm', 300, LIMITES_CORTE.chapaMax, 'Largura da chapa');
   const campos = Object.keys(config);
   await db.run(`UPDATE producao_config SET ${campos.map((k) => `${k} = ?`).join(', ')} WHERE id = 1`, ...campos.map((k) => config[k]));
+  await trocarTamanhoDaChapa(db, chapa, comprimento, largura);
   return lerConfig(db);
 }
 

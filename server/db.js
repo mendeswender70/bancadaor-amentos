@@ -470,6 +470,9 @@ export const MIGRACOES = [
     `ALTER TABLE plano_pecas ADD COLUMN origem_pagina integer CHECK (origem_pagina IS NULL OR origem_pagina BETWEEN 1 AND 9999)`,
     `CREATE INDEX plano_pecas_origem ON plano_pecas(origem_anexo_id)`,
   ],
+  // v16: o plano usa um tamanho de chapa só (a "chapa padrão" da oficina); a
+  // produção não escolhe tipo de MDF nem fita.
+  [`ALTER TABLE producao_config ADD COLUMN chapa_padrao_id integer REFERENCES chapas(id) ON DELETE SET NULL`],
 ];
 
 // ---------------------------------------------------------------------------

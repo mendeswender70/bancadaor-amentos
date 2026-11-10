@@ -3,7 +3,6 @@
 import { formatarDinheiro, formatarNumero } from '/shared/calc.js';
 import {
   AJUSTES_PADRAO,
-  LADOS_FITA,
   LIMITES_CORTE,
   MODOS_CORTE,
   SOLUCOES,
@@ -15,7 +14,6 @@ import {
   formatarMetros,
   formatarMm,
   lerCm,
-  ladosComFita,
   lerLinhasPecas,
   resumirSolucao,
 } from '/shared/corte.js';
@@ -58,36 +56,18 @@ export function calcularNoWorker(dados) {
 
 // -------------------------------------------------------------- Uma peça
 
-function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = false, origem = null }, fechar) {
+function formularioPeca(peca, { chapas, chapaPadraoId, grupos, novo = false, soPadrao = false, origem = null }, fechar) {
+  // Só medidas: a peça vai na chapa padrão da oficina, sem tipo de MDF nem fita.
   const dados = { ...peca };
   const numero = (valor, rotulo, extra = {}) => h('input', { type: 'text', inputmode: 'numeric', value: valor ? String(valor) : '', 'aria-label': rotulo, ...extra });
   const medidaCm = (mm, rotulo, extra = {}) => h('input', { type: 'text', inputmode: 'decimal', value: mm ? formatarCm(mm) : '', 'aria-label': rotulo, ...extra });
   const listaId = `grupos-${Math.random().toString(36).slice(2)}`;
-  const grupo = h('input', { type: 'text', value: dados.grupo || '', maxlength: '120', list: listaId, placeholder: 'Ex.: Cozinha · aéreo' });
+  const grupo = h('input', { type: 'text', value: dados.grupo || '', maxlength: '120', list: listaId, placeholder: 'Opcional. Ex.: Cozinha · aéreo' });
   const descricao = h('input', { type: 'text', value: dados.descricao || '', maxlength: '120', placeholder: 'Ex.: Lateral' });
   const comprimento = medidaCm(dados.comprimento_mm, 'Comprimento em cm', { autofocus: novo });
   const largura = medidaCm(dados.largura_mm, 'Largura em cm');
   const quantidade = numero(dados.quantidade || 1, 'Quantidade');
-  const chapa = h(
-    'select',
-    {},
-    h('option', { value: '' }, 'Escolha a chapa'),
-    chapas.filter((c) => c.ativo || c.id === dados.chapa_id).map((c) => h('option', { value: String(c.id), selected: c.id === dados.chapa_id }, `${nomeChapa(c)}${c.veio ? ' · com veio' : ''}`)),
-  );
-  const veio = h('input', { type: 'checkbox', checked: Boolean(dados.veio) });
-  const fita = h(
-    'select',
-    {},
-    h('option', { value: '' }, 'Sem fita'),
-    fitas.filter((f) => f.ativo || f.id === dados.fita_id).map((f) => h('option', { value: String(f.id), selected: f.id === dados.fita_id }, f.nome)),
-  );
-  const lados = LADOS_FITA.map(([chave, nome]) => [chave, h('input', { type: 'checkbox', checked: Boolean(dados[chave]), 'aria-label': `Fita no lado ${nome}` }), nome]);
-  const caixaLados = h('div', { class: 'p-lados' }, lados.map(([, el, nome]) => h('label', { class: 'caixa-marcar' }, el, nome)));
-  const atualizarLados = () => {
-    caixaLados.hidden = !fita.value;
-  };
-  fita.addEventListener('change', atualizarLados);
-  atualizarLados();
+  const chapaDaPeca = chapas.find((c) => c.id === (dados.chapa_id ?? chapaPadraoId)) || chapas.find((c) => c.id === chapaPadraoId);
   const ler = (el, min, max, nome) => {
     const n = Number(el.value.trim());
     if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${nome}: use um número inteiro de ${min} a ${max}.`);
@@ -96,9 +76,8 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
   const lerMedida = (el, nome) => {
     const mm = lerCm(el.value);
     if (!mm || mm > LIMITES_CORTE.medidaMax) throw new Error(`${nome}: use centímetros, de 0,1 a ${formatarCm(LIMITES_CORTE.medidaMax)} (ex.: 72,5).`);
-    // Maior que a chapa escolhida (ou a maior cadastrada) = quase sempre digitado em mm.
-    const escolhida = chapas.find((c) => c.id === Number(chapa.value));
-    const limite = Math.max(0, ...(escolhida ? [escolhida] : chapas).map((c) => Math.max(c.comprimento_mm, c.largura_mm)));
+    // Maior que a chapa = quase sempre digitado em mm.
+    const limite = chapaDaPeca ? Math.max(chapaDaPeca.comprimento_mm, chapaDaPeca.largura_mm) : 0;
     if (limite && mm > limite) {
       el.focus();
       throw new Error(`${nome}: ${formatarCm(mm)} cm é maior que a chapa (${formatarCm(limite)} cm). As medidas são em centímetros: confira se não digitou em milímetros.`);
@@ -112,8 +91,7 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
       onsubmit: (e) => {
         e.preventDefault();
         try {
-          const lida = { ...dados, grupo: grupo.value.trim(), chapa_id: chapa.value ? Number(chapa.value) : null, veio: veio.checked ? 1 : 0, fita_id: fita.value ? Number(fita.value) : null };
-          for (const [chave, el] of lados) lida[chave] = lida.fita_id && el.checked ? 1 : 0;
+          const lida = { ...dados, grupo: grupo.value.trim(), chapa_id: dados.chapa_id ?? chapaPadraoId };
           if (!soPadrao) {
             Object.assign(lida, {
               descricao: descricao.value.trim(),
@@ -129,8 +107,8 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
       },
     },
     h('datalist', { id: listaId }, grupos.map((g) => h('option', { value: g }))),
-    soPadrao ? campo('Móvel', grupo) : h('div', { class: 'grade-2' }, campo('Móvel', grupo), campo('Peça', descricao)),
-    soPadrao ? null : h('div', { class: 'grade-3' }, campo('Comp. (cm)', comprimento, { dica: 'No veio' }), campo('Larg. (cm)', largura), campo('Qtd.', quantidade)),
+    soPadrao ? campo('Móvel', grupo, { dica: 'Agrupa as peças por cor no desenho. Pode deixar em branco.' }) : h('div', { class: 'grade-2' }, campo('Peça', descricao), campo('Móvel', grupo)),
+    soPadrao ? null : h('div', { class: 'grade-3' }, campo('Comp. (cm)', comprimento), campo('Larg. (cm)', largura), campo('Qtd.', quantidade)),
     origem
       ? h(
           'p',
@@ -140,11 +118,7 @@ function formularioPeca(peca, { chapas, fitas, grupos, novo = false, soPadrao = 
           h('button', { type: 'button', class: 'botao botao-pequeno', onclick: () => (fechar(null), origem.abrir()) }, 'Ver no projeto'),
         )
       : null,
-    campo('Chapa', chapa),
-    h('label', { class: 'caixa-marcar' }, veio, 'Seguir o veio (não girar a peça)'),
-    campo('Fita de borda', fita),
-    caixaLados,
-    h('small', { class: 'dica' }, 'C1 e C2 são os lados do comprimento; L1 e L2, os da largura. A peça é cortada na medida final.'),
+    soPadrao ? null : h('small', { class: 'dica' }, `Medida final da peça. Vai na chapa de ${chapaDaPeca ? `${formatarCm(chapaDaPeca.comprimento_mm)} × ${formatarCm(chapaDaPeca.largura_mm)} cm` : 'padrão'}.`),
     h(
       'div',
       { class: 'acoes-modal' },
@@ -175,19 +149,22 @@ export async function paginaPlano(planoId, params) {
   let avisouCorte = false;
   const concluido = Boolean(plano.concluido_em);
 
+  // Uma chapa só para o plano todo (a chapa padrão da oficina): sem tipo de MDF nem fita.
+  const chapaPadrao = plano.config.chapa_padrao;
+  if (chapaPadrao && !chapas.some((c) => c.id === chapaPadrao.id)) chapas.push({ ...chapaPadrao, ativo: 1 });
+  const chapaPadraoId = chapaPadrao?.id ?? null;
+  for (const p of pecas) p.chapa_id ??= chapaPadraoId;
   const chapasPorId = new Map(chapas.map((c) => [c.id, c]));
-  const fitasPorId = new Map(fitas.map((f) => [f.id, f]));
   const ultima = pecas[pecas.length - 1];
-  const ativas = chapas.filter((c) => c.ativo);
   const padrao = {
     grupo: ultima?.grupo || plano.trabalho?.ambientes?.[0]?.itens?.[0]?.nome || '',
-    chapa_id: ultima?.chapa_id ?? (ativas.length === 1 ? ativas[0].id : null),
-    veio: ultima?.veio || 0,
-    fita_id: ultima?.fita_id ?? null,
-    fita_c1: ultima?.fita_c1 || 0,
-    fita_c2: ultima?.fita_c2 || 0,
-    fita_l1: ultima?.fita_l1 || 0,
-    fita_l2: ultima?.fita_l2 || 0,
+    chapa_id: chapaPadraoId,
+    veio: 0,
+    fita_id: null,
+    fita_c1: 0,
+    fita_c2: 0,
+    fita_l1: 0,
+    fita_l2: 0,
   };
   const grupos = () => {
     const doTrabalho = (plano.trabalho?.ambientes || []).flatMap((a) => a.itens.map((i) => `${i.nome}`));
@@ -260,7 +237,7 @@ export async function paginaPlano(planoId, params) {
     return { texto, abrir: () => abrirAnexoEmTelaCheia(anexo, peca.origem_pagina || 1) };
   };
   const editarPeca = async (indice) => {
-    const resposta = await abrirModal(`Linha #${indice + 1}`, (fechar) => formularioPeca(pecas[indice], { chapas, fitas, grupos: grupos(), origem: origemDe(pecas[indice]) }, fechar), { contexto: 'Peça' });
+    const resposta = await abrirModal(`Linha #${indice + 1}`, (fechar) => formularioPeca(pecas[indice], { chapas, chapaPadraoId, grupos: grupos(), origem: origemDe(pecas[indice]) }, fechar), { contexto: 'Peça' });
     if (!resposta) return;
     if (resposta.acao === 'excluir') pecas.splice(indice, 1);
     else if (resposta.acao === 'duplicar') pecas.splice(indice + 1, 0, { ...pecas[indice] });
@@ -276,14 +253,12 @@ export async function paginaPlano(planoId, params) {
   const botaoPadrao = h('button', { type: 'button', class: 'p-padrao' }, icone('regua'), h('span', {}, h('small', {}, 'Próximas peças'), textoPadrao), icone('editar', 'icone icone-mini'));
   const desenharPadrao = () => {
     const chapa = chapasPorId.get(padrao.chapa_id);
-    const lados = ladosComFita(padrao);
-    textoPadrao.textContent = [padrao.grupo || 'Sem móvel', chapa ? nomeChapa(chapa) : 'escolha a chapa', lados ? `fita ${lados}` : 'sem fita', padrao.veio && chapa?.veio ? 'segue o veio' : ''].filter(Boolean).join(' · ');
-    botaoPadrao.classList.toggle('sem-chapa', !chapa);
+    textoPadrao.textContent = [padrao.grupo || 'Sem móvel', chapa ? `chapa ${formatarCm(chapa.comprimento_mm)} × ${formatarCm(chapa.largura_mm)} cm` : ''].filter(Boolean).join(' · ');
   };
   const editarPadrao = async () => {
-    const resposta = await abrirModal('Próximas peças', (fechar) => formularioPeca(padrao, { chapas, fitas, grupos: grupos(), soPadrao: true }, fechar), {
+    const resposta = await abrirModal('Próximas peças', (fechar) => formularioPeca(padrao, { chapas, chapaPadraoId, grupos: grupos(), soPadrao: true }, fechar), {
       contexto: 'Entrada rápida',
-      subtitulo: 'Móvel, chapa e fita que entram nas próximas peças digitadas.',
+      subtitulo: 'Móvel das próximas peças digitadas.',
     });
     if (resposta?.acao === 'salvar') {
       Object.assign(padrao, resposta.peca);
@@ -294,7 +269,7 @@ export async function paginaPlano(planoId, params) {
   desenharPadrao();
 
   // Medida maior que a maior chapa quase sempre é alguém digitando em milímetros.
-  const maiorChapa = Math.max(0, ...chapas.map((c) => Math.max(c.comprimento_mm, c.largura_mm)));
+  const maiorChapa = Math.max(0, ...[chapasPorId.get(chapaPadraoId) || chapas[0]].filter(Boolean).map((c) => Math.max(c.comprimento_mm, c.largura_mm)));
   const pareceMilimetro = (mm) => maiorChapa && mm > maiorChapa;
   const adicionar = () => {
     const c = lerCm(entradaC.value);
@@ -313,11 +288,7 @@ export async function paginaPlano(planoId, params) {
     }
     if (!valido(q, LIMITES_CORTE.quantidade)) return aviso(`Quantidade de 1 a ${LIMITES_CORTE.quantidade}.`, 'erro');
     if (pecas.length >= LIMITES_CORTE.linhas) return aviso(`Use no máximo ${LIMITES_CORTE.linhas} linhas por plano.`, 'erro');
-    if (!chapasPorId.has(padrao.chapa_id)) {
-      aviso('Escolha a chapa das próximas peças.', 'erro');
-      editarPadrao();
-      return;
-    }
+    if (!chapasPorId.has(padrao.chapa_id)) return aviso('Falta o tamanho da chapa: o escritório define em Ajustes.', 'erro');
     // Com o projeto aberto em "Medir", a peça guarda o anexo e a página de onde veio a medida.
     pecas.push({ ...padrao, descricao: entradaD.value.trim(), comprimento_mm: c, largura_mm: l, quantidade: q, ...origemDaMedida() });
     aviso(`#${pecas.length} ${entradaD.value.trim() || 'peça'} · ${formatarCm(c)} × ${formatarCm(l)} cm × ${q}`);
@@ -360,14 +331,14 @@ export async function paginaPlano(planoId, params) {
             },
           },
           campo('Uma peça por linha', area, { dica: 'Comprimento, largura e quantidade, nesta ordem, em centímetros (aceita vírgula: 72,5). O texto vira o nome. Também aceita colunas copiadas de planilha.' }),
-          h('p', { class: 'dica' }, 'As peças entram com o móvel, a chapa e a fita de "Próximas peças".'),
+          h('p', { class: 'dica' }, 'As peças entram com o móvel de "Próximas peças", na chapa padrão.'),
           h('div', { class: 'acoes-modal' }, h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Adicionar peças')),
         );
       },
       { contexto: 'Entrada rápida' },
     );
     if (!lidas?.length) return;
-    if (!chapasPorId.has(padrao.chapa_id)) return aviso('Escolha a chapa em "Próximas peças" antes de colar.', 'erro');
+    if (!chapasPorId.has(padrao.chapa_id)) return aviso('Falta o tamanho da chapa: o escritório define em Ajustes.', 'erro');
     if (lidas.some((p) => !p.comprimento_mm || !p.largura_mm || p.comprimento_mm > LIMITES_CORTE.medidaMax || p.largura_mm > LIMITES_CORTE.medidaMax || p.quantidade > LIMITES_CORTE.quantidade)) {
       return aviso('Há medidas ou quantidades fora do limite. Confira a lista.', 'erro');
     }
@@ -400,14 +371,15 @@ export async function paginaPlano(planoId, params) {
         indices.map((i) => {
           const p = pecas[i];
           const chapa = chapasPorId.get(p.chapa_id);
-          const lados = ladosComFita(p);
           const origem = textoDaOrigem(p, projeto.anexos());
-          const detalhes = [chapa ? nomeChapa(chapa) : null, lados ? `fita ${lados}` : null, p.veio && chapa?.veio ? 'segue o veio' : null, origem ? `medida: ${origem}` : null].filter(Boolean);
+          // A chapa só aparece se o plano antigo tiver peça fora da chapa padrão.
+          const outraChapa = chapa && p.chapa_id !== chapaPadraoId ? `chapa ${formatarCm(chapa.comprimento_mm)} × ${formatarCm(chapa.largura_mm)} cm` : null;
+          const detalhes = [outraChapa, origem ? `medida: ${origem}` : null].filter(Boolean);
           const linha = h(
             'button',
             { type: 'button', class: `p-peca${chapa ? '' : ' sem-chapa'}`, onclick: () => !concluido && editarPeca(i), disabled: concluido },
             h('span', { class: 'p-peca-linha' }, `#${i + 1}`),
-            h('span', { class: 'p-peca-texto' }, h('strong', {}, p.descricao || 'Peça'), h('small', { class: chapa ? '' : 'erro' }, chapa ? detalhes.join(' · ') : 'Escolha a chapa')),
+            h('span', { class: 'p-peca-texto' }, h('strong', {}, p.descricao || 'Peça'), h('small', { class: chapa ? '' : 'erro' }, chapa ? detalhes.join(' · ') : 'Sem chapa')),
             h('span', { class: 'p-peca-medida' }, `${formatarCm(p.comprimento_mm)} × ${formatarCm(p.largura_mm)}`, h('small', {}, `cm · ×${p.quantidade}`)),
           );
           linha.style.setProperty('--cor', cores.get(grupo));
@@ -423,7 +395,6 @@ export async function paginaPlano(planoId, params) {
   const abaPecasEl = h(
     'div',
     { class: 'p-pilha' },
-    !ativas.length ? h('p', { class: 'p-alerta erro' }, icone('alerta'), h('span', {}, 'Nenhuma chapa cadastrada. ', h('a', { href: '#/ajustes' }, 'Cadastre em Ajustes'), ' para montar o plano.')) : null,
     concluido
       ? h('p', { class: 'p-alerta info' }, icone('check'), h('span', {}, 'Plano concluído. A lista fica guardada só para consulta.'))
       : h(
@@ -432,7 +403,7 @@ export async function paginaPlano(planoId, params) {
           botaoPadrao,
           h('div', { class: 'p-medidas' }, entradaC, h('span', {}, '×'), entradaL, h('span', {}, '×'), entradaQ),
           h('div', { class: 'p-entrada-nome' }, entradaD, h('button', { type: 'button', class: 'botao botao-primario', onclick: adicionar, 'aria-label': 'Adicionar peça' }, icone('mais'))),
-          h('div', { class: 'p-titulo-cartao' }, h('small', { class: 'dica' }, 'Medidas finais em cm (ex.: 72,5), sem descontar fita. Comprimento é o lado do veio.'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: colarLista }, icone('copiar', 'icone icone-mini'), 'Colar lista')),
+          h('div', { class: 'p-titulo-cartao' }, h('small', { class: 'dica' }, 'Medidas finais em cm (ex.: 72,5): comprimento × largura × quantidade.'), h('button', { type: 'button', class: 'botao botao-pequeno', onclick: colarLista }, icone('copiar', 'icone icone-mini'), 'Colar lista')),
         ),
     listaEl,
   );
@@ -441,7 +412,7 @@ export async function paginaPlano(planoId, params) {
   async function calcular({ automatico = false } = {}) {
     if (calculando || concluido) return;
     if (!pecas.length) return automatico ? null : aviso('Adicione as peças primeiro.', 'erro');
-    if (pecas.some((p) => !chapasPorId.has(p.chapa_id))) return automatico ? null : aviso('Escolha a chapa de todas as peças (as marcadas em vermelho).', 'erro');
+    if (pecas.some((p) => !chapasPorId.has(p.chapa_id))) return automatico ? null : aviso('Há peças sem chapa. O escritório define o tamanho da chapa em Ajustes.', 'erro');
     if (plano.iniciado_em && !automatico && !(await confirmar('O corte deste plano já começou. Calcular de novo recomeça o passo a passo.', { sim: 'Calcular de novo' }))) return;
     if (plano.iniciado_em && automatico) return;
     calculando = true;
@@ -485,7 +456,7 @@ export async function paginaPlano(planoId, params) {
   function abaPlano() {
     if (!pecas.length) return h('div', { class: 'p-pilha' }, h('p', { class: 'p-alerta info' }, icone('regua'), h('span', {}, 'Adicione as peças na aba Peças. O plano é calculado aqui.')));
     if (pecas.some((p) => !chapasPorId.has(p.chapa_id))) {
-      return h('div', { class: 'p-pilha' }, h('p', { class: 'p-alerta erro' }, icone('alerta'), h('span', {}, 'Há peças sem chapa (marcadas em vermelho na aba Peças). Escolha a chapa para calcular.')));
+      return h('div', { class: 'p-pilha' }, h('p', { class: 'p-alerta erro' }, icone('alerta'), h('span', {}, 'Há peças sem chapa. O escritório define o tamanho da chapa em Ajustes.')));
     }
     const valido = resultadoValido();
     if (!valido) {
@@ -528,7 +499,6 @@ export async function paginaPlano(planoId, params) {
         ponto.style.setProperty('--cor', cor);
         return h('span', {}, ponto, grupo || 'Sem móvel');
       }),
-      h('span', {}, h('strong', {}, '▬'), 'fita'),
     );
 
     const folhas = detalhes.filter((d) => d.posicaoIgual === 1).map((d) => {
@@ -581,7 +551,8 @@ export async function paginaPlano(planoId, params) {
           indicador('Chapas novas', contagem(resumo.chapas_novas), resumo.retalhos ? `+ ${plural(resumo.retalhos, 'retalho', 'retalhos')}` : 'nenhum retalho'),
           indicador('Aproveitamento', `${String(resumo.aproveitamento).replace('.', ',')}%`, `${plural(resumo.total_pecas, 'peça', 'peças')}`),
           indicador('Cortes', contagem(resumo.cortes), `${plural(resumo.giros, 'giro', 'giros')} da peça`),
-          indicador('Fita', resumo.fitas.length ? formatarMetros(resumo.fitas.reduce((t, f) => t + f.metros_com_margem, 0)) : '—', resumo.fitas.length && ajustes.margem_fita_pct ? `com ${ajustes.margem_fita_pct}% de margem` : ''),
+          // Fita só aparece em plano antigo que ainda tenha peça com fita.
+          resumo.fitas.length ? indicador('Fita', formatarMetros(resumo.fitas.reduce((t, f) => t + f.metros_com_margem, 0)), ajustes.margem_fita_pct ? `com ${ajustes.margem_fita_pct}% de margem` : '') : null,
         ),
         h('h3', { class: 'p-eyebrow', style: null }, 'Separar para o corte'),
         h('ul', { class: 'p-separar' }, separar),
@@ -640,7 +611,6 @@ export async function paginaPlano(planoId, params) {
           h('div', { class: 'campo' }, h('span', { class: 'rotulo' }, 'Cortes'), segmentado(Object.entries(MODOS_CORTE).map(([k, m]) => [k, m.nome]), modo, (v) => (modo = v), { rotulo: 'Modo de corte' })),
           h('small', { class: 'dica' }, `${MODOS_CORTE.aproveitamento.nome}: ${MODOS_CORTE.aproveitamento.descricao} ${MODOS_CORTE.faixas.nome}: ${MODOS_CORTE.faixas.descricao}`),
           h('label', { class: 'caixa-marcar' }, retalhos, 'Usar retalhos do estoque quando economizar chapa'),
-          campo('Margem da fita (%)', margem, { dica: 'Sobra para aplicar a fita.' }),
           h('div', { class: 'acoes-modal' }, h('button', { type: 'submit', class: 'botao botao-primario botao-grande' }, 'Usar estes ajustes')),
         );
       },
@@ -685,11 +655,9 @@ export async function paginaPlano(planoId, params) {
 
   const exportarCsv = () => {
     const campoCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const linhas = [['#', 'Móvel', 'Peça', 'Comprimento (cm)', 'Largura (cm)', 'Quantidade', 'Chapa', 'Espessura (mm)', 'Segue o veio', 'Fita', 'C1', 'C2', 'L1', 'L2']];
+    const linhas = [['#', 'Móvel', 'Peça', 'Comprimento (cm)', 'Largura (cm)', 'Quantidade']];
     pecas.forEach((p, i) => {
-      const chapa = chapasPorId.get(p.chapa_id);
-      const fita = fitasPorId.get(p.fita_id);
-      linhas.push([i + 1, p.grupo, p.descricao, formatarCm(p.comprimento_mm), formatarCm(p.largura_mm), p.quantidade, chapa?.nome || '', chapa?.espessura_mm || '', p.veio ? 'sim' : 'não', fita?.nome || '', ...LADOS_FITA.map(([k]) => (fita && p[k] ? 'sim' : ''))]);
+      linhas.push([i + 1, p.grupo, p.descricao, formatarCm(p.comprimento_mm), formatarCm(p.largura_mm), p.quantidade]);
     });
     baixarArquivo(new Blob([`﻿${linhas.map((l) => l.map(campoCsv).join(';')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' }), `pecas-plano-${planoId}.csv`);
   };

@@ -30,7 +30,7 @@ Configuração conferida na Neon em 20/10/2026:
 O banco contém as tabelas de clientes, orçamentos, itens, histórico, usuários,
 sessões e notificações, chapas, fitas, planos de corte, retalhos e a
 configuração da serra e anexos do projeto, além do controle de migrações e da
-marca de configuração inicial. As migrações atuais estão na versão **15**
+marca de configuração inicial. As migrações atuais estão na versão **16**
 (`server/db.js`) e são aplicadas automaticamente ao acessar a API.
 
 1. **Neon Console → projeto esquadro → Connect**: selecione a branch
@@ -228,6 +228,13 @@ configurada, 900 mm na Baldan SE-3200/38; acima disso, no carro), o aviso de
 girar a peça e o que o corte separa. "Estragou" anota a peça e, no fim, gera o
 plano de recorte. No fim de cada chapa, as sobras boas vão para o estoque de
 retalhos. O andamento é salvo a cada passo e a tela fica acesa enquanto corta.
+
+**Só medidas.** O funcionário digita só nome, medidas e quantidade (e, se
+quiser, o móvel). Todas as peças vão na **chapa padrão** da oficina, sem
+escolher tipo de MDF nem fita de borda. O tamanho dela (ex.: 275 × 185 cm)
+fica em Ajustes da produção e só o escritório muda (migração 16). Sem chapa
+cadastrada, o sistema cria uma de 275 × 185 cm. Trocar o tamanho cria outra
+chapa, e os planos já calculados continuam com a antiga.
 
 **Medidas em centímetros.** A oficina trabalha em cm: peças, chapas, retalhos,
 sobras, guia, refilo e o passo a passo aparecem e são digitados em cm, com até

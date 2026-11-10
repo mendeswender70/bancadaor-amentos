@@ -489,3 +489,22 @@ test('ajustes da serra: campo vazio é erro, não volta ao valor antigo sem avis
   r = await chamar('admin', 'PUT', '/producao/config', { refilo_mm: 10 });
   assert.equal(r.dados.refilo_mm, 10);
 });
+
+test('o plano usa a chapa padrão: só medidas, sem escolher MDF', async () => {
+  let r = await chamar('joao', 'GET', '/producao/config');
+  assert.equal(r.status, 200);
+  const padrao = r.dados.chapa_padrao;
+  assert.ok(padrao?.id, 'sempre há uma chapa padrão');
+  assert.equal(padrao.veio, 0, 'prefere chapa sem veio: a peça pode girar');
+  assert.equal(padrao.preco_cents, undefined, 'sem preço para o funcionário');
+  assert.equal((await chamar('joao', 'PUT', '/producao/config', { chapa_comprimento_mm: 2440 })).status, 403);
+  r = await chamar('admin', 'PUT', '/producao/config', { chapa_comprimento_mm: 2440, chapa_largura_mm: 1830 });
+  assert.equal(r.status, 200, JSON.stringify(r.dados));
+  assert.deepEqual([r.dados.chapa_padrao.comprimento_mm, r.dados.chapa_padrao.largura_mm], [2440, 1830]);
+  assert.notEqual(r.dados.chapa_padrao_id, padrao.id, 'tamanho novo vira outra chapa; planos antigos não mudam');
+  const plano = (await chamar('pedro', 'POST', '/producao/planos', { nome: 'Só medidas' })).dados;
+  assert.equal(plano.config.chapa_padrao_id, r.dados.chapa_padrao_id);
+  assert.ok(plano.chapas.some((c) => c.id === r.dados.chapa_padrao_id));
+  r = await chamar('admin', 'PUT', '/producao/config', { chapa_comprimento_mm: padrao.comprimento_mm, chapa_largura_mm: padrao.largura_mm });
+  assert.equal(r.dados.chapa_padrao_id, padrao.id, 'volta para a chapa do mesmo tamanho que já existe');
+});

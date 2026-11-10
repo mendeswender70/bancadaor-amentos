@@ -20,7 +20,9 @@ export function seloSituacao(plano) {
 
 export const contagem = (n) => Number(n || 0).toLocaleString('pt-BR');
 export const plural = (n, um, varios) => `${contagem(n)} ${Number(n) === 1 ? um : varios}`;
-export const nomeChapa = (c) => (c ? `${c.nome} ${c.espessura_mm} mm` : 'Sem chapa');
+// A chapa padrão (nome "Chapa") aparece pelo tamanho; as cadastradas, pelo nome.
+const cm = (mm) => (Math.round(Number(mm) || 0) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+export const nomeChapa = (c) => (!c ? 'Sem chapa' : c.nome === 'Chapa' ? `Chapa ${cm(c.comprimento_mm)} × ${cm(c.largura_mm)} cm` : `${c.nome} ${c.espessura_mm} mm`);
 
 // Navegação com verificação de saída (ex.: lista ainda salvando).
 let verificarSaida = null;
