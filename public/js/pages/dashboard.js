@@ -4,9 +4,9 @@ import { desenharDashboard } from '../gestao-dashboard.js';
 
 export async function paginaDashboard() {
   let dados = await api.get('/dashboard');
-  let periodo = 'mes', metrica = 'orcado', pagina, sequencia = 0, montado = false;
+  let periodo = 'mes', pagina, sequencia = 0, montado = false;
   const desenhar = (foco) => {
-    const nova = desenharDashboard(dados,{periodo,metrica,aoMudarPeriodo:valor=>atualizar(valor,true),aoMudarMetrica:valor=>{metrica=valor;desenhar('.pc-evolucao select');},aoAtualizar:()=>atualizar(periodo,true)});
+    const nova = desenharDashboard(dados,{periodo,aoMudarPeriodo:valor=>atualizar(valor,true),aoAtualizar:()=>atualizar(periodo,true)});
     pagina?.replaceWith(nova); pagina=nova;
     if (foco) pagina.querySelector(foco)?.focus({preventScroll:true});
   };
