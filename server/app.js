@@ -126,6 +126,9 @@ function lerSugestoesAmbiente(json) {
   return AMBIENTES_SUGERIDOS;
 }
 
+/** A página de aprovação do PDF mostra o selo quando a proposta já foi aprovada. */
+const aprovacaoParaPdf = (orc) => (orc.status === 'aprovado' ? { aprovado_por: orc.aprovado_por, aprovado_em: orc.aprovado_em } : null);
+
 /**
  * Forma de pagamento escolhida pelo cliente no simulador da proposta. O cliente manda só a
  * opção ({ forma: 'cartao', parcelas } ou { forma: 'combinado' }); o texto é montado aqui,
@@ -328,7 +331,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
   api.get('/publico/propostas/:token/pdf', async (req, res) => {
     const { orc, empresa } = await montarProposta(await idPorToken(db, req.params.token));
     const logo = await lerLogo();
-    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null);
+    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null, aprovacaoParaPdf(orc));
     res.type('application/pdf').setHeader('Content-Disposition', `attachment; filename="${nomeArquivoPdf(orc)}"`).send(pdf);
   });
 
@@ -963,7 +966,7 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     if (!orc) throw naoEncontrado('Orçamento não encontrado.');
     const empresa = await db.get('SELECT * FROM empresa WHERE id = 1');
     const logo = await lerLogo();
-    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null);
+    const pdf = await gerarPdf(visaoCliente(orc, empresa), logo?.bytes ?? null, aprovacaoParaPdf(orc));
     res
       .type('application/pdf')
       .setHeader('Content-Disposition', `${req.query.baixar ? 'attachment' : 'inline'}; filename="${nomeArquivoPdf(orc)}"`)

@@ -13,7 +13,8 @@ export const novidades = [
     itens: [
       { icone: 'projeto', titulo: 'Páginas que viram', texto: 'O cliente arrasta ou usa as setas, no celular e no computador. Cada ambiente tem a sua página, com o valor de cada móvel.' },
       { icone: 'pagamento', titulo: 'Simulador de cartão', texto: 'Ele escolhe o número de parcelas e vê o valor na hora. A forma escolhida aparece no histórico do orçamento.' },
-      { icone: 'aprovado', titulo: 'Aprovação segurando o botão', texto: 'Dois segundos com o dedo no botão e você recebe o aviso. O PDF continua disponível para baixar.' },
+      { icone: 'aprovado', titulo: 'Aprovação segurando o botão', texto: 'Dois segundos com o dedo no botão e você recebe o aviso na hora.' },
+      { icone: 'pdf', titulo: 'PDF com a cara do livro', texto: 'As mesmas páginas em A4, com selo de aprovação quando a proposta já foi aceita.' },
     ],
     acao: { rotulo: 'Ver meus orçamentos', href: '#/orcamentos' },
   },
