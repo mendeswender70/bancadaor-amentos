@@ -776,6 +776,10 @@ test('cliente aprova a proposta pelo link', async () => {
   assert.ok(painel.atencao.some((a) => a.id === orcamentoAmbientesId && a.motivo === 'aprovado'));
   const clientes = (await chamar('GET', '/clientes?q=joao')).dados.clientes;
   assert.ok(clientes[0].aprovado_cents >= orc.total_cents);
+  // Aguardando resposta: só enviados e em negociação, conferido contra a lista do próprio cliente.
+  const ficha = (await chamar('GET', `/clientes/${clientes[0].id}`)).dados;
+  const esperado = ficha.lista_orcamentos.filter((o) => ['enviado', 'negociacao'].includes(o.status)).reduce((n, o) => n + o.total_cents, 0);
+  assert.equal(clientes[0].aguardando_cents, esperado);
 });
 
 test('proposta vencida ou recusada não pode ser aprovada', async () => {

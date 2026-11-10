@@ -119,6 +119,11 @@ window.addEventListener('beforeunload', (e) => {
   }
 });
 
+/** Desenha de novo a tela atual (depois de duplicar ou excluir um orçamento, por exemplo). */
+export function recarregarRota() {
+  return rotear();
+}
+
 export function irPara(hash) {
   location.hash = hash;
 }

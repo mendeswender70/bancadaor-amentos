@@ -605,7 +605,8 @@ export function criarApp({ banco, dataHoje = hoje } = {}) {
     );
     const clientes = await db.all(
       `SELECT c.*, COUNT(o.id) AS orcamentos, MAX(o.data) AS ultimo_orcamento,
-              COALESCE(SUM(CASE WHEN o.status = 'aprovado' THEN o.total_cents END), 0) AS aprovado_cents
+              COALESCE(SUM(CASE WHEN o.status = 'aprovado' THEN o.total_cents END), 0) AS aprovado_cents,
+              COALESCE(SUM(CASE WHEN o.status IN ('enviado', 'negociacao') THEN o.total_cents END), 0) AS aguardando_cents
        FROM clientes c LEFT JOIN orcamentos o ON o.cliente_id = c.id
        ${where}
        GROUP BY c.id ORDER BY lower(c.nome), c.id LIMIT ? OFFSET ?`,

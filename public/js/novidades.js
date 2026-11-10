@@ -6,6 +6,18 @@
 // Um item é um texto simples ou { icone, titulo, texto }: título curto e uma frase de explicação.
 export const novidades = [
   {
+    id: '2026-11-clientes-livro-caixa',
+    data: '10 de novembro de 2026',
+    titulo: 'Clientes com o que cada um aprovou',
+    resumo: 'A lista e a ficha de clientes mostram quanto cada um já aprovou e quanto está esperando resposta.',
+    itens: [
+      { icone: 'clientes', titulo: 'Lista em colunas', texto: 'Contato, valor aguardando resposta e valor aprovado lado a lado, para você ver quem merece um retorno.' },
+      { icone: 'grafico', titulo: 'Resumo na ficha', texto: 'Aprovado, aguardando resposta e número de propostas no topo da ficha de cada cliente.' },
+      { icone: 'orcamentos', titulo: 'Orçamentos completos', texto: 'Na ficha, cada orçamento mostra ambientes, andamento e o menu com enviar, PDF e duplicar.' },
+    ],
+    acao: { rotulo: 'Ver meus clientes', href: '#/clientes' },
+  },
+  {
     id: '2026-11-editor-folha',
     data: '10 de novembro de 2026',
     titulo: 'Editor mais limpo, com as ações à mão',
